@@ -23,3 +23,7 @@ en timestamp UTC.
 Les routes CRUD manuelles utilisent uniquement `manual-session-repository`.
 La saisie accepte les disciplines autorisées et une durée de 1 à 720 minutes,
 avec un libellé limité à 100 caractères et une note limitée à 500 caractères.
+
+Le dashboard peut lire cette table pour construire sa présentation calendrier,
+mais ses agrégats de course et sa synthèse lisent exclusivement
+`synced_activities`.

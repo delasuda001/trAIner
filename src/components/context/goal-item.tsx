@@ -1,0 +1,10 @@
+"use client";
+
+import { Archive, Pause, Pencil, Play } from "lucide-react";
+import type { Goal } from "@/lib/db/types";
+
+export function GoalItem({ goal, onChange, onEdit }: { goal: Goal; onChange: (goal: Goal) => void; onEdit: () => void }) {
+  async function update(changes: Record<string, unknown>) { const response = await fetch(`/api/goals/${goal.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes) }); if (response.ok) onChange(await response.json() as Goal); }
+  async function archive() { const response = await fetch(`/api/goals/${goal.id}/archive`, { method: "POST" }); if (response.ok) onChange(await response.json() as Goal); }
+  return <article className="goal-item"><div><span className={`goal-badge ${goal.priority}`}>{goal.priority === "primary" ? "Primary" : "Secondaire"}</span><span className="goal-status">{goal.status === "active" ? "Actif" : goal.status === "paused" ? "En pause" : "Archivé"}</span><h3>{goal.title}</h3><p>{goal.type}{goal.targetDate ? ` · échéance ${goal.targetDate}` : ""}{goal.targetValue !== null && goal.targetValue !== undefined ? ` · ${goal.targetValue} ${goal.targetUnit ?? ""}` : ""}</p></div><div className="goal-actions">{goal.status !== "archived" && <><button className="icon-button" title="Modifier" aria-label="Modifier" onClick={onEdit}><Pencil size={15} /></button><button className="icon-button" title={goal.status === "active" ? "Mettre en pause" : "Reprendre"} aria-label={goal.status === "active" ? "Mettre en pause" : "Reprendre"} onClick={() => void update({ status: goal.status === "active" ? "paused" : "active" })}>{goal.status === "active" ? <Pause size={15} /> : <Play size={15} />}</button><button className="icon-button" title="Archiver" aria-label="Archiver" onClick={() => void archive()}><Archive size={15} /></button></>}</div></article>;
+}

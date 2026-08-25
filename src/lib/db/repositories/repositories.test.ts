@@ -60,19 +60,21 @@ describe("repositories SQLite", () => {
 
   it("maintient un seul contexte actif dans une transaction", async () => {
     const repository = createAthleteContextRepository(database);
-    await repository.create({ id: "context-1", status: "draft", contextJson: JSON.stringify({ goals: [], weekTemplate: [] }), sourceText: null, createdAt: now, activatedAt: null, archivedAt: null, updatedAt: now });
-    await repository.create({ id: "context-2", status: "draft", contextJson: JSON.stringify({ goals: ["10 km"], weekTemplate: [] }), sourceText: null, createdAt: now, activatedAt: null, archivedAt: null, updatedAt: now });
+    const context = { version: 1, athleteProfile: {}, performanceReferences: [], priorities: { secondary: [] }, weeklyTemplate: {}, coachingPreferences: { wantsCriticalDataGroundedFeedback: true, wantsTrainingScenariosToReview: true, wantsSourcesAndLimitationsAlwaysVisible: true } };
+    await repository.create({ id: "context-1", status: "draft", contextJson: JSON.stringify(context), sourceText: null, createdAt: now, activatedAt: null, archivedAt: null, updatedAt: now });
+    await repository.create({ id: "context-2", status: "draft", contextJson: JSON.stringify({ ...context, priorities: { primary: "10 km", secondary: [] } }), sourceText: null, createdAt: now, activatedAt: null, archivedAt: null, updatedAt: now });
     await repository.activate("context-1");
     await repository.activate("context-2");
     await expect(repository.findActive()).resolves.toMatchObject({ id: "context-2" });
     expect(sqlite.prepare("select count(*) as count from athlete_context_versions where status = 'active'").get()).toMatchObject({ count: 1 });
   });
 
-  it("refuse un second objectif principal actif", async () => {
+  it("remplace transactionnellement l’objectif principal actif", async () => {
     const repository = createGoalRepository(database);
     const input = { title: "10 km", type: "race", priority: "primary" as const, status: "active" as const, definitionJson: JSON.stringify({ distanceKm: 10 }), createdAt: now, updatedAt: now };
     await repository.create({ ...input, id: "goal-1" });
-    await expect(repository.create({ ...input, id: "goal-2" })).rejects.toThrow("Un seul objectif");
+    await repository.create({ ...input, id: "goal-2" });
+    expect(sqlite.prepare("select count(*) as count from goals where priority = 'primary' and status = 'active'").get()).toMatchObject({ count: 1 });
   });
 
   it("garde les repositories de course structurellement séparés des séances manuelles", async () => {

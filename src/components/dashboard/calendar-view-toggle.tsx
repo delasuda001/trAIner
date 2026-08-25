@@ -1,0 +1,3 @@
+export function CalendarViewToggle({ view, onChange }: { view: "week" | "month"; onChange: (view: "week" | "month") => void }) {
+  return <div className="view-toggle" role="group" aria-label="Vue du calendrier"><button className={view === "week" ? "selected" : ""} onClick={() => onChange("week")}>Semaine</button><button className={view === "month" ? "selected" : ""} onClick={() => onChange("month")}>Mois</button></div>;
+}

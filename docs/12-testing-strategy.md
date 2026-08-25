@@ -22,3 +22,7 @@ seul `synced_activities` est lu, avec filtres de dates et limite.
 Les routes manuelles sont testées avec une base mémoire séparée : création,
 réponse vide, validation de date, discipline et durée, limites de texte, filtre
 de période, PATCH partiel, conservation de `created_at`, suppression et 404.
+
+Les routes contexte/objectifs sont testées sur SQLite mémoire pour le contexte
+vide, la validation V1, l'archivage transactionnel des versions, le remplacement
+du primary actif, les mises à jour partielles, le tri et l'archivage non destructif.

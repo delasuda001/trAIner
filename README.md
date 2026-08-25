@@ -45,6 +45,14 @@ L'accueil permet aussi d'ajouter des séances manuelles pour un futur calendrier
 Les types autorisés sont musculation, natation, mobilité et autre ; la durée est
 limitée à 720 minutes. Ces séances ne participent à aucune analyse de course.
 
+Le dashboard affiche le calendrier semaine/mois et le volume de course des
+12 dernières semaines. Le volume et la synthèse sont explicitement « Course
+uniquement » ; les séances manuelles n'apparaissent que dans le calendrier.
+
+La page [Mon contexte](/context) permet de déclarer un contexte sportif
+versionné, une semaine type et des objectifs. Cette étape ne produit aucune
+recommandation et n'intègre pas Gemini ou un autre LLM.
+
 ## Documentation
 
 Voir le dossier docs.
