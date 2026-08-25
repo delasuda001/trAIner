@@ -27,7 +27,13 @@ npm run dev
 
 Ouvrir ensuite http://localhost:3000. Les variables attendues dans `.env.local`
 sont `INTERVALS_API_KEY` et `INTERVALS_ATHLETE_ID`. Les contrôles disponibles sont
-`npm run lint`, `npm run typecheck` et `npm run build`.
+`npm run lint`, `npm run typecheck`, `npm run test` et `npm run build`.
+
+## Base locale
+
+La base SQLite est configurée par `DATABASE_URL=file:./data/run-insights.db`.
+Les commandes Drizzle sont `npm run db:generate`, `npm run db:migrate` et
+`npm run db:studio`. La base n'est jamais supprimée automatiquement.
 
 ## Documentation
 

@@ -1,6 +1,18 @@
 
 # Modèle de données local
 
+Le modèle local est défini dans `src/lib/db/schema.ts`. Les activités synchronisées
+et les séances manuelles sont volontairement stockées dans deux tables distinctes :
+`synced_activities` et `manual_sessions`. Elles ne doivent pas être réunies dans
+une table polymorphe.
+
+Les timestamps techniques sont des chaînes ISO 8601 UTC. La date métier d'une
+séance manuelle est une chaîne locale stricte `YYYY-MM-DD`, sans conversion de
+fuseau.
+
+Les payloads JSON persistés sont validés avec les contrats Zod internes avant
+écriture et après lecture. Aucun GPS brut n'est stocké.
+
 ## Tables MVP
 
 ### activity_cache
