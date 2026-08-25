@@ -1,0 +1,22 @@
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Local SQLite database
+/data/*.db
+/data/*.db-journal
+/data/*.db-wal
+/data/*.db-shm
+
+# Next.js
+.next/
+out/
+
+# Node
+node_modules/
+*.tsbuildinfo
+
+# Logs
+*.log
