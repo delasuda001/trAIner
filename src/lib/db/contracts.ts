@@ -8,6 +8,13 @@ export const contextStatusSchema = z.enum(["draft", "active", "archived"]);
 export const goalPrioritySchema = z.enum(["primary", "secondary"]);
 export const goalStatusSchema = z.enum(["active", "paused", "completed", "archived"]);
 export const localDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "La date doit respecter YYYY-MM-DD").refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)), "La date est invalide");
+export const manualSessionInputSchema = z.object({
+  sessionDate: localDateSchema,
+  discipline: manualDisciplineSchema,
+  durationMinutes: z.number().int().positive().max(720),
+  label: z.string().trim().max(100).optional(),
+  note: z.string().trim().max(500).optional(),
+});
 
 export const confirmationPayloadSchema = z.record(z.string(), z.unknown());
 export const activityDetailCacheSchema = z.object({ id: z.string(), name: z.string().optional(), sportType: z.string().optional() }).strict();

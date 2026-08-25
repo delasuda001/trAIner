@@ -18,3 +18,7 @@ Ils couvrent les bornes `weeks`, le mapping des types `Run`, l'idempotence, les
 modifications, les activités invalides isolées, les réponses globales invalides,
 les erreurs réseau et le statut 429. Les tests de route de liste vérifient que
 seul `synced_activities` est lu, avec filtres de dates et limite.
+
+Les routes manuelles sont testées avec une base mémoire séparée : création,
+réponse vide, validation de date, discipline et durée, limites de texte, filtre
+de période, PATCH partiel, conservation de `created_at`, suppression et 404.

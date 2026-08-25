@@ -41,6 +41,10 @@ importer manuellement les courses des 12 dernières semaines. `POST
 Une seconde synchronisation ne crée pas de doublon. Les séances manuelles restent
 dans `manual_sessions` et ne sont pas incluses dans les activités analysables.
 
+L'accueil permet aussi d'ajouter des séances manuelles pour un futur calendrier.
+Les types autorisés sont musculation, natation, mobilité et autre ; la durée est
+limitée à 720 minutes. Ces séances ne participent à aucune analyse de course.
+
 ## Documentation
 
 Voir le dossier docs.

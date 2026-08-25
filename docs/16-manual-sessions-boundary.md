@@ -19,3 +19,7 @@ seule ; cette fusion ne doit jamais modifier les sources ni leurs règles d'acc�
 
 La date manuelle est locale et stricte (`YYYY-MM-DD`). Elle n'est jamais convertie
 en timestamp UTC.
+
+Les routes CRUD manuelles utilisent uniquement `manual-session-repository`.
+La saisie accepte les disciplines autorisées et une durée de 1 à 720 minutes,
+avec un libellé limité à 100 caractères et une note limitée à 500 caractères.
