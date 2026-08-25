@@ -77,6 +77,9 @@ export const intervalsSchema = z.object({
   icu_groups: z.array(z.unknown()).optional(),
 });
 
+export const streamSchema = z.object({ type: z.string(), data: z.array(z.unknown()).optional() }).passthrough();
+export const streamsSchema = z.array(streamSchema);
+
 export type Interval = z.infer<typeof intervalSchema>;
 export type IntervalsResponse = z.infer<typeof intervalsSchema>;
 

@@ -21,6 +21,8 @@ mais jamais de streams bruts, latitude, longitude, polyline ou trace GPS.
 `activity_stream_summaries` est réservé à de futurs résumés dérivés, sans données
 brutes de localisation.
 
+Le détail réutilise ce cache pendant 24 heures ; les streams n'y sont pas écrits.
+
 `user_confirmations` contient uniquement des candidats et leur résolution explicite.
 Une détection n'est jamais enregistrée comme vérité automatique.
 

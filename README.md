@@ -49,6 +49,9 @@ Le dashboard affiche le calendrier semaine/mois et le volume de course des
 12 dernières semaines. Le volume et la synthèse sont explicitement « Course
 uniquement » ; les séances manuelles n'apparaissent que dans le calendrier.
 
+La page détail charge les streams uniquement dans l'onglet « Courbes ». Aucun
+stream brut ni donnée GPS n'est stocké ou retourné.
+
 La page [Mon contexte](/context) permet de déclarer un contexte sportif
 versionné, une semaine type et des objectifs. Cette étape ne produit aucune
 recommandation et n'intègre pas Gemini ou un autre LLM.

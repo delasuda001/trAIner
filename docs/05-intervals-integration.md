@@ -29,6 +29,10 @@ Les activités sont validées individuellement puis seules les activités de typ
 `Run` sont mappées vers `synced_activities`. Les autres types observés sont
 ignorés. `manual_sessions` n'est jamais lu ni écrit par cette intégration.
 
+Le détail est mis en cache 24 heures dans `activity_details_cache`. Les streams
+sont chargés uniquement à la demande depuis une route distincte et ne sont
+jamais stockés bruts.
+
 ## Optimisation
 
 - Ne pas récupérer les streams de toutes les activités.

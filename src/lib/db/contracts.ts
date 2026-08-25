@@ -32,6 +32,11 @@ export const athleteContextSchema = z.object({
   coachingPreferences: z.object({ wantsCriticalDataGroundedFeedback: z.boolean(), wantsTrainingScenariosToReview: z.boolean(), wantsSourcesAndLimitationsAlwaysVisible: z.boolean() }).strict(),
 }).strict();
 export const goalDefinitionSchema = z.record(z.string(), z.unknown());
+export const cachedActivityDetailSchema = z.object({
+  id: z.string(), name: z.string().optional(), type: z.string().optional(), start_date: z.string().optional(), start_date_local: z.string().optional(), distance: z.number().nullable().optional(), moving_time: z.number().nullable().optional(), elapsed_time: z.number().nullable().optional(), average_speed: z.number().nullable().optional(), average_heartrate: z.number().nullable().optional(), average_cadence: z.number().nullable().optional(), total_elevation_gain: z.number().nullable().optional(), temperature: z.number().nullable().optional(), icu_training_load: z.number().nullable().optional(),
+}).strict();
+export const cachedIntervalsSchema = z.object({ intervals: z.array(z.object({ id: z.union([z.string(), z.number()]).optional(), name: z.string().nullable().optional(), distance: z.number().nullable().optional(), elapsed_time: z.number().nullable().optional(), moving_time: z.number().nullable().optional(), average_speed: z.number().nullable().optional(), average_heartrate: z.number().nullable().optional(), average_cadence: z.number().nullable().optional() }).strict()) }).strict();
+export const normalizedStreamsSchema = z.object({ activityId: z.string(), sampleCount: z.number().int().nonnegative(), elapsedTimeS: z.array(z.number().finite()), distanceM: z.array(z.number().finite()).optional(), speedMps: z.array(z.number().finite().nullable()).optional(), heartRateBpm: z.array(z.number().finite().nullable()).optional(), cadenceSpm: z.array(z.number().finite().nullable()).optional(), altitudeM: z.array(z.number().finite().nullable()).optional(), powerW: z.array(z.number().finite().nullable()).optional(), availability: z.object({ speed: z.boolean(), heartRate: z.boolean(), cadence: z.boolean(), altitude: z.boolean(), power: z.boolean() }).strict(), qualityWarnings: z.array(z.string()) }).strict();
 export const goalTypeSchema = z.enum(["general", "race", "performance", "process", "technical_observation"]);
 export const goalInputSchema = z.object({ title: boundedText(150).min(1), type: goalTypeSchema, priority: goalPrioritySchema, status: z.enum(["active", "paused"]).default("active"), startDate: localDateSchema.optional(), targetDate: localDateSchema.optional(), targetValue: z.number().finite().optional(), targetUnit: boundedText(50).optional(), description: boundedText(1000).optional(), definition: goalDefinitionSchema.default({}) }).strict();
 
@@ -49,6 +54,9 @@ export type AthleteContextV1 = z.infer<typeof athleteContextSchema>;
 export type AthleteContext = AthleteContextV1;
 export type GoalInput = z.infer<typeof goalInputSchema>;
 export type GoalDefinition = z.infer<typeof goalDefinitionSchema>;
+export type CachedActivityDetail = z.infer<typeof cachedActivityDetailSchema>;
+export type CachedIntervals = z.infer<typeof cachedIntervalsSchema>;
+export type NormalizedStreams = z.infer<typeof normalizedStreamsSchema>;
 
 export function serializeJson<T>(schema: z.ZodType<T>, value: T): string {
   return JSON.stringify(schema.parse(value));
