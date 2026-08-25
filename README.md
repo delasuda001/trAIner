@@ -35,6 +35,12 @@ La base SQLite est configurée par `DATABASE_URL=file:./data/run-insights.db`.
 Les commandes Drizzle sont `npm run db:generate`, `npm run db:migrate` et
 `npm run db:studio`. La base n'est jamais supprimée automatiquement.
 
+La liste principale lit le cache local. Utilisez le bouton « Synchroniser » pour
+importer manuellement les courses des 12 dernières semaines. `POST
+/api/sync/activities` accepte éventuellement `{ "weeks": 1 }` à `{ "weeks": 52 }`.
+Une seconde synchronisation ne crée pas de doublon. Les séances manuelles restent
+dans `manual_sessions` et ne sont pas incluses dans les activités analysables.
+
 ## Documentation
 
 Voir le dossier docs.

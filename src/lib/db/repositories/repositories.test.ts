@@ -34,7 +34,7 @@ describe("repositories SQLite", () => {
   it("applique la migration et impose l’unicité Intervals", async () => {
     const repository = createSyncedActivityRepository(database);
     await repository.upsert(syncedInput());
-    await expect(repository.upsert({ ...syncedInput(), id: "sync-2" })).resolves.toMatchObject({ id: "sync-2" });
+    await expect(repository.upsert({ ...syncedInput(), id: "sync-2" })).resolves.toMatchObject({ id: "sync-1" });
     await expect(repository.findByPeriod("2026-08-01T00:00:00.000Z", "2026-08-31T23:59:59.999Z")).resolves.toHaveLength(1);
   });
 

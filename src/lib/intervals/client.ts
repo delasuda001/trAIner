@@ -1,14 +1,14 @@
 import "server-only";
 
-import { activitiesSchema, activitySchema, intervalsSchema } from "./schemas";
-import type { Activity, Lap } from "./schemas";
+import { activitiesListEnvelopeSchema, activitiesSchema, activityListItemSchema, activitySchema, intervalsSchema } from "./schemas";
+import type { Activity, ActivityListItem, Lap } from "./schemas";
 
 const API_URL = "https://intervals.icu/api/v1";
 
 export type ActivityRequestContext = { requestId: string; activityId: string };
 
 export class IntervalsApiError extends Error {
-  constructor(public readonly status: number, message: string, public readonly endpoint: string) {
+  constructor(public readonly status: number, message: string, public readonly endpoint: string, public readonly retryAfter?: string) {
     super(message);
     this.name = "IntervalsApiError";
   }
@@ -20,6 +20,8 @@ export class IntervalsValidationError extends Error {
     this.name = "IntervalsValidationError";
   }
 }
+
+export type ActivityListRequest = { requestId: string; oldest: string; newest: string };
 
 function credentials(): string {
   const apiKey = process.env.INTERVALS_API_KEY;
@@ -44,12 +46,25 @@ async function intervalsFetch(path: string, context: ActivityRequestContext): Pr
     throw new IntervalsApiError(503, "Service Intervals.icu indisponible", path);
   }
   console.info("[intervals] response", { requestId: context.requestId, activityId: context.activityId, endpoint: path, status: response.status });
-  if (!response.ok) throw new IntervalsApiError(response.status, "Erreur de réponse Intervals.icu", path);
+  if (!response.ok) throw new IntervalsApiError(response.status, "Erreur de réponse Intervals.icu", path, response.headers.get("retry-after") ?? undefined);
   let payload: unknown;
   try { payload = await response.json(); }
   catch { throw new IntervalsValidationError(path, ["invalid_json"]); }
   console.info("[intervals] payload keys", { requestId: context.requestId, activityId: context.activityId, endpoint: path, keys: Array.isArray(payload) ? ["array"] : typeof payload === "object" && payload !== null ? Object.keys(payload).slice(0, 20) : [typeof payload] });
   return payload;
+}
+
+export async function fetchActivityList(request: ActivityListRequest): Promise<unknown[]> {
+  const athleteId = process.env.INTERVALS_ATHLETE_ID;
+  if (!athleteId) throw new Error("Configuration Intervals.icu incomplète");
+  const path = `/athlete/${athleteId}/activities?oldest=${request.oldest}&newest=${request.newest}`;
+  const payload = await intervalsFetch(path, { requestId: request.requestId, activityId: "list" });
+  try { return activitiesListEnvelopeSchema.parse(payload); }
+  catch { throw new IntervalsValidationError(path, objectKeys(payload)); }
+}
+
+export function parseActivityListItem(payload: unknown): ActivityListItem {
+  return activityListItemSchema.parse(payload);
 }
 
 export async function listRecentActivities(): Promise<Activity[]> {

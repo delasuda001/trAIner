@@ -12,3 +12,9 @@ La migration de production est vérifiée séparément avec `npm run db:migrate`
 la base locale. Cette séparation évite qu'un test automatisé ne modifie la base
 de développement tout en testant effectivement le SQL généré dans une base
 temporaire.
+
+Les tests de synchronisation mockent `fetch` et utilisent la même base mémoire.
+Ils couvrent les bornes `weeks`, le mapping des types `Run`, l'idempotence, les
+modifications, les activités invalides isolées, les réponses globales invalides,
+les erreurs réseau et le statut 429. Les tests de route de liste vérifient que
+seul `synced_activities` est lu, avec filtres de dates et limite.

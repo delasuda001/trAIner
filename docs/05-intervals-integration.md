@@ -20,6 +20,15 @@ Intervals.icu est la source des activités sportives Garmin.
 - Charger les streams uniquement pour l'activité consultée.
 - Charger les données wellness dans une phase ultérieure.
 
+La synchronisation manuelle utilise `GET /api/v1/athlete/{id}/activities` avec
+`oldest` et `newest` au format `YYYY-MM-DD`. Les bornes sont traitées comme
+inclusives par le service local. La période par défaut est de 12 semaines et peut
+être bornée entre 1 et 52 semaines.
+
+Les activités sont validées individuellement puis seules les activités de type
+`Run` sont mappées vers `synced_activities`. Les autres types observés sont
+ignorés. `manual_sessions` n'est jamais lu ni écrit par cette intégration.
+
 ## Optimisation
 
 - Ne pas récupérer les streams de toutes les activités.
