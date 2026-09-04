@@ -131,6 +131,24 @@ Structure verticale :
    - pistes à examiner ;
    - sources utilisées.
 
+## Écran 3 bis : Débrief IA (révisé)
+
+Sections affichées, dans l'ordre :
+- constats factuels ;
+- classification en zones (avec allure/FC seuil utilisée et son niveau de
+  confiance affiché explicitement, ex. "confiance : faible — 2 séances
+  qualité manquantes") ;
+- comparaison historique chiffrée ;
+- recommandations techniques et allure cible pour la prochaine séance
+  similaire (nouveau bloc visible, pas masqué derrière un accordéon) ;
+- hypothèses et limites ;
+- safety_note, affichée uniquement si présente dans la réponse ;
+- sources utilisées (activités, métriques).
+
+Si la confiance de l'estimation de seuil est `insufficient` ou `low`,
+afficher un bandeau discret suggérant le type de séance à réaliser pour
+l'améliorer, avant même le débrief.
+
 ## Écran 4 : objectifs
 
 Objectif : visualiser des objectifs actifs et explorer leur progression.

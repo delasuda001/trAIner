@@ -113,4 +113,42 @@ export const goals = sqliteTable("goals", {
   targetDateIndex: index("goals_target_date_idx").on(table.targetDate),
 }));
 
-export const schema = { syncedActivities, activityDetailsCache, activityStreamSummaries, manualSessions, userConfirmations, athleteContextVersions, goals };
+export const activityContexts = sqliteTable("activity_contexts", {
+  id: text("id").primaryKey(),
+  intervalsActivityId: text("intervals_activity_id").notNull(),
+  sessionGoal: text("session_goal"),
+  perceivedExertion: text("perceived_exertion"),
+  unusualFatigue: integer("unusual_fatigue").default(0),
+  painFlag: integer("pain_flag").default(0),
+  note: text("note"),
+  ...timestamps,
+}, (table) => ({
+  activityIndex: index("activity_contexts_activity_idx").on(table.intervalsActivityId),
+}));
+
+export const analyses = sqliteTable("analyses", {
+  id: text("id").primaryKey(),
+  intervalsActivityId: text("intervals_activity_id").notNull(),
+  deterministicMetricsJson: text("deterministic_metrics_json").notNull(),
+  historicalComparisonJson: text("historical_comparison_json"),
+  llmResponseJson: text("llm_response_json").notNull(),
+  llmModel: text("llm_model").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  ...timestamps,
+}, (table) => ({
+  activityIndex: index("analyses_activity_idx").on(table.intervalsActivityId),
+}));
+
+export const actionItems = sqliteTable("action_items", {
+  id: text("id").primaryKey(),
+  analysisId: text("analysis_id").notNull(),
+  category: text("category").notNull(),
+  content: text("content").notNull(),
+  status: text("status").notNull().default("open"),
+  ...timestamps,
+  completedAt: text("completed_at"),
+}, (table) => ({
+  analysisIndex: index("action_items_analysis_idx").on(table.analysisId),
+}));
+
+export const schema = { syncedActivities, activityDetailsCache, activityStreamSummaries, manualSessions, userConfirmations, athleteContextVersions, goals, activityContexts, analyses, actionItems };

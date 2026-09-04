@@ -41,6 +41,23 @@ jamais stockés bruts.
 - Prévoir un délai de nouvelle tentative respectant Retry-After.
 - Ne pas dépendre d'un schéma de réponse non validé.
 
+
+## Estimation de seuil et zones (ajout)
+
+Voir docs/22-dynamic-thresholds-and-zones.md pour la méthode complète.
+Le moteur expose un résultat structuré `ThresholdEstimate` consommé par :
+- la classification en zone de chaque segment ;
+- le calcul de l'allure cible suggérée pour la prochaine séance similaire ;
+- le débrief LLM, qui ne reçoit jamais l'algorithme mais uniquement le
+  résultat (allure/FC seuil, confiance, biais, zones manquantes).
+
+## Comparaison historique (précision)
+
+La comparaison à des séances similaires retourne désormais un delta chiffré
+explicite (écart d'allure en %, écart de FC en bpm, écart de cadence en
+pas/min) plutôt qu'une comparaison qualitative uniquement.
+
+
 ## Documentation de référence
 
 https://intervals.icu/api-docs.html

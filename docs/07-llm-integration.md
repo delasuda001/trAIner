@@ -25,25 +25,32 @@ Gemini ne calcule aucune métrique et ne reçoit pas de streams bruts.
 - données personnelles inutiles ;
 - notes libres non filtrées si elles contiennent des données sensibles.
 
-## Format de sortie obligatoire
 
-La sortie est du JSON validé par Zod.
+## Format de sortie v2
 
-Champs :
+Champs (remplace la version précédente) :
 - summary
 - observed_facts
-- historical_comparison
+- historical_comparison (avec deltas chiffrés)
+- zone_classification_summary
+- technical_recommendations   (nouveau — exercices concrets, sourcés)
+- next_session_pace_guidance  (nouveau — allure cible ajustée, chiffrée,
+  avec justification factuelle)
 - hypotheses
 - limitations
 - questions_to_consider
 - next_steps
-- safety_note
+- safety_note (nouveau : conditionnel, affiché uniquement si le contexte
+  utilisateur signale douleur/fatigue inhabituelle ; absent sinon)
 
-## Règles éditoriales
+## Règles éditoriales (révisées)
 
-- Distinguer fait et hypothèse.
-- Citer les métriques à l'origine d'une conclusion.
-- Ne pas inventer de donnée.
-- Ne pas diagnostiquer une pathologie, blessure ou surentraînement.
-- Utiliser un langage prudent.
-- Présenter les actions comme des pistes à examiner.
+- Ton argumenté et technique, adapté à un utilisateur expérimenté qui a
+  explicitement demandé des retours moins prudents que la version initiale.
+- Toute recommandation d'allure ou d'exercice doit citer la métrique ou la
+  comparaison qui la fonde.
+- Aucune invention de métrique absente des données fournies.
+- Frontière stricte et non négociable : aucune interprétation médicale,
+  aucune évaluation de douleur/blessure, aucun score de charge ou de
+  fatigue globale, même sur demande implicite de l'utilisateur.
+

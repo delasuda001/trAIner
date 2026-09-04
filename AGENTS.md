@@ -55,6 +55,20 @@ L'application sert à :
 - Le LLM ne doit pas inventer de métrique absente des données fournies.
 
 
+## Principes d'analyse (complément)
+
+- Le ton est argumenté et technique, adapté à un utilisateur expérimenté
+  (voir ADR-007), pas systématiquement prudent.
+- Les recommandations techniques (allure, exercices, structure de séance)
+  sont autorisées et doivent être chiffrées et sourcées.
+- La frontière médicale (ADR-004) reste strictement non négociable :
+  aucune interprétation de douleur, blessure, charge ou fatigue globale.
+- Toute estimation de seuil provient exclusivement de
+  docs/22-dynamic-thresholds-and-zones.md : jamais de champ propriétaire
+  Intervals.icu/Garmin, jamais de table statique importée.
+
+
+
 ## Conversation et objectifs
 
 L'application propose deux usages LLM :

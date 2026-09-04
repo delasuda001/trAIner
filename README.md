@@ -1,6 +1,7 @@
-# trAIner
+# Run Insights
 
 Application web personnelle d'analyse d'activités de course à pied.
+
 
 Elle utilise Intervals.icu comme source de données sportives. Ce premier vertical
 slice affiche les activités récentes et le détail de leurs laps.
@@ -58,4 +59,5 @@ recommandation et n'intègre pas Gemini ou un autre LLM.
 
 ## Documentation
 
-Voir le dossier docs.
+Voir le dossier docs, notamment docs/00-product-context.md (positionnement révisé)
+et docs/22-dynamic-thresholds-and-zones.md (estimation dynamique des seuils).
