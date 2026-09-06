@@ -9,6 +9,7 @@ import { createConfirmationRepository } from "./confirmation-repository";
 import { createGoalRepository } from "./goal-repository";
 import { createManualSessionRepository } from "./manual-session-repository";
 import { createSyncedActivityRepository } from "./synced-activity-repository";
+import { createConversationRepository } from "./conversation-repository";
 import { schema } from "../schema";
 import type { AppDatabase } from "../client";
 
@@ -21,6 +22,8 @@ const now = "2026-08-25T12:00:00.000Z";
 function applyMigration(connection: Database.Database): void {
   const migration = readFileSync(resolve(process.cwd(), "drizzle/0000_previous_marrow.sql"), "utf8");
   connection.exec(migration.replaceAll("--> statement-breakpoint", ""));
+  const conversationMigration = readFileSync(resolve(process.cwd(), "drizzle/0002_boring_speed_demon.sql"), "utf8");
+  connection.exec(conversationMigration.replaceAll("--> statement-breakpoint", ""));
 }
 
 function syncedInput(overrides: Record<string, unknown> = {}) {
@@ -83,5 +86,17 @@ describe("repositories SQLite", () => {
     await manualRepository.create({ id: "manual-1", sessionDate: "2026-08-25", discipline: "strength_training", durationMinutes: 45, createdAt: now, updatedAt: now });
     await syncedRepository.upsert(syncedInput());
     await expect(syncedRepository.findByPeriod("2026-08-25T00:00:00.000Z", "2026-08-25T23:59:59.999Z")).resolves.toHaveLength(1);
+  });
+
+  it("crée un thread, ajoute deux messages et relit son historique", async () => {
+    const repository = createConversationRepository(database);
+    await repository.createThread({ id: "thread-1", title: "Question", goalId: null, createdAt: now, updatedAt: now });
+    await repository.addMessage({ id: "message-1", threadId: "thread-1", role: "user", contentJson: "Question initiale", createdAt: now });
+    await repository.addMessage({ id: "message-2", threadId: "thread-1", role: "assistant", contentJson: JSON.stringify({ summary: "Réponse" }), createdAt: "2026-08-25T12:01:00.000Z" });
+    await expect(repository.findThread("thread-1")).resolves.toMatchObject({ title: "Question" });
+    await expect(repository.listMessages("thread-1")).resolves.toMatchObject([
+      { id: "message-1", role: "user" },
+      { id: "message-2", role: "assistant" },
+    ]);
   });
 });

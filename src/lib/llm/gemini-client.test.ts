@@ -8,6 +8,7 @@ vi.mock("@google/genai", () => {
       models = {
         generateContent: vi.fn().mockResolvedValue({
           text: JSON.stringify({
+            key_takeaways: ["Séance solide", "Récupération suffisante", "À travailler"],
             summary: "ok",
             observed_facts: ["fact"],
             historical_comparison: "",
@@ -52,6 +53,7 @@ describe("GeminiAnalysisClient", () => {
     await expect(
       client.analyze({
         activityId: "a-1",
+        performanceProfile: null,
         activityMetadata: {
           startDate: "2025-01-01T00:00:00.000Z",
           name: "Test",
@@ -88,7 +90,7 @@ describe("GeminiAnalysisClient", () => {
       } satisfies ActivityAnalysisContext)
     ).resolves.toMatchObject({
       response: expect.objectContaining({ summary: "ok" }),
-      model: "gemini-flash-latest",
+      model: "gemini-3.8-flash",
     });
 
     delete process.env.GEMINI_API_KEY;

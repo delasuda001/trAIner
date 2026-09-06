@@ -1,5 +1,5 @@
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
-import type { activityDetailsCache, activityStreamSummaries, athleteContextVersions, goals, manualSessions, syncedActivities, userConfirmations, activityContexts, analyses, actionItems } from "./schema";
+import type { activityDetailsCache, activityStreamSummaries, athleteContextVersions, goals, manualSessions, syncedActivities, userConfirmations, activityContexts, analyses, actionItems, conversationThreads, conversationMessages } from "./schema";
 
 export type SyncedActivity = InferSelectModel<typeof syncedActivities>;
 export type NewSyncedActivity = InferInsertModel<typeof syncedActivities>;
@@ -13,9 +13,14 @@ export type Goal = InferSelectModel<typeof goals>;
 export type NewGoal = InferInsertModel<typeof goals>;
 export type ActivityDetailsCache = InferSelectModel<typeof activityDetailsCache>;
 export type ActivityStreamSummary = InferSelectModel<typeof activityStreamSummaries>;
+export type NewActivityStreamSummary = InferInsertModel<typeof activityStreamSummaries>;
 export type ActivityContext = InferSelectModel<typeof activityContexts>;
 export type NewActivityContext = InferInsertModel<typeof activityContexts>;
 export type Analysis = InferSelectModel<typeof analyses>;
 export type NewAnalysis = InferInsertModel<typeof analyses>;
 export type ActionItem = InferSelectModel<typeof actionItems>;
 export type NewActionItem = InferInsertModel<typeof actionItems>;
+export type ConversationThread = InferSelectModel<typeof conversationThreads>;
+export type NewConversationThread = InferInsertModel<typeof conversationThreads>;
+export type ConversationMessage = InferSelectModel<typeof conversationMessages>;
+export type NewConversationMessage = InferInsertModel<typeof conversationMessages>;

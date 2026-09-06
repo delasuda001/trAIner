@@ -151,4 +151,19 @@ export const actionItems = sqliteTable("action_items", {
   analysisIndex: index("action_items_analysis_idx").on(table.analysisId),
 }));
 
-export const schema = { syncedActivities, activityDetailsCache, activityStreamSummaries, manualSessions, userConfirmations, athleteContextVersions, goals, activityContexts, analyses, actionItems };
+export const conversationThreads = sqliteTable("conversation_threads", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  goalId: text("goal_id"),
+  ...timestamps,
+}, (table) => ({ goalIndex: index("conversation_threads_goal_idx").on(table.goalId) }));
+
+export const conversationMessages = sqliteTable("conversation_messages", {
+  id: text("id").primaryKey(),
+  threadId: text("thread_id").notNull(),
+  role: text("role").notNull(),
+  contentJson: text("content_json").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => ({ threadIndex: index("conversation_messages_thread_idx").on(table.threadId, table.createdAt) }));
+
+export const schema = { syncedActivities, activityDetailsCache, activityStreamSummaries, manualSessions, userConfirmations, athleteContextVersions, goals, activityContexts, analyses, actionItems, conversationThreads, conversationMessages };

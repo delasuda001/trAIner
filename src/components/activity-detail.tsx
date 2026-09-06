@@ -12,6 +12,7 @@ import { segmentActivity, type SegmentationStrategy } from "@/lib/analysis/segme
 type Detail = { activity: Activity; intervals: Lap[]; dataAvailability: { intervals: boolean }; sourceMetadata: { cacheStatus: string; fetchedAt: string; sourceUpdatedAt: string | null } };
 type Tab = "summary" | "intervals" | "charts";
 type Analysis = {
+  key_takeaways: string[];
   summary: string;
   observed_facts: string[];
   historical_comparison: string | null;
@@ -118,7 +119,13 @@ function ContextForm({ context, setContext, onSubmit, saving, message }: { conte
 
 function AnalysisPanel({ payload }: { payload: AnalysisPayload }) {
   const analysis = payload.analysis;
-  return <section className="analysis-panel"><div className="section-heading"><div><p className="kicker"><Sparkles size={14} /> Débrief IA</p><h2>{analysis.summary}</h2></div><span className="detail-mark">{payload.model}</span></div><AnalysisList title="Constats factuels" items={analysis.observed_facts} /><div className="analysis-block"><h3>Classification en zones</h3><p>{analysis.zone_classification_summary}</p></div><div className="analysis-block"><h3>Comparaison historique</h3><p>{analysis.historical_comparison ?? "Comparaison historique insuffisante."}</p></div><AnalysisList title="Recommandations techniques" items={analysis.technical_recommendations} />{analysis.next_session_pace_guidance && <div className="analysis-block"><h3>Allure cible pour la prochaine séance similaire</h3><strong>{analysis.next_session_pace_guidance.recommendedPaceDisplay}</strong><p>{analysis.next_session_pace_guidance.rationale}</p><AnalysisList title="Ajustements" items={analysis.next_session_pace_guidance.adjustments} /></div>}<AnalysisList title="Hypothèses et limites" items={[...analysis.hypotheses, ...analysis.limitations]} />{analysis.safety_note && <div className="analysis-block safety-note"><h3>Note de sécurité</h3><p>{analysis.safety_note}</p></div>}<AnalysisList title="Pistes à examiner" items={[...analysis.questions_to_consider, ...analysis.next_steps]} /><p className="data-note">Source : activité et métriques déterministes calculées. Généré le {new Date(payload.createdAt).toLocaleString("fr-FR")}.</p></section>;
+  return <section className="analysis-panel"><div className="section-heading"><div><p className="kicker"><Sparkles size={14} /> Débrief IA</p><h2>{analysis.summary}</h2></div><span className="detail-mark">{payload.model}</span></div>
+    <div className="analysis-block highlight"><h3>Points clés</h3><ul>{analysis.key_takeaways.map((item, index) => <li key={`key-${index}`}>{item}</li>)}</ul></div>
+    <AnalysisList title="Recommandations techniques" items={analysis.technical_recommendations} />
+    {analysis.next_session_pace_guidance && <div className="analysis-block"><h3>Allure cible pour la prochaine séance similaire</h3><strong>{analysis.next_session_pace_guidance.recommendedPaceDisplay}</strong><p>{analysis.next_session_pace_guidance.rationale}</p><AnalysisList title="Ajustements" items={analysis.next_session_pace_guidance.adjustments} /></div>}
+    <div className="analysis-block"><h3>Hypothèses</h3><ul>{analysis.hypotheses.map((item, index) => <li key={`hyp-${index}`}>{item}</li>)}</ul></div>
+    <details className="analysis-block"><summary>Voir le détail complet</summary><div className="detail-extra"><AnalysisList title="Constats factuels" items={analysis.observed_facts} /><div className="analysis-block"><h3>Classification en zones</h3><p>{analysis.zone_classification_summary}</p></div><div className="analysis-block"><h3>Comparaison historique</h3><p>{analysis.historical_comparison ?? "Comparaison historique insuffisante."}</p></div><AnalysisList title="Limites et fiabilité" items={analysis.limitations} /><AnalysisList title="Questions à considérer" items={analysis.questions_to_consider} /><AnalysisList title="Prochaines étapes" items={analysis.next_steps} />{analysis.safety_note && <div className="analysis-block safety-note"><h3>Note de sécurité</h3><p>{analysis.safety_note}</p></div>}</div></details>
+    <p className="data-note">Source : activité et métriques déterministes calculées. Généré le {new Date(payload.createdAt).toLocaleString("fr-FR")}.</p></section>;
 }
 
 function AnalysisList({ title, items }: { title: string; items: string[] }) { return <div className="analysis-block"><h3>{title}</h3>{items.length ? <ul>{items.map((item, index) => <li key={`${title}-${index}`}>{item}</li>)}</ul> : <p className="data-note">Aucun élément fourni.</p>}</div>; }

@@ -51,6 +51,13 @@ export const historicalComparisonSchema = z.object({
 
 export const activityAnalysisContextSchema = z.object({
   activityId: z.string(),
+  performanceProfile: z.object({
+    summary: z.string(),
+    recentHighlights: z.array(z.string()),
+    volumeTrend: z.string().nullable(),
+    thresholdEstimate: z.string().nullable(),
+    keyTakeaways: z.array(z.string()),
+  }).nullable().default(null),
   activityMetadata: z.object({
     startDate: z.string(),
     name: z.string().nullable(),
@@ -111,6 +118,7 @@ export const activityAnalysisContextSchema = z.object({
 export type ActivityAnalysisContext = z.infer<typeof activityAnalysisContextSchema>;
 
 export const activityAnalysisResponseSchema = z.object({
+  key_takeaways: z.array(z.string()).min(1).max(3),
   summary: z.string(),
   observed_facts: z.array(z.string()),
   historical_comparison: z.string().nullable(),
@@ -132,3 +140,29 @@ export const activityAnalysisResponseSchema = z.object({
 });
 
 export type ActivityAnalysisResponse = z.infer<typeof activityAnalysisResponseSchema>;
+
+export const conversationScopeSchema = z.object({
+  kind: z.enum(["activity", "trend", "goal", "data_gap"]),
+  periodStart: z.string().nullable(),
+  periodEnd: z.string().nullable(),
+  activityIds: z.array(z.string()),
+  goalId: z.string().nullable(),
+});
+
+export const conversationEvidenceSchema = z.object({
+  activityId: z.string().nullable(),
+  label: z.string(),
+  value: z.string(),
+});
+
+export const conversationResponseSchema = z.object({
+  summary: z.string(),
+  observedFacts: z.array(z.string()),
+  comparisons: z.array(z.string()),
+  hypotheses: z.array(z.string()),
+  limitations: z.array(z.string()),
+  missingData: z.array(z.string()),
+  evidence: z.array(conversationEvidenceSchema),
+});
+
+export type ConversationResponse = z.infer<typeof conversationResponseSchema>;

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import type { AppDatabase } from "@/lib/db/client";
-import { buildActivityAnalysisContext } from "./context";
+import { buildActivityAnalysisContext, buildHistoricalComparisonForWorkout } from "./context";
 import { schema } from "@/lib/db/schema";
 
 vi.mock("server-only", () => ({}));
@@ -28,6 +28,67 @@ vi.mock("@/lib/activities/detail", () => ({
     intervals: [],
   }),
 }));
+
+describe("buildHistoricalComparisonForWorkout", () => {
+  it("uses work-segment percent-of-threshold and the right rep bucket", () => {
+    const comparison = buildHistoricalComparisonForWorkout(
+      {
+        averageSpeedMps: 3.0,
+        dominantZone: "threshold",
+        averagePercentOfThreshold: 98,
+        averageWorkSegmentDurationS: 180,
+        workSegmentCount: 5,
+      },
+      [
+        { averageSpeedMps: 3.1, dominantZone: "threshold", averagePercentOfThreshold: 100, averageWorkSegmentDurationS: 150, workSegmentCount: 5 },
+        { averageSpeedMps: 3.2, dominantZone: "threshold", averagePercentOfThreshold: 103, averageWorkSegmentDurationS: 180, workSegmentCount: 4 },
+      ]
+    );
+
+    expect(comparison.comparableActivitiesCount).toBe(2);
+    expect(comparison.insufficientDataReason).toBeNull();
+    expect(comparison.paceDeltaPct).toBeCloseTo(-2.0, 1);
+    expect(comparison.observations.join(" ")).toContain("% de seuil");
+  });
+
+  it("returns explicit insufficient data when no comparable repetitions are found", () => {
+    const comparison = buildHistoricalComparisonForWorkout(
+      {
+        averageSpeedMps: 3.0,
+        dominantZone: "threshold",
+        averagePercentOfThreshold: 98,
+        averageWorkSegmentDurationS: 300,
+        workSegmentCount: 3,
+      },
+      [
+        { averageSpeedMps: 3.4, dominantZone: "vo2max", averagePercentOfThreshold: 110, averageWorkSegmentDurationS: 90, workSegmentCount: 2 },
+      ]
+    );
+
+    expect(comparison.comparableActivitiesCount).toBe(0);
+    expect(comparison.insufficientDataReason).toContain("aucune séance comparable");
+  });
+
+  it("tracks delta versus the most recent comparable session and the last 3 sessions", () => {
+    const comparison = buildHistoricalComparisonForWorkout(
+      {
+        averageSpeedMps: 3.2,
+        dominantZone: "vo2max",
+        averagePercentOfThreshold: 108,
+        averageWorkSegmentDurationS: 120,
+        workSegmentCount: 4,
+      },
+      [
+        { averageSpeedMps: 2.8, dominantZone: "vo2max", averagePercentOfThreshold: 100, averageWorkSegmentDurationS: 120, workSegmentCount: 5, recentness: 20 },
+        { averageSpeedMps: 3.0, dominantZone: "vo2max", averagePercentOfThreshold: 104, averageWorkSegmentDurationS: 120, workSegmentCount: 4, recentness: 10 },
+        { averageSpeedMps: 3.15, dominantZone: "vo2max", averagePercentOfThreshold: 106, averageWorkSegmentDurationS: 120, workSegmentCount: 4, recentness: 5 },
+      ]
+    );
+
+    expect(comparison.paceDeltaPct).toBeCloseTo(1.9, 1);
+    expect(comparison.observations.join(" ")).toContain("3 séances");
+  });
+});
 
 describe("buildActivityAnalysisContext", () => {
   let db: AppDatabase;

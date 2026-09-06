@@ -53,6 +53,13 @@ uniquement » ; les séances manuelles n'apparaissent que dans le calendrier.
 La page détail charge les streams uniquement dans l'onglet « Courbes ». Aucun
 stream brut ni donnée GPS n'est stocké ou retourné.
 
+
+La page détail permet de générer un débrief Gemini argumenté (constats,
+zones d'entraînement, comparaison historique, recommandations techniques
+et allure cible pour la séance suivante), fondé sur une estimation
+dynamique du seuil (voir docs/22-dynamic-thresholds-and-zones.md).
+
+
 La page [Mon contexte](/context) permet de déclarer un contexte sportif
 versionné, une semaine type et des objectifs. Cette étape ne produit aucune
 recommandation et n'intègre pas Gemini ou un autre LLM.
