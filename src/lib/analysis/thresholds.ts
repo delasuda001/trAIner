@@ -102,6 +102,10 @@ export interface ThresholdEstimate {
   sessionSuggestionsForMissingZones: string[];
   biasIndicator: string | null; // ex. "basée uniquement sur efforts courts"
   freshnessAlert: boolean;
+  /** Nombre de points retenus dont l'effort source date de plus de FRESHNESS_WINDOW_S. */
+  stalePointCount: number;
+  /** Âge (semaines, 1 décimale) du plus ancien point retenu ; null si aucun point retenu. */
+  oldestRetainedPointWeeks: number | null;
   rejectedPoints: RejectionReason[];
 }
 
@@ -141,29 +145,36 @@ function isValidPoint(
     }
   }
 
-  // Test 2 : Plausibilité de dégradation
+  // Test 2 : Plausibilité de dégradation.
+  // On compare au point valide le plus proche PARMI toutes les durées
+  // inférieures, pas seulement à la durée de référence immédiatement
+  // précédente : sinon un trou (durée intermédiaire absente du cache ou
+  // elle-même rejetée) désactive silencieusement ce contrôle et laisse
+  // passer un effort long non maximal, qui tire ensuite la vitesse
+  // critique vers le bas.
   const currentSpeed = point.distanceM / point.durationS;
-  const previousDurationS = REFERENCE_DURATIONS_S.filter((d) => d < point.durationS).at(-1);
+  const previousDurationS = REFERENCE_DURATIONS_S
+    .filter((d) => d < point.durationS)
+    .reverse()
+    .find((d) => lastValidByDuration.has(d));
 
   if (previousDurationS !== undefined) {
-    const lastValid = lastValidByDuration.get(previousDurationS);
-    if (lastValid) {
-      // Allure attendue selon modèle de fatigue Riegel
-      const durationRatio = point.durationS / previousDurationS;
-      const expectedSpeedRatio = Math.pow(durationRatio, -FATIGUE_EXPONENT);
-      const expectedSpeed = lastValid.speed * expectedSpeedRatio;
+    const lastValid = lastValidByDuration.get(previousDurationS)!;
+    // Allure attendue selon modèle de fatigue Riegel
+    const durationRatio = point.durationS / previousDurationS;
+    const expectedSpeedRatio = Math.pow(durationRatio, -FATIGUE_EXPONENT);
+    const expectedSpeed = lastValid.speed * expectedSpeedRatio;
 
-      // Dégradation réelle vs attendue
-      const actualSlowdown = 1 - currentSpeed / expectedSpeed;
-      const expectedSlowdown = 1 - expectedSpeedRatio;
-      const maxAcceptableSlowdown = expectedSlowdown * (1 + DEGRADATION_TOLERANCE);
+    // Dégradation réelle vs attendue
+    const actualSlowdown = 1 - currentSpeed / expectedSpeed;
+    const expectedSlowdown = 1 - expectedSpeedRatio;
+    const maxAcceptableSlowdown = expectedSlowdown * (1 + DEGRADATION_TOLERANCE);
 
-      if (actualSlowdown > maxAcceptableSlowdown) {
-        return {
-          valid: false,
-          reason: `Dégradation d'allure ${(actualSlowdown * 100).toFixed(1)}% vs ${(expectedSlowdown * 100).toFixed(1)}% attendu — effort probablement non maximal`,
-        };
-      }
+    if (actualSlowdown > maxAcceptableSlowdown) {
+      return {
+        valid: false,
+        reason: `Dégradation d'allure ${(actualSlowdown * 100).toFixed(1)}% vs ${(expectedSlowdown * 100).toFixed(1)}% attendu face au meilleur effort de ${Math.round(previousDurationS / 60)} min — effort probablement non maximal`,
+      };
     }
   }
 
@@ -346,6 +357,13 @@ export function estimateThreshold(input: ThresholdInput): ThresholdEstimate {
   const biasIndicator = generateBiasIndicator(validPoints, confidenceLevel);
   const freshnessAlert = assessFreshness(validPoints, now);
 
+  const staleThresholdS = now - FRESHNESS_WINDOW_S;
+  const stalePointCount = validPoints.filter((point) => point.dateS < staleThresholdS).length;
+  const oldestDateS = validPoints.length > 0 ? Math.min(...validPoints.map((point) => point.dateS)) : null;
+  const oldestRetainedPointWeeks = oldestDateS != null
+    ? Math.round(((now - oldestDateS) / (7 * 24 * 3600)) * 10) / 10
+    : null;
+
   return {
     criticalSpeedMps: validPoints.length >= 2 ? cs : null,
     dprimM: validPoints.length >= 2 ? dprime : null,
@@ -356,6 +374,8 @@ export function estimateThreshold(input: ThresholdInput): ThresholdEstimate {
     sessionSuggestionsForMissingZones: sessionSuggestions,
     biasIndicator,
     freshnessAlert,
+    stalePointCount,
+    oldestRetainedPointWeeks,
     rejectedPoints,
   };
 }
@@ -377,6 +397,8 @@ export const thresholdEstimateSchema = z.object({
   sessionSuggestionsForMissingZones: z.array(z.string()),
   biasIndicator: z.string().nullable(),
   freshnessAlert: z.boolean(),
+  stalePointCount: z.number().int().nonnegative(),
+  oldestRetainedPointWeeks: z.number().nonnegative().nullable(),
   rejectedPoints: z.array(
     z.object({
       durationS: z.number().positive(),

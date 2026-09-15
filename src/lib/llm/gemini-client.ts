@@ -18,21 +18,50 @@ CRITICAL BOUNDARIES (non-negotiable):
 - NEVER mention internal variable names or technical field names such as validPointCount, thresholdEstimate, percentOfThreshold, or any other private implementation names in the final text. Rewrite them in plain language instead.
 
 INSTRUCTIONS:
-1. Write 3 short key takeaways at the top, in simple language, without jargon.
+1. Write 1 to 3 short key_takeaways at the top, in simple language, without jargon.
 2. Cite the metrics and comparisons supporting each recommendation.
 3. Every speed mentioned in summary, observed_facts, technical_recommendations, or next_session_pace_guidance MUST be expressed as min:sec/km pace in French format (for example, "4:12/km" or "4:12 /km"). Never use m/s or km/h in textual output. You may reason internally in other units, but all output text must use min/km pace.
 4. Fill next_session_pace_guidance.recommendedPaceDisplay with the recommended min:sec /km pace. Keep recommendedPaceMps only as the internal numeric value.
 5. For exercises, provide concrete structure (duration, reps, intensity zone).
 6. Distinguish facts (observed), comparisons (historical), and hypotheses.
-7. Always include limitations and data gaps.
-8. Round all numeric values to the nearest integer for heart rate, to the nearest second for pace values, and to the nearest whole percentage in prose and JSON where relevant.
-9. Merge any clarifications that affect reliability into limitations instead of listing redundant future-session suggestions. Keep recommendations and future-session guidance distinct but non-duplicative.
-10. When a dynamic threshold confidence is insufficient or low and the user-declared reference is used as fallback, explicitly state that the value comes from the declared reference and not from the computed threshold.
+7. ROUNDING (strict, prose AND JSON): heart rate to the nearest whole bpm, pace values to the nearest whole second, percentages to the nearest whole percent. Never emit more precision than that.
+8. NEVER write internal field or variable names in any output string (examples of forbidden tokens: validPointCount, thresholdEstimate, percentOfThreshold, criticalSpeedMps, confidenceLevel, coverageByZone, biasHint, key_takeaways). Always paraphrase in plain French.
+9. There is no "questions to consider" section. Any clarification that affects the reliability of a conclusion goes into limitations. Everything else that is not an actionable recommendation or a concrete next step is omitted. Keep technical_recommendations and next_session_pace_guidance distinct and non-duplicative.
+10. zone_classification_summary MUST state which threshold pace value was used to classify the zones AND where it comes from. thresholdEstimate.basis is always "recent_history": the threshold is computed from the athlete's best efforts over the last thresholdEstimate.windowWeeks weeks across several sessions (thresholdEstimate.retainedPoints lists the source activities and dates), NOT from this single session — say this plainly so the reader is not misled. If thresholdEstimate.usedDeclaredReferenceFallback is true, the computed estimate is too weak (confidence "insufficient" or "low"): classify the zones using the user-declared performance reference from the athlete context instead, and state explicitly that the zones rely on that declared reference and not on a computed threshold. Also reflect thresholdEstimate.staleWarning.message in limitations when it is non-null.
+11. Always include limitations and data gaps.
 
-OUTPUT FORMAT: Valid JSON matching the provided schema.
+OUTPUT FORMAT: Valid JSON matching the provided schema. Do NOT add fields that are not in the schema.
 Respond with ONLY the JSON object, no markdown wrapper or additional text.`;
 
-const PROMPT_VERSION = "1.0";
+// Le débrief d'activité et la conversation guidée ont des schémas de réponse
+// (activityAnalysisResponseSchema vs conversationResponseSchema) et des prompts
+// qui évoluent indépendamment : deux versions distinctes, chacune persistée
+// dans la colonne prompt_version de sa table (analyses vs conversation_messages).
+//
+// DEBRIEF_PROMPT_VERSION
+//   1.0 -> format initial.
+//   1.1 -> ajout de key_takeaways (obligatoire, min. 1) ; les analyses
+//          persistées en "1.0" sont détectées comme format obsolète à la
+//          lecture (cf. parseStoredAnalysis) et doivent être régénérées.
+//   1.2 -> retrait de questions_to_consider du contrat (les clarifications
+//          de fiabilité rejoignent limitations) ; transparence imposée sur
+//          la source de la valeur de seuil dans zone_classification_summary.
+//          Retirer un champ n'invalide pas les payloads antérieurs (Zod
+//          non-strict les strippe) : les analyses "1.1" restent lisibles,
+//          seules les "1.0" (sans key_takeaways) restent "à régénérer".
+//   1.3 -> changements de LOGIQUE de contenu (schéma inchangé, donc payloads
+//          antérieurs toujours valides) : comparaison historique normalisée
+//          par % de l'allure seuil (jamais versionnée jusqu'ici) ; provenance
+//          multi-séances du seuil (basis/windowWeeks/retainedPoints,
+//          usedDeclaredReferenceFallback) ; correction du filtre de
+//          plausibilité (efforts longs non maximaux désormais écartés).
+//          Détectée par comparaison stricte prompt_version stocké vs courant
+//          -> bandeau "fraîcheur de logique", non bloquant (cf. docs/07).
+export const DEBRIEF_PROMPT_VERSION = "1.3";
+//
+// CONVERSATION_PROMPT_VERSION
+//   1.0 -> premier format explicitement versionné de conversationResponseSchema.
+const CONVERSATION_PROMPT_VERSION = "1.0";
 // const MODEL = "gemini-3.5-flash-lite";
 const MODEL =  "gemini-3.8-flash";
 // const MODEL = process.env.GEMINI_MODEL
@@ -155,7 +184,7 @@ Provide a structured technical analysis following the output schema.`;
     return {
       response: validatedResponse,
       model: MODEL,
-      promptVersion: PROMPT_VERSION,
+      promptVersion: DEBRIEF_PROMPT_VERSION,
     };
   }
 
@@ -197,7 +226,7 @@ Return only valid JSON matching the requested schema.`;
     try { parsedResponse = JSON.parse(jsonMatch[0]); } catch (error) { throw new InvalidResponseError(`Failed to parse conversation JSON: ${error instanceof Error ? error.message : "unknown"}`); }
     const validatedResponse = conversationResponseSchema.safeParse(parsedResponse);
     if (!validatedResponse.success) throw new InvalidResponseError("Conversation response validation failed", validatedResponse.error.issues);
-    return { response: validatedResponse.data, model: MODEL, promptVersion: PROMPT_VERSION };
+    return { response: validatedResponse.data, model: MODEL, promptVersion: CONVERSATION_PROMPT_VERSION };
   }
 }
 

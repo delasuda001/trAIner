@@ -319,4 +319,63 @@ describe("thresholds", () => {
       expect(resultLong.biasIndicator).toContain("longs");
     }
   });
+
+  // Test 8 : Comptage des points retenus périmés (> 8 semaines) et âge du plus ancien
+  it("expose stalePointCount et oldestRetainedPointWeeks", () => {
+    const now = Math.floor(Date.now() / 1000);
+    const weeks = (n: number) => now - n * 7 * 24 * 3600;
+    const input: ThresholdInput = {
+      effortsByDuration: [
+        { durationS: 300, distanceM: 1650, heartRateBpm: 185, activityId: "fresh", dateS: weeks(2) },
+        { durationS: 1200, distanceM: 6000, heartRateBpm: 178, activityId: "old", dateS: weeks(15) },
+      ],
+      globalMaxHeartRateBpm: 195,
+    };
+
+    const result = estimateThreshold(input);
+    expect(result.validPointCount).toBe(2);
+    expect(result.stalePointCount).toBe(1); // le point à 15 semaines
+    expect(result.oldestRetainedPointWeeks).toBeGreaterThanOrEqual(14.9);
+    expect(result.oldestRetainedPointWeeks).toBeLessThanOrEqual(15.1);
+    // Un point < 8 semaines existe -> pas d'alerte globale, mais stalePointCount signale la nuance.
+    expect(result.freshnessAlert).toBe(false);
+  });
+
+  it("oldestRetainedPointWeeks est null sans point retenu", () => {
+    const result = estimateThreshold({ effortsByDuration: [], globalMaxHeartRateBpm: 190 });
+    expect(result.oldestRetainedPointWeeks).toBeNull();
+    expect(result.stalePointCount).toBe(0);
+  });
+
+  // Test 9 : un trou dans les durées ne doit pas désactiver le contrôle de
+  // dégradation pour les points plus longs (bug de seuil trop lent).
+  it("rejette les efforts longs non maximaux même quand une durée intermédiaire manque", () => {
+    const now = Math.floor(Date.now() / 1000);
+    const input: ThresholdInput = {
+      effortsByDuration: [
+        { durationS: 180, distanceM: 900, heartRateBpm: 186, activityId: "a", dateS: now }, // 5.00 m/s (maximal)
+        { durationS: 300, distanceM: 1395, heartRateBpm: 182, activityId: "b", dateS: now }, // 4.65 m/s
+        { durationS: 600, distanceM: 2520, heartRateBpm: 178, activityId: "c", dateS: now }, // 4.20 m/s
+        { durationS: 1200, distanceM: 4320, heartRateBpm: 165, activityId: "d", dateS: now }, // 3.60 m/s (non maximal)
+        { durationS: 1800, distanceM: 6156, heartRateBpm: 152, activityId: "e", dateS: now }, // 3.42 m/s (non maximal)
+      ],
+      globalMaxHeartRateBpm: 190,
+    };
+
+    const result = estimateThreshold(input);
+
+    // 1200 s et 1800 s rejetés pour dégradation implausible, avec motif.
+    expect(result.validPointCount).toBe(3);
+    const rejectedDurations = result.rejectedPoints.map((point) => point.durationS).sort((x, y) => x - y);
+    expect(rejectedDurations).toEqual([1200, 1800]);
+    expect(result.rejectedPoints.every((point) => /Dégradation/.test(point.reason))).toBe(true);
+
+    // La vitesse critique n'est plus tirée vers le bas par l'effort long non
+    // maximal : ~3.84 m/s (~4:21/km), plus RAPIDE que l'effort de 30 min (4:52/km).
+    expect(result.criticalSpeedMps).not.toBeNull();
+    expect(result.criticalSpeedMps!).toBeGreaterThan(3.7);
+    expect(result.criticalSpeedMps!).toBeGreaterThan(6156 / 1800); // > vitesse de l'effort de 30 min
+    const paceSecPerKm = 1000 / result.criticalSpeedMps!;
+    expect(paceSecPerKm).toBeLessThan(270); // < 4:30/km
+  });
 });

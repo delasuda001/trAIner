@@ -1,10 +1,9 @@
 import Database from "better-sqlite3";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { schema, manualSessions, syncedActivities } from "@/lib/db/schema";
 import type { AppDatabase } from "@/lib/db/client";
+import { applyMigrations } from "@/lib/db/testing/apply-migrations";
 import { readLocalActivities } from "./route";
 
 vi.mock("server-only", () => ({}));
@@ -13,12 +12,7 @@ let sqlite: Database.Database;
 let database: AppDatabase;
 const now = "2026-08-25T12:00:00.000Z";
 
-function applyMigration(connection: Database.Database): void {
-  const migration = readFileSync(resolve(process.cwd(), "drizzle/0000_previous_marrow.sql"), "utf8");
-  connection.exec(migration.replaceAll("--> statement-breakpoint", ""));
-}
-
-beforeEach(() => { sqlite = new Database(":memory:"); applyMigration(sqlite); database = drizzle(sqlite, { schema }); });
+beforeEach(() => { sqlite = new Database(":memory:"); applyMigrations(sqlite); database = drizzle(sqlite, { schema }); });
 afterEach(() => sqlite.close());
 
 describe("GET /api/activities", () => {

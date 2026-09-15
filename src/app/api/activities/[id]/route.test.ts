@@ -1,7 +1,6 @@
 import Database from "better-sqlite3";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { applyMigrations } from "@/lib/db/testing/apply-migrations";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { activityDetailsCache, schema, syncedActivities } from "@/lib/db/schema";
 import type { AppDatabase } from "@/lib/db/client";
@@ -15,8 +14,7 @@ const interval = { id: 1, label: "Lap 1", distance: 1000, moving_time: 300, aver
 let sqlite: Database.Database;
 let database: AppDatabase;
 
-function applyMigration(connection: Database.Database): void { const migration = readFileSync(resolve(process.cwd(), "drizzle/0000_previous_marrow.sql"), "utf8"); connection.exec(migration.replaceAll("--> statement-breakpoint", "")); }
-beforeEach(() => { sqlite = new Database(":memory:"); applyMigration(sqlite); database = drizzle(sqlite, { schema }); });
+beforeEach(() => { sqlite = new Database(":memory:"); applyMigrations(sqlite); database = drizzle(sqlite, { schema }); });
 afterEach(() => { vi.unstubAllGlobals(); sqlite.close(); });
 beforeAll(() => { process.env.INTERVALS_API_KEY = "test-key"; process.env.INTERVALS_ATHLETE_ID = "test-athlete"; });
 

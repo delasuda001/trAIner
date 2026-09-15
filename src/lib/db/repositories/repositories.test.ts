@@ -1,15 +1,17 @@
 import Database from "better-sqlite3";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { vi } from "vitest";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { applyMigrations } from "../testing/apply-migrations";
 import { createAthleteContextRepository } from "./athlete-context-repository";
 import { createConfirmationRepository } from "./confirmation-repository";
 import { createGoalRepository } from "./goal-repository";
 import { createManualSessionRepository } from "./manual-session-repository";
 import { createSyncedActivityRepository } from "./synced-activity-repository";
 import { createConversationRepository } from "./conversation-repository";
+import { createAnalysisRepository, parseStoredAnalysis } from "./analysis-repository";
+import { createActivityContextRepository } from "./activity-context-repository";
+import { createStreamSummaryRepository } from "./stream-summary-repository";
 import { schema } from "../schema";
 import type { AppDatabase } from "../client";
 
@@ -19,18 +21,11 @@ let sqlite: Database.Database;
 let database: AppDatabase;
 const now = "2026-08-25T12:00:00.000Z";
 
-function applyMigration(connection: Database.Database): void {
-  const migration = readFileSync(resolve(process.cwd(), "drizzle/0000_previous_marrow.sql"), "utf8");
-  connection.exec(migration.replaceAll("--> statement-breakpoint", ""));
-  const conversationMigration = readFileSync(resolve(process.cwd(), "drizzle/0002_boring_speed_demon.sql"), "utf8");
-  connection.exec(conversationMigration.replaceAll("--> statement-breakpoint", ""));
-}
-
 function syncedInput(overrides: Record<string, unknown> = {}) {
   return { id: "sync-1", intervalsActivityId: "i179394628", startDate: now, sportType: "Run", syncedAt: now, createdAt: now, updatedAt: now, ...overrides };
 }
 
-beforeEach(() => { sqlite = new Database(":memory:"); applyMigration(sqlite); database = drizzle(sqlite, { schema }); });
+beforeEach(() => { sqlite = new Database(":memory:"); applyMigrations(sqlite); database = drizzle(sqlite, { schema }); });
 afterEach(() => sqlite.close());
 
 describe("repositories SQLite", () => {
@@ -88,15 +83,116 @@ describe("repositories SQLite", () => {
     await expect(syncedRepository.findByPeriod("2026-08-25T00:00:00.000Z", "2026-08-25T23:59:59.999Z")).resolves.toHaveLength(1);
   });
 
+  it("signale une analyse persistée dans un ancien format sans planter à la lecture", async () => {
+    const repository = createAnalysisRepository(database);
+    // Payload conforme au contrat de réponse *avant* l'ajout de key_takeaways.
+    const legacyResponse = {
+      summary: "Séance de seuil régulière.",
+      observed_facts: ["Allure stable autour de 4:10/km."],
+      historical_comparison: null,
+      zone_classification_summary: "Majoritairement en zone seuil.",
+      technical_recommendations: [],
+      next_session_pace_guidance: null,
+      hypotheses: [],
+      limitations: ["Comparaison historique indisponible."],
+      questions_to_consider: [],
+      next_steps: [],
+      safety_note: null,
+    };
+    await repository.create({
+      id: "analysis-legacy",
+      intervalsActivityId: "i179394628",
+      deterministicMetricsJson: "{}",
+      historicalComparisonJson: null,
+      llmResponseJson: JSON.stringify(legacyResponse),
+      llmModel: "gemini-legacy",
+      promptVersion: "1.0",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const stored = await repository.findLatestByActivityId("i179394628");
+    expect(stored).toBeDefined();
+
+    const parsed = parseStoredAnalysis(stored!);
+    expect(parsed.status).toBe("outdated");
+    if (parsed.status === "outdated") {
+      expect(parsed.issues.some((issue) => issue.includes("key_takeaways"))).toBe(true);
+    }
+
+    // Une analyse "1.1" (avec key_takeaways ET l'ancien questions_to_consider)
+    // reste lisible sous le contrat 1.2 : le champ retiré est simplement strippé.
+    await repository.create({
+      id: "analysis-current",
+      intervalsActivityId: "i179394628",
+      deterministicMetricsJson: "{}",
+      historicalComparisonJson: null,
+      llmResponseJson: JSON.stringify({ ...legacyResponse, key_takeaways: ["Séance réussie."], questions_to_consider: ["ancienne question"] }),
+      llmModel: "gemini-3.8-flash",
+      promptVersion: "1.1",
+      createdAt: "2026-08-25T12:05:00.000Z",
+      updatedAt: "2026-08-25T12:05:00.000Z",
+    });
+    const current = parseStoredAnalysis((await repository.findLatestByActivityId("i179394628"))!);
+    expect(current.status).toBe("ok");
+    if (current.status === "ok") {
+      expect(current.analysis).not.toHaveProperty("questions_to_consider");
+      expect(current.analysis.key_takeaways).toEqual(["Séance réussie."]);
+    }
+  });
+
+  it("upsert le contexte d'activité : crée, relit par intervals_activity_id, met à jour sans dupliquer", async () => {
+    const repository = createActivityContextRepository(database);
+    const created = await repository.upsert({ id: "ctx-1", intervalsActivityId: "i179394628", sessionGoal: "Tempo", perceivedExertion: "modéré", unusualFatigue: 0, painFlag: 0, note: "RAS", createdAt: now, updatedAt: now });
+    expect(created).toMatchObject({ intervalsActivityId: "i179394628", sessionGoal: "Tempo", perceivedExertion: "modéré" });
+
+    await expect(repository.findByActivityId("i179394628")).resolves.toMatchObject({ id: created.id, note: "RAS" });
+    await expect(repository.findByActivityId("absent")).resolves.toBeUndefined();
+
+    const updated = await repository.upsert({ id: "ctx-2", intervalsActivityId: "i179394628", sessionGoal: "Seuil", perceivedExertion: "difficile", unusualFatigue: 1, painFlag: 1, note: "Gêne mollet", createdAt: "2099-01-01T00:00:00.000Z", updatedAt: now });
+    expect(updated).toMatchObject({ sessionGoal: "Seuil", unusualFatigue: 1, painFlag: 1, note: "Gêne mollet" });
+    // La mise à jour préserve l'identité et la date de création de la ligne :
+    // l'id "ctx-2" et le createdAt "2099-..." fournis en entrée sont ignorés.
+    expect(updated.id).toBe(created.id);
+    expect(updated.createdAt).toBe(now);
+    // updatedAt est rafraîchi par le repository, jamais figé à la valeur d'entrée.
+    expect(updated.updatedAt).not.toBe(now);
+    expect(Date.parse(updated.updatedAt)).toBeGreaterThan(Date.parse(now));
+    expect(sqlite.prepare("select count(*) as count from activity_contexts where intervals_activity_id = 'i179394628'").get()).toMatchObject({ count: 1 });
+    await expect(repository.findByActivityId("i179394628")).resolves.toMatchObject({ sessionGoal: "Seuil", note: "Gêne mollet" });
+
+    await expect(repository.findById(updated.id)).resolves.toMatchObject({ intervalsActivityId: "i179394628" });
+    await expect(repository.delete(updated.id)).resolves.toBe(true);
+    await expect(repository.delete(updated.id)).resolves.toBe(false);
+    await expect(repository.findByActivityId("i179394628")).resolves.toBeUndefined();
+  });
+
+  it("upsert un résumé de streams par (activité, version) sans dupliquer", async () => {
+    const repository = createStreamSummaryRepository(database);
+    const payloadV1a = JSON.stringify({ version: "1", bestEfforts: ["initial"] });
+    const payloadV1b = JSON.stringify({ version: "1", bestEfforts: ["recalculé"] });
+
+    await repository.upsert({ id: "sum-1", intervalsActivityId: "i179394628", streamVersion: "1", summaryJson: payloadV1a, createdAt: now, updatedAt: now });
+    const updated = await repository.upsert({ id: "sum-2", intervalsActivityId: "i179394628", streamVersion: "1", summaryJson: payloadV1b, createdAt: now, updatedAt: "2026-08-25T13:00:00.000Z" });
+    expect(updated.summaryJson).toBe(payloadV1b);
+    expect(sqlite.prepare("select count(*) as count from activity_stream_summaries where intervals_activity_id = 'i179394628'").get()).toMatchObject({ count: 1 });
+
+    await repository.upsert({ id: "sum-3", intervalsActivityId: "i179394628", streamVersion: "2", summaryJson: JSON.stringify({ version: "2" }), createdAt: now, updatedAt: now });
+    expect(sqlite.prepare("select count(*) as count from activity_stream_summaries where intervals_activity_id = 'i179394628'").get()).toMatchObject({ count: 2 });
+
+    await expect(repository.findByActivityAndVersion("i179394628", "1")).resolves.toMatchObject({ summaryJson: payloadV1b });
+    await expect(repository.listByVersion("1")).resolves.toHaveLength(1);
+  });
+
   it("crée un thread, ajoute deux messages et relit son historique", async () => {
     const repository = createConversationRepository(database);
     await repository.createThread({ id: "thread-1", title: "Question", goalId: null, createdAt: now, updatedAt: now });
     await repository.addMessage({ id: "message-1", threadId: "thread-1", role: "user", contentJson: "Question initiale", createdAt: now });
-    await repository.addMessage({ id: "message-2", threadId: "thread-1", role: "assistant", contentJson: JSON.stringify({ summary: "Réponse" }), createdAt: "2026-08-25T12:01:00.000Z" });
+    await repository.addMessage({ id: "message-2", threadId: "thread-1", role: "assistant", contentJson: JSON.stringify({ summary: "Réponse" }), model: "gemini-3.8-flash", promptVersion: "1.0", createdAt: "2026-08-25T12:01:00.000Z" });
     await expect(repository.findThread("thread-1")).resolves.toMatchObject({ title: "Question" });
     await expect(repository.listMessages("thread-1")).resolves.toMatchObject([
-      { id: "message-1", role: "user" },
-      { id: "message-2", role: "assistant" },
+      { id: "message-1", role: "user", model: null, promptVersion: null },
+      { id: "message-2", role: "assistant", model: "gemini-3.8-flash", promptVersion: "1.0" },
     ]);
   });
 });

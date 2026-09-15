@@ -1,7 +1,6 @@
 import Database from "better-sqlite3";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { applyMigrations } from "@/lib/db/testing/apply-migrations";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { schema } from "@/lib/db/schema";
 import type { AppDatabase } from "@/lib/db/client";
@@ -15,8 +14,7 @@ let sqlite: Database.Database;
 let database: AppDatabase;
 const context = { version: 1 as const, athleteProfile: { experienceLevel: "confirmed" as const, notes: "Course régulière" }, performanceReferences: [{ id: "ref-1", label: "Seuil", value: "4:15 min/km", source: "Déclaré", observedDate: "2026-08-25" }], priorities: { primary: "Régularité", secondary: ["Vitesse"] }, weeklyTemplate: { monday: { activities: ["running" as const], flexible: false } }, currentBlock: { title: "Base", durationWeeks: 8, priority: "Endurance", description: "Bloc actuel", personalRules: ["Rester progressif"] }, coachingPreferences: { wantsCriticalDataGroundedFeedback: true, wantsTrainingScenariosToReview: true, wantsSourcesAndLimitationsAlwaysVisible: true } };
 const goal = { title: "10 km", type: "race", priority: "primary", status: "active", targetDate: "2026-10-01", definition: {} };
-function applyMigration(connection: Database.Database): void { const migration = readFileSync(resolve(process.cwd(), "drizzle/0000_previous_marrow.sql"), "utf8"); connection.exec(migration.replaceAll("--> statement-breakpoint", "")); }
-beforeEach(() => { sqlite = new Database(":memory:"); applyMigration(sqlite); database = drizzle(sqlite, { schema }); });
+beforeEach(() => { sqlite = new Database(":memory:"); applyMigrations(sqlite); database = drizzle(sqlite, { schema }); });
 afterEach(() => sqlite.close());
 
 describe("context et objectifs", () => {

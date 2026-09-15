@@ -7,6 +7,24 @@ export const thresholdEstimateSchema = z.object({
   dprimM: z.number().nullable(),
   validPointCount: z.number().int(),
   confidenceLevel: z.enum(["insufficient", "low", "moderate", "good"]),
+  /** Origine de la valeur : toujours l'historique récent (jamais cette seule séance). */
+  basis: z.literal("recent_history"),
+  /** Fenêtre (semaines) des efforts qui alimentent l'estimation. */
+  windowWeeks: z.number().int().positive(),
+  /**
+   * true quand la confiance est insufficient/low ET qu'une référence de
+   * performance déclarée existe dans le contexte athlète : le modèle DOIT
+   * alors classer les zones sur cette référence et le dire explicitement.
+   */
+  usedDeclaredReferenceFallback: z.boolean(),
+  /** Activités et dates des points retenus pour l'estimation. */
+  retainedPoints: z.array(
+    z.object({
+      durationS: z.number().int().positive(),
+      activityId: z.string(),
+      activityDate: z.string(),
+    })
+  ),
   coverageByZone: z.object({
     short: z.boolean(),
     medium: z.boolean(),
@@ -23,6 +41,8 @@ export const thresholdEstimateSchema = z.object({
   staleWarning: z.object({
     isStale: z.boolean(),
     lastValidDaysAgo: z.number().nullable(),
+    stalePointCount: z.number().int().nonnegative(),
+    oldestRetainedPointWeeks: z.number().nonnegative().nullable(),
     message: z.string().nullable(),
   }),
   rejectedPoints: z.array(
@@ -32,6 +52,51 @@ export const thresholdEstimateSchema = z.object({
     })
   ),
 });
+
+/**
+ * Profil de performance multi-activités, dérivé des résumés de streams en
+ * cache, de la tendance de volume et des débriefs récents. Agrégats
+ * uniquement : aucune série brute, aucun score de charge/fatigue.
+ */
+export const performanceProfileSchema = z.object({
+  generatedAt: z.string(),
+  /** Fenêtre (semaines) des résumés qui participent à l'estimation active de seuil. */
+  estimateWindowWeeks: z.number().int().positive(),
+  thresholdPaceMinKm: z.string().nullable(),
+  thresholdConfidence: z.enum(["insufficient", "low", "moderate", "good"]),
+  thresholdBiasHint: z.string().nullable(),
+  thresholdFreshnessStale: z.boolean(),
+  /** Nombre de points retenus datant de plus de 8 semaines (péremption). */
+  thresholdStalePointCount: z.number().int().nonnegative(),
+  thresholdOldestRetainedPointWeeks: z.number().nonnegative().nullable(),
+  /** Message de péremption en français, `null` si aucun point retenu périmé. Affiché indépendamment de la confiance. */
+  thresholdStaleMessage: z.string().nullable(),
+  missingDurationZones: z.array(z.enum(["short", "medium", "long"])),
+  bestEfforts: z.array(
+    z.object({
+      durationS: z.number().int().positive(),
+      paceMinKm: z.string(),
+      meanHeartRateBpm: z.number().nullable(),
+      activityId: z.string(),
+      /** Date (ISO) de l'activité source de ce meilleur effort. */
+      activityDate: z.string(),
+      /** `used` = retenu par l'estimation de seuil ; `rejected` = écarté (filtre intensité/plausibilité). */
+      status: z.enum(["used", "rejected"]),
+      rejectionReason: z.string().nullable(),
+    })
+  ),
+  weeklyVolume: z.object({
+    recentAverageKm: z.number().nullable(),
+    priorAverageKm: z.number().nullable(),
+    trend: z.string().nullable(),
+  }),
+  recentKeyTakeaways: z.array(z.string()),
+  activitiesWithStreamSummary: z.number().int().nonnegative(),
+  activitiesWithStreamSummaryInWindow: z.number().int().nonnegative(),
+  totalRunningActivities: z.number().int().nonnegative(),
+});
+
+export type PerformanceProfile = z.infer<typeof performanceProfileSchema>;
 
 export const segmentZoneSchema = z.object({
   segmentIndex: z.number(),
@@ -51,13 +116,7 @@ export const historicalComparisonSchema = z.object({
 
 export const activityAnalysisContextSchema = z.object({
   activityId: z.string(),
-  performanceProfile: z.object({
-    summary: z.string(),
-    recentHighlights: z.array(z.string()),
-    volumeTrend: z.string().nullable(),
-    thresholdEstimate: z.string().nullable(),
-    keyTakeaways: z.array(z.string()),
-  }).nullable().default(null),
+  performanceProfile: performanceProfileSchema.nullable().default(null),
   activityMetadata: z.object({
     startDate: z.string(),
     name: z.string().nullable(),
@@ -134,7 +193,6 @@ export const activityAnalysisResponseSchema = z.object({
     .nullable(),
   hypotheses: z.array(z.string()),
   limitations: z.array(z.string()),
-  questions_to_consider: z.array(z.string()),
   next_steps: z.array(z.string()),
   safety_note: z.string().nullable(),
 });

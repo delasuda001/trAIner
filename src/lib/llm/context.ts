@@ -6,6 +6,8 @@ import { createGoalRepository } from "../db/repositories/goal-repository";
 import { createSyncedActivityRepository } from "../db/repositories/synced-activity-repository";
 import { loadActivityDetail } from "../activities/detail";
 import { estimateThreshold } from "../analysis/thresholds";
+import { aggregateCachedEfforts, toThresholdInput } from "../analysis/threshold-basis";
+import { buildThresholdStaleMessage } from "../analysis/confidence-banner";
 import { classifySegmentInZone } from "../analysis/zones";
 import { segmentActivity } from "../analysis/segmentation";
 import { parseJson, athleteContextSchema } from "../db/contracts";
@@ -205,12 +207,13 @@ export async function buildActivityAnalysisContext(
     return `${min}:${sec.toString().padStart(2, "0")}`;
   }
 
-  // Build threshold estimate from synced activity
-  const thresholdInput = {
-    effortsByDuration: [],
-    globalMaxHeartRateBpm: synced.maxHeartRateBpm,
-  };
-  const thresholdEst = estimateThreshold(thresholdInput);
+  // Estimation de seuil pour CE débrief : mêmes résumés de streams en cache et
+  // même fenêtre temporelle que le profil de performance (aucun fetch de
+  // streams ici ; si le cache est vide, la confiance reste "insufficient").
+  // `thresholdBasis` est calculé une seule fois puis partagé avec le profil.
+  const contextNow = new Date();
+  const thresholdBasis = await aggregateCachedEfforts(database, contextNow);
+  const thresholdEst = estimateThreshold(toThresholdInput(thresholdBasis));
 
   const segmentZones = segmented.segments.map((seg, idx) => ({
     segmentIndex: idx,
@@ -240,6 +243,9 @@ export async function buildActivityAnalysisContext(
   // Prepare athlete context
   const athleteCtxRepo = createAthleteContextRepository(database);
   const athleteCtxVersion = await athleteCtxRepo.findActive();
+  const athleteContext = athleteCtxVersion
+    ? parseJson(athleteContextSchema, athleteCtxVersion.contextJson)
+    : null;
 
   // Prepare active goals
   const goalRepo = createGoalRepository(database);
@@ -282,23 +288,52 @@ export async function buildActivityAnalysisContext(
         }))
       );
 
+  const declaredReferenceCount = athleteContext?.performanceReferences?.length ?? 0;
+  const usedDeclaredReferenceFallback =
+    (thresholdEst.confidenceLevel === "insufficient" || thresholdEst.confidenceLevel === "low") &&
+    declaredReferenceCount > 0;
+
+  const newestRetainedMs = thresholdBasis.efforts.length > 0
+    ? Math.max(...thresholdBasis.efforts.map((effort) => new Date(effort.activityDateIso).getTime()))
+    : null;
+  const lastValidDaysAgo = newestRetainedMs != null
+    ? Math.round((contextNow.getTime() - newestRetainedMs) / 86_400_000)
+    : null;
+
+  const staleMessage = buildThresholdStaleMessage({
+    validPointCount: thresholdEst.validPointCount,
+    stalePointCount: thresholdEst.stalePointCount,
+    oldestRetainedPointWeeks: thresholdEst.oldestRetainedPointWeeks,
+    windowWeeks: thresholdBasis.windowWeeks,
+  });
+
   const thresholdEstimate = {
     criticalSpeedMps: thresholdEst.criticalSpeedMps,
     thresholdPaceMinKm: formatPace(thresholdEst.criticalSpeedMps),
     dprimM: thresholdEst.dprimM,
     validPointCount: thresholdEst.validPointCount,
     confidenceLevel: thresholdEst.confidenceLevel,
+    basis: "recent_history" as const,
+    windowWeeks: thresholdBasis.windowWeeks,
+    usedDeclaredReferenceFallback,
+    retainedPoints: thresholdBasis.efforts.map((effort) => ({
+      durationS: effort.durationS,
+      activityId: effort.activityId,
+      activityDate: effort.activityDateIso,
+    })),
     coverageByZone: thresholdEst.coverageByZone,
     missingZones: thresholdEst.missingZones,
-    suggestedSessions: thresholdEst.sessionSuggestionsForMissingZones.map((suggestion) => ({
-      missingZone: thresholdEst.missingZones[0] ?? "short",
+    suggestedSessions: thresholdEst.sessionSuggestionsForMissingZones.map((suggestion, index) => ({
+      missingZone: thresholdEst.missingZones[index] ?? thresholdEst.missingZones[0] ?? "short",
       suggestion,
     })),
     biasHint: thresholdEst.biasIndicator,
     staleWarning: {
       isStale: thresholdEst.freshnessAlert,
-      lastValidDaysAgo: null,
-      message: thresholdEst.freshnessAlert ? "No recent threshold data available." : null,
+      lastValidDaysAgo,
+      stalePointCount: thresholdEst.stalePointCount,
+      oldestRetainedPointWeeks: thresholdEst.oldestRetainedPointWeeks,
+      message: staleMessage,
     },
     rejectedPoints: thresholdEst.rejectedPoints.map((point) => ({
       durationS: point.durationS,
@@ -306,7 +341,7 @@ export async function buildActivityAnalysisContext(
     })),
   };
 
-  const performanceProfile = await buildPerformanceProfile(database, activityId);
+  const performanceProfile = await buildPerformanceProfile(database, contextNow, thresholdBasis);
 
   return {
     activityId,
@@ -343,12 +378,7 @@ export async function buildActivityAnalysisContext(
       targetValue: goal.targetValue,
       targetUnit: goal.targetUnit,
     })),
-    athleteContext: athleteCtxVersion
-      ? parseJson(
-          athleteContextSchema,
-          athleteCtxVersion.contextJson
-        )
-      : null,
+    athleteContext,
     userContextForThisActivity: userContext
       ? {
           goalForThisSession: userContext.sessionGoal,

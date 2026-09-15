@@ -11,9 +11,19 @@ export function createActivityContextRepository(database: AppDatabase = getDb())
       });
 
       if (existing) {
+        // Mise à jour : ne réassigne jamais `id` ni `createdAt` (identité et
+        // date de création de la ligne restent celles de `existing`) ; seuls
+        // les champs métier et `updatedAt` sont écrits.
         const [updated] = await database
           .update(activityContexts)
-          .set({ ...input, updatedAt: new Date().toISOString() })
+          .set({
+            sessionGoal: input.sessionGoal,
+            perceivedExertion: input.perceivedExertion,
+            unusualFatigue: input.unusualFatigue,
+            painFlag: input.painFlag,
+            note: input.note,
+            updatedAt: new Date().toISOString(),
+          })
           .where(eq(activityContexts.id, existing.id))
           .returning();
         return updated;

@@ -124,30 +124,56 @@ Structure verticale :
 
 7. Débrief IA
    - uniquement après action explicite de l'utilisateur ;
-   - faits observés ;
-   - comparaison historique ;
+   - points clés (encart distinct, en tête) ;
+   - recommandations techniques et allure cible (visibles) ;
    - hypothèses ;
-   - limites ;
-   - pistes à examiner ;
-   - sources utilisées.
+   - section repliable « Voir le détail complet » : faits observés,
+     classification en zones, comparaison historique, limites, prochaines
+     étapes, note de sécurité si présente, sources utilisées.
 
 ## Écran 3 bis : Débrief IA (révisé)
 
-Sections affichées, dans l'ordre :
+Toujours visibles, dans l'ordre :
+- **bandeau « logique obsolète »** si `logicStale` (prompt_version stocké ≠
+  version courante) et que la forme reste valide : « Généré avec une version
+  antérieure de l'analyse… Régénérez pour bénéficier des dernières
+  améliorations. » Discret, non bloquant, le contenu reste affiché ;
+- **provenance du seuil** (`ThresholdProvenance`) : allure seuil utilisée,
+  niveau de confiance en toutes lettres, fenêtre d'estimation (« estimée sur
+  vos N dernières semaines ») et rappel « pas seulement cette séance » avec le
+  nombre d'efforts retenus. Si l'estimation calculée est trop faible et qu'un
+  repère de performance a été déclaré, la ligne indique que le débrief s'appuie
+  sur ce repère déclaré. Rendu à partir du bloc `thresholdEstimate` renvoyé par
+  la route, pas seulement du texte du modèle ;
+- **note de péremption neutre**, affichée **dès qu'un des efforts retenus a
+  plus de 8 semaines, quelle que soit la confiance** (ex. « 3 des 5 efforts
+  retenus datent de plus de 8 semaines (le plus ancien : 19 semaines). ») —
+  ferme le cas « confiance bonne mais ancrage tempo/long périmé ». Ce n'est pas
+  le bandeau alarmant ci-dessous ;
+- **bandeau discret alarmant** si `confidenceLevel` vaut `insufficient` ou
+  `low`, placé avant le débrief : message de fraîcheur en français, durées de
+  zone à couvrir, séances suggérées pour combler les manques, indice de biais,
+  et la liste des **efforts écartés** avec leur motif ;
+- `key_takeaways` : 1 à 3 points clés en langage simple, dans un encart
+  distinct ;
+- recommandations techniques ;
+- allure cible pour la prochaine séance similaire (bloc visible, pas masqué
+  derrière un accordéon) ;
+- hypothèses.
+
+Section repliable par défaut (« Voir le détail complet ») :
 - constats factuels ;
-- classification en zones (avec allure/FC seuil utilisée et son niveau de
-  confiance affiché explicitement, ex. "confiance : faible — 2 séances
-  qualité manquantes") ;
+- classification en zones (le texte du modèle rappelle en plus que le seuil
+  vient de l'historique récent multi-séances, ou de la référence déclarée en
+  repli) ;
 - comparaison historique chiffrée ;
-- recommandations techniques et allure cible pour la prochaine séance
-  similaire (nouveau bloc visible, pas masqué derrière un accordéon) ;
-- hypothèses et limites ;
-- safety_note, affichée uniquement si présente dans la réponse ;
+- limites et fiabilité ;
+- prochaines étapes ;
+- `safety_note`, uniquement si présente dans la réponse ;
 - sources utilisées (activités, métriques).
 
-Si la confiance de l'estimation de seuil est `insufficient` ou `low`,
-afficher un bandeau discret suggérant le type de séance à réaliser pour
-l'améliorer, avant même le débrief.
+Il n'y a plus de section « questions à considérer » : les clarifications de
+fiabilité sont fondues dans les limites.
 
 ## Écran 4 : objectifs
 

@@ -18,7 +18,8 @@ export const manualSessionInputSchema = z.object({
 
 export const confirmationPayloadSchema = z.record(z.string(), z.unknown());
 export const activityDetailCacheSchema = z.object({ id: z.string(), name: z.string().optional(), sportType: z.string().optional() }).strict();
-export const streamSummarySchema = z.object({ version: z.string(), metrics: z.record(z.string(), z.number().finite()) }).strict();
+// Le contrat du résumé de streams persisté est `streamSummaryPayloadSchema`
+// dans `src/lib/analysis/stream-summary.ts` (meilleurs efforts + FC moyenne).
 const boundedText = (max: number) => z.string().trim().max(max);
 const activityKindSchema = z.enum(["running", "swimming", "strength_training", "mobility", "rest", "other"]);
 const weeklyAvailabilitySchema = z.object({ activities: z.array(activityKindSchema).max(6), note: boundedText(300).optional(), flexible: z.boolean().default(false) }).strict();
@@ -49,7 +50,6 @@ export type GoalPriority = z.infer<typeof goalPrioritySchema>;
 export type GoalStatus = z.infer<typeof goalStatusSchema>;
 export type ConfirmationPayload = z.infer<typeof confirmationPayloadSchema>;
 export type ActivityDetailCache = z.infer<typeof activityDetailCacheSchema>;
-export type StreamSummary = z.infer<typeof streamSummarySchema>;
 export type AthleteContextV1 = z.infer<typeof athleteContextSchema>;
 export type AthleteContext = AthleteContextV1;
 export type GoalInput = z.infer<typeof goalInputSchema>;

@@ -163,6 +163,8 @@ export const conversationMessages = sqliteTable("conversation_messages", {
   threadId: text("thread_id").notNull(),
   role: text("role").notNull(),
   contentJson: text("content_json").notNull(),
+  model: text("model"),
+  promptVersion: text("prompt_version"),
   createdAt: text("created_at").notNull(),
 }, (table) => ({ threadIndex: index("conversation_messages_thread_idx").on(table.threadId, table.createdAt) }));
 

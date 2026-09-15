@@ -1,7 +1,7 @@
 import type { AppDatabase } from "../db/client";
 import { createGoalRepository } from "../db/repositories/goal-repository";
 import { createSyncedActivityRepository } from "../db/repositories/synced-activity-repository";
-import { conversationScopeSchema, type ConversationResponse } from "./schemas";
+import { conversationScopeSchema, type ConversationResponse, type PerformanceProfile } from "./schemas";
 import type { ConversationMessage } from "../db/types";
 
 export type ConversationScope = {
@@ -29,6 +29,8 @@ export type ConversationContext = {
   }>;
   selectedGoal: { id: string; title: string; type: string; targetValue: number | null; targetUnit: string | null } | null;
   previousMessages: Array<{ role: string; content: string }>;
+  /** Profil de performance calculé, en complément du contexte déclaré (jamais en remplacement). */
+  performanceProfile: PerformanceProfile | null;
   missingData: string[];
 };
 
@@ -56,7 +58,12 @@ export async function classifyQuestionAndSelectScope(question: string, database:
   return conversationScopeSchema.parse({ kind: "data_gap", periodStart: start, periodEnd: end, activityIds: [], goalId: null });
 }
 
-export async function buildConversationContext(question: string, database: AppDatabase, previousMessages: ConversationMessage[] = []): Promise<ConversationContext> {
+export async function buildConversationContext(
+  question: string,
+  database: AppDatabase,
+  previousMessages: ConversationMessage[] = [],
+  options: { performanceProfile?: PerformanceProfile | null } = {}
+): Promise<ConversationContext> {
   const scope = await classifyQuestionAndSelectScope(question, database);
   const activityRepository = createSyncedActivityRepository(database);
   const activities = scope.activityIds.length > 0
@@ -87,6 +94,7 @@ export async function buildConversationContext(question: string, database: AppDa
     })),
     selectedGoal: selectedGoal ? { id: selectedGoal.id, title: selectedGoal.title, type: selectedGoal.type, targetValue: selectedGoal.targetValue, targetUnit: selectedGoal.targetUnit } : null,
     previousMessages: previousMessages.slice(-6).map((message) => ({ role: message.role, content: message.contentJson })),
+    performanceProfile: options.performanceProfile ?? null,
     missingData,
   };
 }

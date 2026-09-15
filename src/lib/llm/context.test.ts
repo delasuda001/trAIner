@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import type { AppDatabase } from "@/lib/db/client";
 import { buildActivityAnalysisContext, buildHistoricalComparisonForWorkout } from "./context";
 import { schema } from "@/lib/db/schema";
+import { applyMigrations } from "@/lib/db/testing/apply-migrations";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db/repositories/synced-activity-repository", () => ({
@@ -93,74 +94,19 @@ describe("buildHistoricalComparisonForWorkout", () => {
 describe("buildActivityAnalysisContext", () => {
   let db: AppDatabase;
 
+  let sqlite: Database.Database;
+
   beforeEach(() => {
-    const sqlite = new Database(":memory:");
+    // On applique toutes les vraies migrations Drizzle plutôt qu'un sous-ensemble
+    // de DDL réécrit à la main : buildActivityAnalysisContext ->
+    // buildPerformanceProfile lit activity_stream_summaries et analyses, tables
+    // absentes de l'ancien setup partiel de ce fichier.
+    sqlite = new Database(":memory:");
+    applyMigrations(sqlite);
     db = drizzle(sqlite, { schema }) as AppDatabase;
-
-    sqlite.exec(`
-      CREATE TABLE synced_activities (
-        id TEXT PRIMARY KEY,
-        intervals_activity_id TEXT NOT NULL,
-        start_date TEXT NOT NULL,
-        timezone TEXT,
-        name TEXT,
-        sport_type TEXT NOT NULL,
-        distance_m REAL,
-        moving_time_s INTEGER,
-        elapsed_time_s INTEGER,
-        elevation_gain_m REAL,
-        average_speed_mps REAL,
-        average_heart_rate_bpm REAL,
-        max_heart_rate_bpm REAL,
-        average_cadence_spm REAL,
-        average_power_w REAL,
-        training_load REAL,
-        source_updated_at TEXT,
-        synced_at TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE activity_contexts (
-        id TEXT PRIMARY KEY,
-        intervals_activity_id TEXT NOT NULL,
-        session_goal TEXT,
-        perceived_exertion TEXT,
-        unusual_fatigue INTEGER DEFAULT 0,
-        pain_flag INTEGER DEFAULT 0,
-        note TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE athlete_context_versions (
-        id TEXT PRIMARY KEY,
-        status TEXT NOT NULL,
-        context_json TEXT NOT NULL,
-        source_text TEXT,
-        created_at TEXT NOT NULL,
-        activated_at TEXT,
-        archived_at TEXT,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE goals (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        type TEXT NOT NULL,
-        priority TEXT NOT NULL,
-        status TEXT NOT NULL,
-        start_date TEXT,
-        target_date TEXT,
-        target_value REAL,
-        target_unit TEXT,
-        description TEXT,
-        definition_json TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-    `);
   });
+
+  afterEach(() => sqlite.close());
 
   it("should exclude GPS and raw streams from context", async () => {
     const activityId = "test-activity-1";
@@ -180,6 +126,87 @@ describe("buildActivityAnalysisContext", () => {
         insufficientDataReason: expect.stringMatching(/comparable|données/i),
       }),
     });
+  });
+
+  it("construit un profil de performance en lisant analyses et activity_stream_summaries sans planter", async () => {
+    const activityId = "test-activity-1";
+    const now = "2026-01-01T00:00:00.000Z";
+    sqlite.prepare(
+      `INSERT INTO synced_activities (id, intervals_activity_id, start_date, sport_type, average_speed_mps, max_heart_rate_bpm, synced_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'Run', 4.0, 185, ?, ?, ?)`
+    ).run("sa-1", activityId, now, now, now, now);
+    const debrief = {
+      key_takeaways: ["Séance solide."],
+      summary: "s", observed_facts: [], historical_comparison: null, zone_classification_summary: "z",
+      technical_recommendations: [], next_session_pace_guidance: null, hypotheses: [], limitations: [], next_steps: [], safety_note: null,
+    };
+    sqlite.prepare(
+      `INSERT INTO analyses (id, intervals_activity_id, deterministic_metrics_json, llm_response_json, llm_model, prompt_version, created_at, updated_at)
+       VALUES (?, ?, '{}', ?, 'gemini-test', '1.2', ?, ?)`
+    ).run("an-1", activityId, JSON.stringify(debrief), now, now);
+
+    const context = await buildActivityAnalysisContext(activityId, db);
+    expect(context.performanceProfile).not.toBeNull();
+    expect(context.performanceProfile?.recentKeyTakeaways).toContain("Séance solide.");
+    expect(context.performanceProfile?.totalRunningActivities).toBe(1);
+  });
+
+  it("alimente le thresholdEstimate du débrief avec les résumés de streams en cache dans la fenêtre", async () => {
+    const activityId = "test-activity-1";
+    const recent = (weeks: number) => new Date(Date.now() - weeks * 7 * 24 * 60 * 60 * 1000).toISOString();
+    const summaryJson = (efforts: Array<[number, number, number]>) => JSON.stringify({
+      version: "1", computedAt: recent(1), sampleCount: 1800,
+      bestEfforts: efforts.map(([durationS, speedMps, hr]) => ({ durationS, actualElapsedS: durationS, distanceM: speedMps * durationS, speedMps, meanHeartRateBpm: hr })),
+    });
+    for (const [id, weeks] of [[activityId, 1], ["hist-1", 4]] as const) {
+      sqlite.prepare(
+        `INSERT INTO synced_activities (id, intervals_activity_id, start_date, sport_type, average_speed_mps, max_heart_rate_bpm, synced_at, created_at, updated_at)
+         VALUES (?, ?, ?, 'Run', 4.0, 190, ?, ?, ?)`
+      ).run(`sa-${id}`, id, recent(weeks), recent(weeks), recent(weeks), recent(weeks));
+    }
+    sqlite.prepare(`INSERT INTO activity_stream_summaries (id, intervals_activity_id, stream_version, summary_json, created_at, updated_at) VALUES (?, ?, '1', ?, ?, ?)`)
+      .run("sum-cur", activityId, summaryJson([[600, 4.6, 178]]), recent(1), recent(1));
+    sqlite.prepare(`INSERT INTO activity_stream_summaries (id, intervals_activity_id, stream_version, summary_json, created_at, updated_at) VALUES (?, ?, '1', ?, ?, ?)`)
+      .run("sum-hist", "hist-1", summaryJson([[1200, 4.2, 174]]), recent(4), recent(4));
+
+    const context = await buildActivityAnalysisContext(activityId, db);
+    expect(context.thresholdEstimate.confidenceLevel).not.toBe("insufficient");
+    expect(context.thresholdEstimate.validPointCount).toBeGreaterThanOrEqual(2);
+    expect(context.thresholdEstimate.criticalSpeedMps).not.toBeNull();
+    expect(context.thresholdEstimate.thresholdPaceMinKm).not.toBeNull();
+    // Provenance explicite : historique récent, fenêtre, points sources.
+    expect(context.thresholdEstimate.basis).toBe("recent_history");
+    expect(context.thresholdEstimate.windowWeeks).toBe(20);
+    expect(context.thresholdEstimate.retainedPoints.map((point) => point.activityId).sort()).toEqual(["hist-1", activityId].sort());
+    expect(context.thresholdEstimate.retainedPoints.every((point) => typeof point.activityDate === "string")).toBe(true);
+    expect(context.thresholdEstimate.usedDeclaredReferenceFallback).toBe(false);
+  });
+
+  it("garde une confiance insuffisante quand aucun résumé de streams n'est en cache, avec un message de fraîcheur en français", async () => {
+    sqlite.prepare(
+      `INSERT INTO synced_activities (id, intervals_activity_id, start_date, sport_type, max_heart_rate_bpm, synced_at, created_at, updated_at)
+       VALUES ('sa-x', 'test-activity-1', ?, 'Run', 190, ?, ?, ?)`
+    ).run(new Date().toISOString(), new Date().toISOString(), new Date().toISOString(), new Date().toISOString());
+
+    const context = await buildActivityAnalysisContext("test-activity-1", db);
+    expect(context.thresholdEstimate.confidenceLevel).toBe("insufficient");
+    expect(context.thresholdEstimate.criticalSpeedMps).toBeNull();
+    expect(context.thresholdEstimate.retainedPoints).toEqual([]);
+    expect(context.thresholdEstimate.staleWarning.message).toMatch(/fenêtre de 20 semaines/);
+    expect(context.thresholdEstimate.staleWarning.message).not.toMatch(/No recent threshold data/);
+  });
+
+  it("marque usedDeclaredReferenceFallback quand la confiance est faible et qu'un repère déclaré existe", async () => {
+    sqlite.prepare(
+      `INSERT INTO synced_activities (id, intervals_activity_id, start_date, sport_type, max_heart_rate_bpm, synced_at, created_at, updated_at)
+       VALUES ('sa-x', 'test-activity-1', ?, 'Run', 190, ?, ?, ?)`
+    ).run(new Date().toISOString(), new Date().toISOString(), new Date().toISOString(), new Date().toISOString());
+    const athlete = { version: 1, athleteProfile: {}, performanceReferences: [{ id: "ref-1", label: "Seuil", value: "4:00 min/km" }], priorities: { secondary: [] }, weeklyTemplate: {}, coachingPreferences: { wantsCriticalDataGroundedFeedback: true, wantsTrainingScenariosToReview: true, wantsSourcesAndLimitationsAlwaysVisible: true } };
+    sqlite.prepare(`INSERT INTO athlete_context_versions (id, status, context_json, source_text, created_at, activated_at, archived_at, updated_at) VALUES ('ctx-1', 'active', ?, NULL, ?, ?, NULL, ?)`)
+      .run(JSON.stringify(athlete), new Date().toISOString(), new Date().toISOString(), new Date().toISOString());
+
+    const context = await buildActivityAnalysisContext("test-activity-1", db);
+    expect(context.thresholdEstimate.usedDeclaredReferenceFallback).toBe(true);
   });
 
   it("should include athlete context and active goals if present", () => {

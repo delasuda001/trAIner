@@ -1,11 +1,48 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
-import { createAnalysisRepository } from "@/lib/db/repositories/analysis-repository";
+import { createAnalysisRepository, parseStoredAnalysis } from "@/lib/db/repositories/analysis-repository";
 import { buildActivityAnalysisContext } from "@/lib/llm/context";
-import { GeminiAnalysisClient } from "@/lib/llm/gemini-client";
+import { GeminiAnalysisClient, DEBRIEF_PROMPT_VERSION } from "@/lib/llm/gemini-client";
 import { serializeJson } from "@/lib/db/contracts";
-import { activityAnalysisResponseSchema } from "@/lib/llm/schemas";
+import { activityAnalysisResponseSchema, thresholdEstimateSchema } from "@/lib/llm/schemas";
+import type { z } from "zod";
+
+type FullThresholdEstimate = z.infer<typeof thresholdEstimateSchema>;
+
+/** Sous-ensemble du bloc seuil exposé au client (provenance + confiance + fraîcheur). */
+function toClientThresholdEstimate(estimate: FullThresholdEstimate) {
+  return {
+    thresholdPaceMinKm: estimate.thresholdPaceMinKm,
+    confidenceLevel: estimate.confidenceLevel,
+    basis: estimate.basis,
+    windowWeeks: estimate.windowWeeks,
+    usedDeclaredReferenceFallback: estimate.usedDeclaredReferenceFallback,
+    retainedPoints: estimate.retainedPoints,
+    missingZones: estimate.missingZones,
+    suggestedSessions: estimate.suggestedSessions,
+    rejectedPoints: estimate.rejectedPoints,
+    biasHint: estimate.biasHint,
+    staleWarning: estimate.staleWarning,
+  };
+}
+
+/**
+ * Relit le bloc seuil persisté dans `deterministic_metrics_json`. Les analyses
+ * antérieures à l'ajout de la provenance ne le contiennent pas (ou partiellement)
+ * -> `null` proprement, l'UI s'adapte.
+ */
+function extractStoredThresholdEstimate(deterministicMetricsJson: string): ReturnType<typeof toClientThresholdEstimate> | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(deterministicMetricsJson);
+  } catch {
+    return null;
+  }
+  const threshold = (raw as { threshold?: unknown } | null)?.threshold;
+  const parsed = thresholdEstimateSchema.safeParse(threshold);
+  return parsed.success ? toClientThresholdEstimate(parsed.data) : null;
+}
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,13 +61,23 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: { code: "NO_ANALYSIS", message: "No analysis found for this activity", requestId } }, { status: 404 });
     }
 
-    const llmResponse = JSON.parse(latest.llmResponseJson);
+    const parsed = parseStoredAnalysis(latest);
+    if (parsed.status === "outdated") {
+      console.warn("[analysis] stored payload does not match current schema", { requestId, analysisId: latest.id, issues: parsed.issues });
+    }
+
     return NextResponse.json({
       id: latest.id,
       activityId: id,
-      analysis: llmResponse,
+      analysis: parsed.status === "ok" ? parsed.analysis : null,
+      // Forme : bloquant si un champ requis manque (Zod).
+      formatOutdated: parsed.status === "outdated",
+      // Logique : non bloquant, contenu affichable, mais généré avec un prompt antérieur.
+      logicStale: latest.promptVersion !== DEBRIEF_PROMPT_VERSION,
+      thresholdEstimate: extractStoredThresholdEstimate(latest.deterministicMetricsJson),
       model: latest.llmModel,
       promptVersion: latest.promptVersion,
+      currentPromptVersion: DEBRIEF_PROMPT_VERSION,
       createdAt: latest.createdAt,
     });
   } catch (error) {
@@ -81,8 +128,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       id: analysis.id,
       activityId: id,
       analysis: response,
+      formatOutdated: false,
+      logicStale: false,
+      thresholdEstimate: toClientThresholdEstimate(context.thresholdEstimate),
       model: analysis.llmModel,
       promptVersion: analysis.promptVersion,
+      currentPromptVersion: DEBRIEF_PROMPT_VERSION,
       createdAt: analysis.createdAt,
     });
   } catch (error) {

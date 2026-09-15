@@ -1,10 +1,9 @@
 import Database from "better-sqlite3";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { schema } from "@/lib/db/schema";
 import type { AppDatabase } from "@/lib/db/client";
+import { applyMigrations } from "@/lib/db/testing/apply-migrations";
 import { calculateSyncPeriod, synchronizeRunningActivities } from "./sync";
 
 vi.mock("server-only", () => ({}));
@@ -14,12 +13,7 @@ let database: AppDatabase;
 const now = "2026-08-25T12:00:00.000Z";
 const run = { id: "i-run-1", type: "Run", start_date: "2026-08-22T15:27:15Z", timezone: null, name: "Sortie", distance: 5000, moving_time: 1500, elapsed_time: 1520, average_speed: 3.33, average_heartrate: 145, max_heartrate: 160, average_cadence: 80, icu_average_watts: null, total_elevation_gain: 20, icu_training_load: 32, icu_sync_date: "2026-08-24T20:44:08.576+00:00" };
 
-function applyMigration(connection: Database.Database): void {
-  const migration = readFileSync(resolve(process.cwd(), "drizzle/0000_previous_marrow.sql"), "utf8");
-  connection.exec(migration.replaceAll("--> statement-breakpoint", ""));
-}
-
-beforeEach(() => { sqlite = new Database(":memory:"); applyMigration(sqlite); database = drizzle(sqlite, { schema }); process.env.INTERVALS_API_KEY = "test-key"; process.env.INTERVALS_ATHLETE_ID = "test-athlete"; });
+beforeEach(() => { sqlite = new Database(":memory:"); applyMigrations(sqlite); database = drizzle(sqlite, { schema }); process.env.INTERVALS_API_KEY = "test-key"; process.env.INTERVALS_ATHLETE_ID = "test-athlete"; });
 afterEach(() => { vi.unstubAllGlobals(); sqlite.close(); });
 
 describe("synchronisation des activités de course", () => {

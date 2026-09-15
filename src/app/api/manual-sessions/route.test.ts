@@ -1,10 +1,9 @@
 import Database from "better-sqlite3";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { schema } from "@/lib/db/schema";
 import type { AppDatabase } from "@/lib/db/client";
+import { applyMigrations } from "@/lib/db/testing/apply-migrations";
 import { createManualSession, getManualSessions } from "./route";
 import { deleteManualSession, updateManualSession } from "./[id]/route";
 
@@ -14,17 +13,12 @@ let sqlite: Database.Database;
 let database: AppDatabase;
 const base = { sessionDate: "2026-08-25", discipline: "strength_training", durationMinutes: 45, label: "Renforcement", note: "Séance courte" };
 
-function applyMigration(connection: Database.Database): void {
-  const migration = readFileSync(resolve(process.cwd(), "drizzle/0000_previous_marrow.sql"), "utf8");
-  connection.exec(migration.replaceAll("--> statement-breakpoint", ""));
-}
-
 async function create(): Promise<{ id: string; createdAt: string }> {
   const response = await createManualSession(new Request("http://localhost", { method: "POST", body: JSON.stringify(base) }), database);
   return response.json();
 }
 
-beforeEach(() => { sqlite = new Database(":memory:"); applyMigration(sqlite); database = drizzle(sqlite, { schema }); });
+beforeEach(() => { sqlite = new Database(":memory:"); applyMigrations(sqlite); database = drizzle(sqlite, { schema }); });
 afterEach(() => sqlite.close());
 
 describe("/api/manual-sessions", () => {

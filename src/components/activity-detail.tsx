@@ -8,6 +8,7 @@ import type { NormalizedStreams } from "@/lib/db/contracts";
 import type { Activity, Lap } from "@/lib/intervals/schemas";
 import { formatDate, formatDistance, formatDuration, formatPace } from "@/lib/formatters";
 import { segmentActivity, type SegmentationStrategy } from "@/lib/analysis/segmentation";
+import { selectConfidenceBannerState, isAlarmingBanner, showsStalenessNote } from "@/lib/analysis/confidence-banner";
 
 type Detail = { activity: Activity; intervals: Lap[]; dataAvailability: { intervals: boolean }; sourceMetadata: { cacheStatus: string; fetchedAt: string; sourceUpdatedAt: string | null } };
 type Tab = "summary" | "intervals" | "charts";
@@ -21,11 +22,28 @@ type Analysis = {
   next_session_pace_guidance: { recommendedPaceMps: number | null; recommendedPaceDisplay: string; rationale: string; adjustments: string[] } | null;
   hypotheses: string[];
   limitations: string[];
-  questions_to_consider: string[];
   next_steps: string[];
   safety_note: string | null;
 };
-type AnalysisPayload = { id: string; analysis: Analysis; model: string; promptVersion: string; createdAt: string };
+type ThresholdEstimateView = {
+  thresholdPaceMinKm: string | null;
+  confidenceLevel: "insufficient" | "low" | "moderate" | "good";
+  basis?: string;
+  windowWeeks?: number;
+  usedDeclaredReferenceFallback?: boolean;
+  retainedPoints?: { durationS: number; activityId: string; activityDate: string }[];
+  missingZones?: ("short" | "medium" | "long")[];
+  suggestedSessions?: { missingZone: string; suggestion: string }[];
+  rejectedPoints?: { durationS: number; reason: string }[];
+  biasHint?: string | null;
+  staleWarning?: { isStale: boolean; message: string | null; stalePointCount?: number; oldestRetainedPointWeeks?: number | null } | null;
+};
+type AnalysisPayload = { id: string; analysis: Analysis | null; formatOutdated?: boolean; logicStale?: boolean; thresholdEstimate?: ThresholdEstimateView | null; model: string; promptVersion: string; currentPromptVersion?: string; createdAt: string };
+
+const toList = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []);
+
+const CONFIDENCE_LABEL: Record<ThresholdEstimateView["confidenceLevel"], string> = { insufficient: "insuffisante", low: "faible", moderate: "modérée", good: "bonne" };
+const DURATION_ZONE_LABEL: Record<"short" | "medium" | "long", string> = { short: "court (VO2max)", medium: "moyen (seuil)", long: "long (tempo)" };
 type ActivityContext = { sessionGoal: string | null; perceivedExertion: string | null; unusualFatigue: number; painFlag: number; note: string | null };
 
 const emptyContext: ActivityContext = { sessionGoal: "", perceivedExertion: "", unusualFatigue: 0, painFlag: 0, note: "" };
@@ -117,15 +135,52 @@ function ContextForm({ context, setContext, onSubmit, saving, message }: { conte
   return <section className="panel laps-panel context-activity"><div className="section-heading"><div><p className="kicker">Contexte personnel</p><h2>Comment s’est passée la séance ?</h2></div></div><form className="form-grid" onSubmit={onSubmit}><label>Objectif de séance<input value={context.sessionGoal ?? ""} onChange={(event) => setContext({ ...context, sessionGoal: event.target.value })} /></label><label>Effort perçu<select value={context.perceivedExertion ?? ""} onChange={(event) => setContext({ ...context, perceivedExertion: event.target.value })}><option value="">Non renseigné</option><option value="facile">Facile</option><option value="modéré">Modéré</option><option value="difficile">Difficile</option><option value="maximal">Très difficile</option></select></label><label className="preference-row"><input type="checkbox" checked={context.unusualFatigue === 1} onChange={(event) => setContext({ ...context, unusualFatigue: event.target.checked ? 1 : 0 })} /> Fatigue inhabituelle</label><label className="preference-row"><input type="checkbox" checked={context.painFlag === 1} onChange={(event) => setContext({ ...context, painFlag: event.target.checked ? 1 : 0 })} /> Douleur ou gêne signalée</label><label className="wide">Note libre<textarea rows={3} value={context.note ?? ""} onChange={(event) => setContext({ ...context, note: event.target.value })} /></label><div className="form-actions wide"><button className="button" type="submit" disabled={saving}>{saving ? "Enregistrement..." : "Enregistrer le contexte"}</button>{message && <span className="data-note">{message}</span>}</div></form></section>;
 }
 
+function ThresholdProvenance({ estimate }: { estimate?: ThresholdEstimateView | null }) {
+  if (!estimate) return null;
+  const bannerState = selectConfidenceBannerState({ confidenceLevel: estimate.confidenceLevel, stalePointCount: estimate.staleWarning?.stalePointCount ?? 0 });
+  const lowConfidence = isAlarmingBanner(bannerState);
+  const pace = estimate.thresholdPaceMinKm ? `${estimate.thresholdPaceMinKm} /km` : "non estimable";
+  const suggestions = (estimate.suggestedSessions ?? []).map((session) => session.suggestion);
+  const missing = (estimate.missingZones ?? []).map((zone) => DURATION_ZONE_LABEL[zone]);
+  return <>
+    <p className="data-note">
+      Allure seuil utilisée : <strong>{pace}</strong> — confiance {CONFIDENCE_LABEL[estimate.confidenceLevel]}
+      {estimate.windowWeeks ? `, estimée sur vos ${estimate.windowWeeks} dernières semaines` : ""}
+      {estimate.retainedPoints?.length ? ` (${estimate.retainedPoints.length} effort${estimate.retainedPoints.length > 1 ? "s" : ""} retenu${estimate.retainedPoints.length > 1 ? "s" : ""}, pas seulement cette séance)` : ""}.
+      {estimate.usedDeclaredReferenceFallback ? " Estimation trop faible : le débrief s’appuie sur votre repère de performance déclaré." : ""}
+    </p>
+    {showsStalenessNote(bannerState) && estimate.staleWarning?.message && <p className="data-note">{estimate.staleWarning.message}</p>}
+    {lowConfidence && <div className="analysis-block state">
+      <h3>Estimation de seuil peu fiable</h3>
+      <p>{estimate.staleWarning?.message ?? "Trop peu d’efforts maximaux récents pour une estimation solide."}</p>
+      {missing.length > 0 && <p className="data-note">Durées à couvrir : {missing.join(", ")}.</p>}
+      {suggestions.length > 0 && <ul>{suggestions.map((item, index) => <li key={`sugg-${index}`}>{item}</li>)}</ul>}
+      {estimate.biasHint && <p className="data-note">{estimate.biasHint}</p>}
+      {(estimate.rejectedPoints?.length ?? 0) > 0 && <p className="data-note">Efforts écartés : {estimate.rejectedPoints!.map((point) => `${Math.round(point.durationS / 60)} min (${point.reason})`).join(" ; ")}.</p>}
+    </div>}
+  </>;
+}
+
 function AnalysisPanel({ payload }: { payload: AnalysisPayload }) {
   const analysis = payload.analysis;
+  if (payload.formatOutdated || !analysis) {
+    return <section className="analysis-panel"><div className="section-heading"><div><p className="kicker"><Sparkles size={14} /> Débrief IA</p><h2>Analyse à régénérer</h2></div><span className="detail-mark">{payload.model}</span></div>
+      <ThresholdProvenance estimate={payload.thresholdEstimate} />
+      <div className="analysis-block highlight"><p>Cette analyse a été générée avec une version antérieure du format de débrief. Régénérez-la pour l’afficher au format actuel.</p></div>
+      <p className="data-note">Générée le {new Date(payload.createdAt).toLocaleString("fr-FR")} (format {payload.promptVersion}).</p></section>;
+  }
+
+  const keyTakeaways = toList(analysis.key_takeaways);
+  const hypotheses = toList(analysis.hypotheses);
+  const paceGuidance = analysis.next_session_pace_guidance;
   return <section className="analysis-panel"><div className="section-heading"><div><p className="kicker"><Sparkles size={14} /> Débrief IA</p><h2>{analysis.summary}</h2></div><span className="detail-mark">{payload.model}</span></div>
-    <div className="analysis-block highlight"><h3>Points clés</h3><ul>{analysis.key_takeaways.map((item, index) => <li key={`key-${index}`}>{item}</li>)}</ul></div>
-    <AnalysisList title="Recommandations techniques" items={analysis.technical_recommendations} />
-    {analysis.next_session_pace_guidance && <div className="analysis-block"><h3>Allure cible pour la prochaine séance similaire</h3><strong>{analysis.next_session_pace_guidance.recommendedPaceDisplay}</strong><p>{analysis.next_session_pace_guidance.rationale}</p><AnalysisList title="Ajustements" items={analysis.next_session_pace_guidance.adjustments} /></div>}
-    <div className="analysis-block"><h3>Hypothèses</h3><ul>{analysis.hypotheses.map((item, index) => <li key={`hyp-${index}`}>{item}</li>)}</ul></div>
-    <details className="analysis-block"><summary>Voir le détail complet</summary><div className="detail-extra"><AnalysisList title="Constats factuels" items={analysis.observed_facts} /><div className="analysis-block"><h3>Classification en zones</h3><p>{analysis.zone_classification_summary}</p></div><div className="analysis-block"><h3>Comparaison historique</h3><p>{analysis.historical_comparison ?? "Comparaison historique insuffisante."}</p></div><AnalysisList title="Limites et fiabilité" items={analysis.limitations} /><AnalysisList title="Questions à considérer" items={analysis.questions_to_consider} /><AnalysisList title="Prochaines étapes" items={analysis.next_steps} />{analysis.safety_note && <div className="analysis-block safety-note"><h3>Note de sécurité</h3><p>{analysis.safety_note}</p></div>}</div></details>
-    <p className="data-note">Source : activité et métriques déterministes calculées. Généré le {new Date(payload.createdAt).toLocaleString("fr-FR")}.</p></section>;
+    {payload.logicStale && <p className="data-note">Généré avec une version antérieure de l’analyse (format {payload.promptVersion}{payload.currentPromptVersion ? `, actuel ${payload.currentPromptVersion}` : ""}). Régénérez pour bénéficier des dernières améliorations (comparaison historique, estimation de seuil).</p>}
+    <ThresholdProvenance estimate={payload.thresholdEstimate} />
+    {keyTakeaways.length > 0 && <div className="analysis-block highlight"><h3>Points clés</h3><ul>{keyTakeaways.map((item, index) => <li key={`key-${index}`}>{item}</li>)}</ul></div>}
+    <AnalysisList title="Recommandations techniques" items={toList(analysis.technical_recommendations)} />
+    {paceGuidance && <div className="analysis-block"><h3>Allure cible pour la prochaine séance similaire</h3><strong>{paceGuidance.recommendedPaceDisplay}</strong><p>{paceGuidance.rationale}</p><AnalysisList title="Ajustements" items={toList(paceGuidance.adjustments)} /></div>}
+    <div className="analysis-block"><h3>Hypothèses</h3><ul>{hypotheses.map((item, index) => <li key={`hyp-${index}`}>{item}</li>)}</ul></div>
+    <details className="analysis-block"><summary>Voir le détail complet</summary><div className="detail-extra"><AnalysisList title="Constats factuels" items={toList(analysis.observed_facts)} /><div className="analysis-block"><h3>Classification en zones</h3><p>{analysis.zone_classification_summary}</p></div><div className="analysis-block"><h3>Comparaison historique</h3><p>{analysis.historical_comparison ?? "Comparaison historique insuffisante."}</p></div><AnalysisList title="Limites et fiabilité" items={toList(analysis.limitations)} /><AnalysisList title="Prochaines étapes" items={toList(analysis.next_steps)} />{analysis.safety_note && <div className="analysis-block safety-note"><h3>Note de sécurité</h3><p>{analysis.safety_note}</p></div>}<p className="data-note">Source : activité et métriques déterministes calculées. Généré le {new Date(payload.createdAt).toLocaleString("fr-FR")}.</p></div></details></section>;
 }
 
 function AnalysisList({ title, items }: { title: string; items: string[] }) { return <div className="analysis-block"><h3>{title}</h3>{items.length ? <ul>{items.map((item, index) => <li key={`${title}-${index}`}>{item}</li>)}</ul> : <p className="data-note">Aucun élément fourni.</p>}</div>; }
