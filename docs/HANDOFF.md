@@ -131,9 +131,18 @@ lancement à 22 h.
 
 - Branche `claude/project-thread-1m6x8x`, tout commité, rien poussé (push GitHub bloqué).
 - Appels Claude réels faits dans ce fil : 6 Sonnet (analyses du 13 et du 4 novembre, ~9 k tokens d'entrée cache compris et ~1,3 k de sortie chacun) et 1 Opus (bilan).
-- Première batterie du banc (16 nov., manuelle, 124,9 k tokens, 13 appels) : en place (session-v9) 3,60
-  au juge contre 3,57 pour la variante `coach-v10` → à creuser. Trouvé et corrigé : zone FC annotée sur
-  la valeur non arrondie (faux rejets du garde-fou sur 4 analyses sur 6). Proposé au coordinateur,
-  en attente de son retour : une v11 (règle foulée de v10 + cause = hausse de charge corroborée,
-  interdiction du jargon « moteur »). La référence est à refaire (charge utile modifiée).
+- Banc, état au 16 nov. au soir :
+  - Batterie 1 (manuelle, 124,9 k tokens, 13 appels) : session-v9 3,60 au juge contre 3,57 pour la
+    variante `coach-v10`. Trouvé et corrigé : zone FC annotée sur la valeur non arrondie (faux rejets du
+    garde-fou sur 4 analyses sur 6, chacune coûtait un second appel).
+  - Décision du coordinateur : `session-v11` appliqué directement comme version en place (règle foulée,
+    cause = hausse de charge corroborée ou facteur de contexte, sinon aucune ligne « cause probable »,
+    cause cohérente avec la consigne, aucun calcul, pas de jargon, séance mal reconnue dite simplement
+    via `format_reconnu`). Garde-fou ajouté : `findUnsupportedMultiples` (un « x fois » doit figurer tel
+    quel dans le résumé). Vérifié sur le 10 et le 13 nov. (2 appels Sonnet), analyses affichées régénérées.
+  - Reste à tester au prochain feu vert de Bastien (~55 k pour refaire la référence v11 sur les 6
+    séances, puis ~70 k par variante) : référence v11 avec juge ; `sans-dynamique` ;
+    `sans-liste-comparables`. La variante `coach-v10` a été retirée (intégrée à v11). Penser à `npm run bench:freeze` si le moteur a changé depuis le gel.
+  - Nuance vue sur le 10 nov. : la hausse de charge est présentée comme « cause probable » d'un écart
+    favorable (séance au-dessus des repères). À surveiller au prochain bilan.
 - Scripts ponctuels hors Next : `npx tsx --conditions=react-server <script>` (la condition contourne `server-only`).
