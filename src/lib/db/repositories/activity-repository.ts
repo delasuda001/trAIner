@@ -87,12 +87,15 @@ export function createActivityRepository(database: AppDatabase = getDb()) {
       return database.select().from(activities).where(and(lt(activities.startTimeUtc, startUtc), inArray(activities.sport, sports))).orderBy(desc(activities.startTimeUtc)).all();
     },
 
-    findPendingDetails(limit: number): ActivityRow[] {
-      return database.select().from(activities).where(eq(activities.detailStatus, "pending")).orderBy(desc(activities.startTimeUtc)).limit(limit).all();
+    /** Séries en attente, plus récentes d'abord ; `sinceUtc` borne la fenêtre (invités : 12 semaines). */
+    findPendingDetails(limit: number, sinceUtc?: string): ActivityRow[] {
+      const pending = eq(activities.detailStatus, "pending");
+      return database.select().from(activities).where(sinceUtc ? and(pending, gte(activities.startTimeUtc, sinceUtc)) : pending).orderBy(desc(activities.startTimeUtc)).limit(limit).all();
     },
 
-    countPendingDetails(): number {
-      return database.select({ id: activities.id }).from(activities).where(eq(activities.detailStatus, "pending")).all().length;
+    countPendingDetails(sinceUtc?: string): number {
+      const pending = eq(activities.detailStatus, "pending");
+      return database.select({ id: activities.id }).from(activities).where(sinceUtc ? and(pending, gte(activities.startTimeUtc, sinceUtc)) : pending).all().length;
     },
 
     saveDetail(id: string, detail: ActivityDetail, now = new Date().toISOString()): void {

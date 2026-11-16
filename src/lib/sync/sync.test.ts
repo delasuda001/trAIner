@@ -77,6 +77,16 @@ describe("runSync", () => {
     expect(second.totalActivities).toBe(3);
   });
 
+  it("profil invité : historique borné, séries récentes seulement, les anciennes restent en attente sans relancer la synchro", async () => {
+    const fake = fakeSource([summary("old", "2025-06-01T10:00:00Z"), summary("mid", "2026-07-01T10:00:00Z"), summary("recent", "2026-11-10T10:00:00Z")]);
+    const result = await runSync(deps(fake.source), { detailBudget: 10, historyStart: new Date("2025-11-15T12:00:00Z"), detailSince: new Date("2026-08-23T12:00:00Z"), wellnessBackfillDays: 120 });
+    expect(fake.listCalls[0]?.toISOString()).toBe("2025-11-15T12:00:00.000Z");
+    expect(result.newActivityIds).toEqual(["garmin:mid", "garmin:recent"]);
+    expect(fake.detailCalls).toEqual(["recent"]);
+    expect(result.pendingDetails).toBe(0);
+    expect(createActivityRepository(database).findById("garmin:mid")?.detailStatus).toBe("pending");
+  });
+
   it("enregistre l'erreur sans perdre l'état précédent", async () => {
     const fake = fakeSource([]);
     fake.source.listActivities = async () => { throw new Error("Garmin indisponible"); };

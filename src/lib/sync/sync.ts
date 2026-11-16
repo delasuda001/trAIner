@@ -85,6 +85,8 @@ export type SyncOptions = {
   historyStart?: Date | null;
   /** Profondeur du premier import de bien-être, en jours. */
   wellnessBackfillDays?: number;
+  /** Séries détaillées téléchargées d'office seulement depuis cette date (les plus anciennes : à l'ouverture). */
+  detailSince?: Date | null;
 };
 
 export async function runSync(deps: SyncDependencies, options: SyncOptions): Promise<SyncResult> {
@@ -106,7 +108,8 @@ export async function runSync(deps: SyncDependencies, options: SyncOptions): Pro
 
     let detailsFetched = 0;
     let detailsFailed = 0;
-    const pending = deps.activities.findPendingDetails(options.detailBudget);
+    const detailSinceUtc = options.detailSince?.toISOString();
+    const pending = deps.activities.findPendingDetails(options.detailBudget, detailSinceUtc);
     await mapWithConcurrency(pending, DETAIL_CONCURRENCY, async (row) => {
       try {
         const detail = await deps.source.getActivityDetail(row.sourceId, row.sourceType);
@@ -141,7 +144,7 @@ export async function runSync(deps: SyncDependencies, options: SyncOptions): Pro
       updatedActivities: summaries.length - inserted.length,
       detailsFetched,
       detailsFailed,
-      pendingDetails: deps.activities.countPendingDetails(),
+      pendingDetails: deps.activities.countPendingDetails(detailSinceUtc),
       wellnessDays: days.length,
       totalActivities: deps.activities.count(),
     };

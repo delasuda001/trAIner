@@ -1,15 +1,21 @@
-import { asMember } from "@/lib/profiles/request";
+import { asMember, guestsSuspended } from "@/lib/profiles/request";
 import type { Member } from "@/lib/profiles/types";
-import { z } from "zod";
+import { AccessPanel } from "@/components/settings/access-panel";
+import { MyDevices } from "@/components/settings/my-devices";
+import { ProfilesAdmin, type ProfileView } from "@/components/settings/profiles-admin";
+import { getRegistry } from "@/lib/profiles/context";
+import { guestsWeeklyCap, quotaStateOf, usageOf } from "@/lib/server/quota";
+import { publicUrl } from "@/lib/server/profiles-admin";
+import { reloadEnv } from "@/lib/server/sync-service";
+import { checkGarminKey } from "@/lib/source/garmin";
 import { Fact } from "@/components/ui/fact";
 import { ModelPicker } from "@/components/settings/model-picker";
 import { currentCoachModel } from "@/lib/coach";
 import { generatedAtLabel, modelLabel } from "@/lib/coach/model-label";
 import { summarizeUsage, totalTokens, type UsageTotals } from "@/lib/coach/usage-summary";
-import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
 import { createUsageRepository } from "@/lib/db/repositories/usage-repository";
 import { formatDate, formatNumber } from "@/lib/formatters";
-import { RATE_LIMIT_KEY, readRateLimits } from "@/lib/server/usage";
+import { readLastRateLimit, readRateLimits } from "@/lib/server/usage";
 import { budgetFromEnv, budgetTokens } from "@/lib/bench/budget";
 import { benchIsRunning, pendingTasks } from "@/lib/bench/runner";
 import { BenchButton } from "@/components/settings/bench-button";
@@ -22,8 +28,6 @@ const KIND_LABELS: Record<string, string> = { session: "Analyse de séance", out
 const AUTOMATIC_KINDS = new Set(["weekly", "bench"]);
 const OUTCOME_LABELS: Record<string, string> = { ok: "ok", rejected: "refusée", error: "échec" };
 const WINDOW_LABELS: Record<string, string> = { five_hour: "fenêtre de 5 h", seven_day: "semaine", seven_day_opus: "semaine (Opus)", seven_day_sonnet: "semaine (Sonnet)" };
-
-const rateLimitSchema = z.object({ status: z.string(), window: z.string().nullable(), utilization: z.number().nullable(), resetsAt: z.string().nullable(), seenAt: z.string() });
 
 function tokens(value: number): string {
   return value >= 10_000 ? `${formatNumber(value / 1000, 0)} k` : formatNumber(value);
@@ -41,11 +45,114 @@ function TotalsCard({ title, totals }: { title: string; totals: UsageTotals }) {
 }
 
 export default async function SettingsPage() {
-  return asMember((member) => renderSettingsPage(member));
+  return asMember(async (member) => (member.role === "admin" ? renderAdmin() : renderGuest(member)));
 }
 
-function renderSettingsPage(member: Member) {
-  void member;
+const LOGIN_OUTCOMES: Record<string, string> = { ok: "entrée", refused: "refusée", locked: "bloquée (trop d'essais)" };
+
+/** Profils, accès et journal : Bastien voit la consommation de chacun, jamais ses séances ni ses échanges. */
+async function adminSections() {
+  reloadEnv();
+  const registry = getRegistry();
+  const records = registry.list();
+  const profiles: ProfileView[] = await Promise.all(records.map(async (record) => {
+    const quota = quotaStateOf(record);
+    const garmin = await checkGarminKey(record.garminEnvVar, false);
+    return {
+      id: record.id,
+      name: record.name,
+      role: record.role,
+      garminEnvVar: record.garminEnvVar,
+      garminPresent: garmin.present,
+      usedToday: quota.usedToday,
+      usedWeek: quota.usedWeek,
+      dailyCap: record.role === "guest" ? record.dailyTokenCap : null,
+      weeklyCap: record.role === "guest" ? record.weeklyTokenCap : null,
+      devices: registry.listSessions(record.id).map((session) => ({ id: session.id, device: session.device, lastSeenAt: session.lastSeenAt })),
+      lastLoginAt: record.lastLoginAt,
+      disabled: record.disabledAt != null,
+      invitationUntil: registry.pendingInvitation(record.id)?.expiresAt ?? null,
+      onboarded: record.onboardedAt != null,
+      hasCode: record.hasCode,
+    };
+  }));
+  const names = new Map(records.map((record) => [record.id, record.name]));
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const guestsWeekUsed = records.filter((record) => record.role === "guest").flatMap((record) => usageOf(record, weekAgo)).reduce((sum, record) => sum + budgetTokens(record), 0);
+  const url = publicUrl("");
+  const logins = registry.listLogins(40);
+  return (
+    <>
+      <section className="section">
+        <div className="section-head">
+          <h2 className="section-title">Profils du test</h2>
+          <span className="section-note">chacun a sa base, sa clé Garmin et son coach ; tu ne vois que leur consommation</span>
+        </div>
+        <ProfilesAdmin profiles={profiles} publicUrlConfigured={url.configured} />
+      </section>
+      <section className="section grid grid-main-side" style={{ alignItems: "start" }}>
+        <div className="card">
+          <h2 className="section-title">Accès depuis l&apos;extérieur</h2>
+          <AccessPanel suspended={guestsSuspended()} publicUrl={url.configured ? url.url : null} guestsWeeklyCap={guestsWeeklyCap()} guestsWeekUsed={guestsWeekUsed} />
+        </div>
+        <div className="card">
+          <h2 className="section-title">Journal des connexions</h2>
+          {logins.length ? (
+            <div className="table-wrap" style={{ marginTop: 8 }}>
+              <table className="data">
+                <thead><tr><th>Quand</th><th>Qui</th><th>Par</th><th>Résultat</th><th>Appareil</th><th>Adresse</th></tr></thead>
+                <tbody>
+                  {logins.map((login) => (
+                    <tr key={`${login.at}-${login.address ?? ""}`}><td>{generatedAtLabel(login.at)}</td><td>{login.profileId ? names.get(login.profileId) ?? login.profileId : "—"}</td><td>{login.method === "invitation" ? "lien" : "code"}</td><td className={login.outcome === "ok" ? "" : "text-warning"}>{LOGIN_OUTCOMES[login.outcome] ?? login.outcome}</td><td>{login.device}</td><td className="muted">{login.address ?? "—"}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <p className="muted small">Aucune connexion pour l&apos;instant.</p>}
+        </div>
+      </section>
+    </>
+  );
+}
+
+/** Vue d'un invité : sa consommation et ses appareils, rien sur les autres profils. */
+function renderGuest(member: Member) {
+  const registry = getRegistry();
+  const record = registry.find(member.id);
+  const quota = record ? quotaStateOf(record) : null;
+  const devices = registry.listSessions(member.id).map((session) => ({ id: session.id, device: session.device, lastSeenAt: session.lastSeenAt }));
+  const k = (value: number) => `${Math.round(value / 1000)} k`;
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <p className="eyebrow">Paramètres</p>
+          <h1 className="page-title">Ton test</h1>
+          <p className="page-sub">Les analyses du coach sont limitées pendant le test : tes chiffres restent toujours affichés.</p>
+        </div>
+      </div>
+      <div className="grid grid-2" style={{ alignItems: "start" }}>
+        <section className="card">
+          <h2 className="section-title">Analyses du coach</h2>
+          {quota && record ? (
+            <div className="facts" style={{ marginTop: 10 }}>
+              <Fact label="Aujourd'hui" value={`${record.dailyTokenCap ? Math.min(100, Math.round((quota.usedToday / record.dailyTokenCap) * 100)) : 0} % utilisé`} sub={record.dailyTokenCap ? `${k(quota.usedToday)} sur ${k(record.dailyTokenCap)} tokens` : undefined} />
+              <Fact label="7 derniers jours" value={`${record.weeklyTokenCap ? Math.min(100, Math.round((quota.usedWeek / record.weeklyTokenCap) * 100)) : 0} % utilisé`} sub={record.weeklyTokenCap ? `${k(quota.usedWeek)} sur ${k(record.weeklyTokenCap)} tokens` : undefined} />
+            </div>
+          ) : null}
+          <p className="muted small" style={{ marginTop: 10 }}>Une analyse de séance ou une question coûte environ 10 k. Une analyse déjà faite se relit gratuitement.</p>
+        </section>
+        <section className="card">
+          <h2 className="section-title">Tes appareils connectés</h2>
+          <MyDevices devices={devices} />
+          <p className="muted small" style={{ marginTop: 10 }}>Un appareil perdu ? Déconnecte-le ici, ou préviens Bastien.</p>
+        </section>
+      </div>
+    </>
+  );
+}
+
+async function renderAdmin() {
   const repository = createUsageRepository();
   const now = new Date();
   const records = repository.since(new Date(now.getTime() - 30 * 86_400_000).toISOString());
@@ -60,7 +167,8 @@ function renderSettingsPage(member: Member) {
   const reports = readReportIndex().slice(0, 8);
   const pending = pendingTasks();
   const first = repository.first();
-  const rateLimit = createAppStateRepository().get(RATE_LIMIT_KEY, rateLimitSchema);
+  const rateLimit = readLastRateLimit();
+  const admin = await adminSections();
   const model = currentCoachModel();
 
   return (
@@ -69,9 +177,10 @@ function renderSettingsPage(member: Member) {
         <div>
           <p className="eyebrow">Paramètres</p>
           <h1 className="page-title">Coach et consommation</h1>
-          <p className="page-sub">Ce que Claude consomme sur ton abonnement pour les analyses, les conseils et tes questions.</p>
+          <p className="page-sub">Profils du test familial, accès, et ce que Claude consomme sur ton abonnement.</p>
         </div>
       </div>
+      {admin}
 
       <div className="grid grid-main-side" style={{ alignItems: "start" }}>
         <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-pink)" }}>

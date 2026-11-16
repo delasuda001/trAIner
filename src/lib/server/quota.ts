@@ -10,9 +10,8 @@ import { readRateLimits } from "./usage";
 
 export const GUESTS_WEEKLY_CAP_KEY = "guests_weekly_cap";
 
-export function guestsWeeklyCap(): number | null {
-  const stored = getRegistry().getSetting(GUESTS_WEEKLY_CAP_KEY, z.number().int().min(0).nullable());
-  return stored === null ? DEFAULT_GUESTS_WEEKLY_CAP : stored;
+export function guestsWeeklyCap(): number {
+  return getRegistry().getSetting(GUESTS_WEEKLY_CAP_KEY, z.number().int().min(0)) ?? DEFAULT_GUESTS_WEEKLY_CAP;
 }
 
 function startOfToday(now: Date): string {
