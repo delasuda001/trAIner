@@ -170,8 +170,17 @@ abonnement Claude le temps du test, et récolter leurs retours.
   réponse ; table `feedback` du registre ; vue /retours (Bastien) : thèmes (catégorie × écran), pouces
   par version de prompt, export Markdown (`lib/feedback/digest.ts`), synthèse Claude sur bouton
   (`feedback-v1`, Sonnet, cache par empreinte, usage `feedback`).
+- Téléphone : en-tête d'une ligne, onglets en bas, coup d'œil « prochaine séance + progression » en
+  haut de l'accueil (`MobileGlance`), thème et déconnexion dans Paramètres ; manifeste, icônes générées
+  (`apple-icon.tsx`, `/icons/[size]`), plein écran iPhone. Accueil du testeur `/bienvenue` (après le
+  lien d'invitation) ; « ce qui manque » (zones, seuil, objectif) sur l'accueil (`MissingInfo`).
 - Accès retenu : Tailscale Funnel sur le Mac seul (adresse HTTPS stable en .ts.net), app sur
   127.0.0.1 (`npm start` = `next start -H 127.0.0.1`). NON INSTALLÉ : accord écrit de Bastien requis.
+  Marche à suivre complète : `docs/ACCES.md`.
+- Vérification de bout en bout (serveur d'essai) : invité créé, lien unique, accueil, plafonds ; l'appel
+  réel du coach pour un invité a été REFUSÉ par la garde (abonnement à 76 % sur 7 jours, seuil invités
+  70 %, remise à zéro le 17 nov. 2 h heure de Toronto) : chemin de refus vérifié, chemin d'appel réel
+  encore à vérifier (≈ 10 k Sonnet + 6 k pour la synthèse des retours).
 - Essais sans toucher à l'app de Bastien : `source data/test/env.sh` (base copiée, registre et
   build `.next-test` séparés, port 3100).
 
