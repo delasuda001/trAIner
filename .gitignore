@@ -27,3 +27,6 @@ node_modules/
 trainer_copilot_save.json
 copilot_summary.md
 clean_copilot.py
+
+# Banc de tests (séances figées, rapports)
+/data/bench/
