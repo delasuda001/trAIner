@@ -4,7 +4,9 @@ import { createHash } from "node:crypto";
 import type { z } from "zod";
 import { getLlmClient } from "@/lib/coach";
 import { LLM_FAILURE_MESSAGES, LlmError, type LlmFailureKind } from "@/lib/coach/llm";
-import { allowedNumbers, collectText, findUnsupportedNumbers } from "@/lib/coach/number-guard";
+import { allowedNumbers, collectText, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
+import { zoneOf } from "@/lib/engine/zones";
+import { goalForCoach } from "@/lib/goal/goal";
 import { buildOutlookPayload, buildOutlookPrompt, OUTLOOK_PROMPT_VERSION, OUTLOOK_SYSTEM_PROMPT, outlookCoachJsonSchema, outlookCoachSchema, type OutlookCoachOutput } from "@/lib/coach/outlook-coach";
 import { buildSessionPayload, buildSessionPrompt, SESSION_PROMPT_VERSION, SESSION_SYSTEM_PROMPT, sessionCoachJsonSchema, sessionCoachSchema, type SessionCoachOutput } from "@/lib/coach/session-coach";
 import { createCoachOutputRepository } from "@/lib/db/repositories/coach-output-repository";
@@ -24,6 +26,8 @@ type Job<T> = {
   prompt: string;
   schema: z.ZodType<T>;
   jsonSchema: Record<string, unknown>;
+  /** Zone FC d'une valeur, pour rejeter une zone mal attribuée dans le texte. */
+  zoneOf: (heartRate: number) => number;
 };
 
 const inFlight = new Map<string, Promise<CoachResult<unknown>>>();
@@ -63,13 +67,14 @@ async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
           }
           throw error;
         }
-        const unsupported = findUnsupportedNumbers(collectText(response.data), allowed);
+        const text = collectText(response.data);
+        const unsupported = [...findUnsupportedNumbers(text, allowed), ...findZoneContradictions(text, job.zoneOf)];
         if (unsupported.length === 0) {
           const row = createCoachOutputRepository().save({ kind: job.kind, subject: job.subject, inputHash, model: response.model, promptVersion: job.promptVersion, output: response.data });
           return { status: "ready", output: response.data, model: response.model, createdAt: row.createdAt };
         }
-        console.warn(`[coach] ${job.kind} : chiffres non sourcés (essai ${attempt}) : ${unsupported.join(", ")}`);
-        prompt = `${job.prompt}\n\nATTENTION : ta réponse précédente contenait des chiffres absents des données (${unsupported.join(", ")}). Réécris-la en n'utilisant que des chiffres présents tels quels dans la charge utile.`;
+        console.warn(`[coach] ${job.kind} : chiffres ou zones non sourcés (essai ${attempt}) : ${unsupported.join(", ")}`);
+        prompt = `${job.prompt}\n\nATTENTION : ta réponse précédente contenait des erreurs (${unsupported.join(" ; ")}). Réécris-la en n'utilisant que des chiffres et des zones présents tels quels dans la charge utile.`;
       }
       throw new LlmError("invalid_output", "Chiffres non sourcés");
     } catch (error) {
@@ -93,13 +98,15 @@ function sessionJob(analysis: SessionAnalysis): Job<SessionCoachOutput> {
     comparables: analysis.comparables,
     zones: analysis.profile.zones,
     lactateThresholdSpeedMps: analysis.profile.lactateThresholdSpeedMps,
+    context: analysis.context,
+    goal: goalForCoach(analysis.goal, analysis.activity.localDate),
   });
-  return { kind: "session", subject: analysis.activity.id, promptVersion: SESSION_PROMPT_VERSION, payload, system: SESSION_SYSTEM_PROMPT, prompt: buildSessionPrompt(payload), schema: sessionCoachSchema, jsonSchema: sessionCoachJsonSchema as unknown as Record<string, unknown> };
+  return { zoneOf: (hr: number) => zoneOf(hr, analysis.profile.zones), kind: "session", subject: analysis.activity.id, promptVersion: SESSION_PROMPT_VERSION, payload, system: SESSION_SYSTEM_PROMPT, prompt: buildSessionPrompt(payload), schema: sessionCoachSchema, jsonSchema: sessionCoachJsonSchema as unknown as Record<string, unknown> };
 }
 
 function outlookJob(dashboard: Dashboard): Job<OutlookCoachOutput> {
-  const payload = buildOutlookPayload({ suggestion: dashboard.suggestion, progression: dashboard.progression, recovery: dashboard.recovery, load: dashboard.load });
-  return { kind: "outlook", subject: "current", promptVersion: OUTLOOK_PROMPT_VERSION, payload, system: OUTLOOK_SYSTEM_PROMPT, prompt: buildOutlookPrompt(payload), schema: outlookCoachSchema, jsonSchema: outlookCoachJsonSchema as unknown as Record<string, unknown> };
+  const payload = buildOutlookPayload({ suggestion: dashboard.suggestion, progression: dashboard.progression, recovery: dashboard.recovery, load: dashboard.load, goal: goalForCoach(dashboard.goal, dashboard.today) });
+  return { zoneOf: (hr: number) => zoneOf(hr, dashboard.profile.zones), kind: "outlook", subject: "current", promptVersion: OUTLOOK_PROMPT_VERSION, payload, system: OUTLOOK_SYSTEM_PROMPT, prompt: buildOutlookPrompt(payload), schema: outlookCoachSchema, jsonSchema: outlookCoachJsonSchema as unknown as Record<string, unknown> };
 }
 
 /** Lecture seule : jamais d'appel à Claude au chargement d'une page. */

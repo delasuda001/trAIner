@@ -1,11 +1,11 @@
 import "server-only";
 
-import { addDays, localDate } from "@/lib/dates";
+import { addDays, daysBetween, localDate, startOfIsoWeek } from "@/lib/dates";
 import { createActivityRepository } from "@/lib/db/repositories/activity-repository";
 import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
 import { createWellnessRepository } from "@/lib/db/repositories/wellness-repository";
 import type { ActivityRow, WellnessRow } from "@/lib/db/types";
-import { computeActivityMetrics, METRICS_VERSION, type ActivityMetrics } from "@/lib/engine/activity-metrics";
+import { computeActivityMetrics, METRICS_VERSION, sessionTitle, type ActivityMetrics } from "@/lib/engine/activity-metrics";
 import { computeDeltas, selectComparables, type ComparisonDeltas, type RunForComparison } from "@/lib/engine/comparable";
 import { isRun, summarizeLoad, type LoadSummary } from "@/lib/engine/load";
 import { computeProgression, referenceHeartRate, type Progression } from "@/lib/engine/progression";
@@ -15,6 +15,7 @@ import { suggestNextSession, type Suggestion } from "@/lib/engine/suggestion";
 import { classifyVerdict, type SessionVerdict } from "@/lib/engine/verdict";
 import { fallbackZones } from "@/lib/engine/zones";
 import type { ActivityStreams, HeartRateZones, Lap, WellnessDay } from "@/lib/source/types";
+import { EMPTY_GOAL, GOAL_KEY, goalSchema, targetPaceMps, type Goal } from "@/lib/goal/goal";
 import { athleteProfileSchema, PROFILE_KEY, SYNC_STATE_KEY, syncStateSchema, type SyncState } from "@/lib/sync/sync";
 
 export type Profile = { zones: HeartRateZones; zonesFromWatch: boolean; lactateThresholdSpeedMps: number | null; restingHeartRateBpm: number };
@@ -39,6 +40,11 @@ export function loadProfile(wellness: WellnessDay[], runs: ActivityRow[]): Profi
     lactateThresholdSpeedMps: stored?.lactateThresholdSpeedMps ?? null,
     restingHeartRateBpm: resting.length >= 7 ? Math.round(median(resting) as number) : 50,
   };
+}
+
+export function readGoal(): Goal | null {
+  const goal = createAppStateRepository().get(GOAL_KEY, goalSchema);
+  return goal && (goal.title || goal.eventDate || goal.preferredDays.length || goal.runsPerWeek !== EMPTY_GOAL.runsPerWeek) ? goal : null;
 }
 
 export function readSyncState(): SyncState | null {
@@ -74,6 +80,7 @@ function metricsFor(row: ActivityRow, profile: Profile, repo: ReturnType<typeof 
 export type AnalyzedRun = RunForComparison & { row: ActivityRow };
 
 type Context = {
+  goal: Goal | null;
   today: string;
   rows: ActivityRow[];
   runs: AnalyzedRun[];
@@ -94,17 +101,49 @@ function loadContext(): Context {
     if (!metrics) continue;
     runs.push({ id: row.id, startTimeUtc: row.startTimeUtc, localDate: row.localDate, name: row.name, sport: row.sport, movingTimeS: row.movingTimeS, distanceM: row.distanceM, averageTemperatureC: row.averageTemperatureC, metrics, row });
   }
-  return { today, rows, runs, wellness, profile };
+  return { today, rows, runs, wellness, profile, goal: readGoal() };
 }
 
 export type SessionAnalysis = {
   activity: ActivityRow;
   metrics: ActivityMetrics;
-  comparables: Array<{ id: string; localDate: string; name: string; movingTimeS: number | null; distanceM: number | null; mainSpeedMps: number | null; mainHeartRateBpm: number | null; workSpeedMps: number | null; workHeartRateBpm: number | null; kind: string; score: number }>;
+  comparables: Array<{ id: string; localDate: string; name: string; title: string; ageDays: number; movingTimeS: number | null; distanceM: number | null; mainSpeedMps: number | null; mainHeartRateBpm: number | null; workSpeedMps: number | null; workHeartRateBpm: number | null; kind: string; score: number }>;
   deltas: ComparisonDeltas;
   verdict: SessionVerdict;
   profile: Profile;
+  goal: Goal | null;
+  /** Contexte du jour de la séance : ce qui peut expliquer un écart. */
+  context: SessionContext;
 };
+
+export type SessionContext = {
+  loadRatio: number | null;
+  acute7d: number;
+  chronicWeekly28d: number;
+  /** Séances de qualité (fractionné, tempo, seuil) des 14 jours précédents. */
+  qualityBefore14d: Array<{ localDate: string; title: string; daysBefore: number }>;
+  daysSincePreviousRun: number | null;
+  recovery: RecoverySignals;
+};
+
+function sessionContext(current: AnalyzedRun, context: Context): SessionContext {
+  const date = current.localDate;
+  const before = context.rows.filter((row) => row.startTimeUtc < current.startTimeUtc);
+  const load = summarizeLoad(before.map((row) => ({ localDate: row.localDate, sport: row.sport, distanceM: row.distanceM, movingTimeS: row.movingTimeS, trainingLoad: row.trainingLoad, hrTimeInZonesS: parseZones(row) })).concat([{ localDate: date, sport: current.sport, distanceM: current.distanceM, movingTimeS: current.movingTimeS, trainingLoad: current.row.trainingLoad, hrTimeInZonesS: parseZones(current.row) }]), date, 4);
+  const previousRuns = context.runs.filter((run) => run.startTimeUtc < current.startTimeUtc);
+  const quality = previousRuns
+    .filter((run) => (run.metrics.family === "intervals" || run.metrics.family === "steady") && daysBetween(run.localDate, date) <= 14)
+    .map((run) => ({ localDate: run.localDate, title: sessionTitle(run.metrics), daysBefore: daysBetween(run.localDate, date) }));
+  const previous = previousRuns.at(-1);
+  return {
+    loadRatio: load.ratio,
+    acute7d: load.acute7d,
+    chronicWeekly28d: load.chronicWeekly28d,
+    qualityBefore14d: quality,
+    daysSincePreviousRun: previous ? daysBetween(previous.localDate, date) : null,
+    recovery: assessRecovery(context.wellness, date),
+  };
+}
 
 export function analyzeSession(activityId: string, context: Context = loadContext()): SessionAnalysis | null {
   const current = context.runs.find((run) => run.id === activityId);
@@ -115,10 +154,12 @@ export function analyzeSession(activityId: string, context: Context = loadContex
   return {
     activity: current.row,
     metrics: current.metrics,
-    comparables: comparables.map((run) => ({ id: run.id, localDate: run.localDate, name: run.name, movingTimeS: run.movingTimeS, distanceM: run.distanceM, mainSpeedMps: run.metrics.mainSpeedMps, mainHeartRateBpm: run.metrics.mainHeartRateBpm, workSpeedMps: run.metrics.work?.averageSpeedMps ?? null, workHeartRateBpm: run.metrics.work?.averageHeartRateBpm ?? null, kind: run.metrics.kind, score: run.score })),
+    comparables: comparables.map((run) => ({ id: run.id, localDate: run.localDate, name: run.name, title: sessionTitle(run.metrics), ageDays: daysBetween(run.localDate, current.localDate), movingTimeS: run.movingTimeS, distanceM: run.distanceM, mainSpeedMps: run.metrics.mainSpeedMps, mainHeartRateBpm: run.metrics.mainHeartRateBpm, workSpeedMps: run.metrics.work?.averageSpeedMps ?? null, workHeartRateBpm: run.metrics.work?.averageHeartRateBpm ?? null, kind: run.metrics.kind, score: run.score })),
     deltas,
     verdict: classifyVerdict(current.metrics, deltas),
     profile: context.profile,
+    goal: context.goal,
+    context: sessionContext(current, context),
   };
 }
 
@@ -141,7 +182,8 @@ function downsample(streams: ActivityStreams | null): ActivityView["chart"] {
     const speeds = slice(streams.speedMps);
     const heartRates = slice(streams.heartRateBpm);
     const altitudes = slice(streams.altitudeM);
-    const speed = speeds.length ? speeds.reduce((a, b) => a + b, 0) / speeds.length : null;
+    // Médiane plutôt que moyenne : un pic GPS isolé ne crée pas de faux sprint.
+    const speed = speeds.length ? (median(speeds) as number) : null;
     points.push({
       t: streams.timeS[start],
       d: streams.distanceM[start],
@@ -150,7 +192,11 @@ function downsample(streams: ActivityStreams | null): ActivityView["chart"] {
       alt: altitudes.length ? Math.round(altitudes.reduce((a, b) => a + b, 0) / altitudes.length) : null,
     });
   }
-  return points;
+  // Lissage léger (médiane glissante sur 3 points, soit ~20 s) pour une courbe lisible.
+  return points.map((point, index) => {
+    const window = present([points[index - 1]?.pace, point.pace, points[index + 1]?.pace]);
+    return { ...point, pace: point.pace == null ? null : Math.round(median(window) as number) };
+  });
 }
 
 export function getActivityView(activityId: string): ActivityView | null {
@@ -171,9 +217,12 @@ export type Dashboard = {
   progression: Progression;
   suggestion: Suggestion;
   lastRun: SessionAnalysis | null;
-  recent: Array<{ id: string; name: string; sport: string; localDate: string; startTimeLocal: string; distanceM: number | null; movingTimeS: number | null; averageSpeedMps: number | null; averageHeartRateBpm: number | null; kind: string | null }>;
+  recent: Array<{ id: string; name: string; sport: string; localDate: string; startTimeLocal: string; distanceM: number | null; movingTimeS: number | null; averageSpeedMps: number | null; averageHeartRateBpm: number | null; kind: string | null; title: string | null }>;
   activityCount: number;
   sync: SyncState | null;
+  goal: Goal | null;
+  /** Semaine en cours, lundi → dimanche : séances faites et séances proposées. */
+  week: Array<{ date: string; done: Array<{ kind: string | null; sport: string }>; planned: string | null }>;
 };
 
 export function getDashboard(): Dashboard {
@@ -183,27 +232,31 @@ export function getDashboard(): Dashboard {
   const recovery = assessRecovery(wellness, today);
   const referenceHr = referenceHeartRate(profile.zones.floors);
   const progression = computeProgression({
-    runs: runs.map((run) => ({ id: run.id, localDate: run.localDate, distanceM: run.distanceM, averageTemperatureC: run.averageTemperatureC, metrics: run.metrics, sport: run.sport })),
+    runs: runs.map((run) => ({ id: run.id, localDate: run.localDate, distanceM: run.distanceM, metrics: run.metrics, sport: run.sport })),
     today,
     fallbackReferenceHeartRateBpm: referenceHr,
     vo2maxSeries: present(wellness.map((day) => (day.vo2max != null ? { date: day.date, value: day.vo2max } : null))),
   });
 
   const recentRuns = runs.filter((run) => run.localDate >= addDays(today, -42));
-  const recentPerBeat = present(recentRuns.map((run) => (run.metrics.aerobic && run.metrics.structure === "continuous" ? run.metrics.aerobic.speedPerBeat : null)));
+  // Efficacité de ses sorties faciles récentes : sert à traduire la FC cible en allure réaliste.
+  const recentPerBeat = present(recentRuns.map((run) => (run.metrics.aerobic && (run.metrics.family === "easy" || run.metrics.family === "long") ? run.metrics.aerobic.speedPerBeat : null)));
+  const goal = context.goal;
   const suggestion = suggestNextSession({
     today,
-    runs: runs.filter((run) => run.localDate >= addDays(today, -60)).map((run) => ({ localDate: run.localDate, kind: run.metrics.kind, family: run.metrics.family, movingTimeS: run.movingTimeS, aerobicTrainingEffect: run.row.aerobicTrainingEffect })),
+    runs: runs.filter((run) => run.localDate >= addDays(today, -60)).map((run) => ({ localDate: run.localDate, kind: run.metrics.kind, family: run.metrics.family, movingTimeS: run.movingTimeS, aerobicTrainingEffect: run.row.aerobicTrainingEffect, title: sessionTitle(run.metrics) })),
     zones: profile.zones,
     restingHeartRateBpm: profile.restingHeartRateBpm,
     recentSpeedPerBeat: recentPerBeat.length ? median(recentPerBeat) : null,
     lactateThresholdSpeedMps: profile.lactateThresholdSpeedMps,
+    easyHeartRateBpm: progression.referenceHeartRateBpm,
     load,
     recovery,
+    goal: goal ? { eventDate: goal.eventDate, distanceKm: goal.distanceKm, targetPaceMps: targetPaceMps(goal), runsPerWeek: goal.runsPerWeek, preferredDays: goal.preferredDays } : null,
   });
 
   const last = runs.at(-1);
-  const kindById = new Map(runs.map((run) => [run.id, run.metrics.kind as string]));
+  const runById = new Map(runs.map((run) => [run.id, run]));
   return {
     today,
     profile,
@@ -212,8 +265,14 @@ export function getDashboard(): Dashboard {
     progression,
     suggestion,
     lastRun: last ? analyzeSession(last.id, context) : null,
-    recent: [...rows].reverse().slice(0, 8).map((row) => ({ id: row.id, name: row.name, sport: row.sport, localDate: row.localDate, startTimeLocal: row.startTimeLocal, distanceM: row.distanceM, movingTimeS: row.movingTimeS, averageSpeedMps: row.averageSpeedMps, averageHeartRateBpm: row.averageHeartRateBpm, kind: kindById.get(row.id) ?? null })),
+    recent: [...rows].reverse().slice(0, 10).map((row) => ({ id: row.id, name: row.name, sport: row.sport, localDate: row.localDate, startTimeLocal: row.startTimeLocal, distanceM: row.distanceM, movingTimeS: row.movingTimeS, averageSpeedMps: row.averageSpeedMps, averageHeartRateBpm: row.averageHeartRateBpm, kind: runById.get(row.id)?.metrics.kind ?? null, title: runById.get(row.id) ? sessionTitle((runById.get(row.id) as AnalyzedRun).metrics) : null })),
     activityCount: rows.length,
     sync: readSyncState(),
+    goal,
+    week: Array.from({ length: 7 }, (_, index) => {
+      const date = addDays(startOfIsoWeek(today), index);
+      const planned = suggestion.when.date === date ? suggestion.primary.type : suggestion.then?.when.date === date ? suggestion.then.type : null;
+      return { date, done: rows.filter((row) => row.localDate === date).map((row) => ({ kind: runById.get(row.id)?.metrics.kind ?? null, sport: row.sport })), planned };
+    }),
   };
 }

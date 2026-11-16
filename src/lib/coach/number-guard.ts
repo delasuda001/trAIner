@@ -62,3 +62,19 @@ export function collectText(value: unknown): string {
   collectStrings(value, strings);
   return strings.join("\n");
 }
+
+/**
+ * Zones contradictoires : « 165 bpm … en Z5 » alors que 165 bpm est en Z4.
+ * On contrôle les FC suivies de près par une zone (même proposition).
+ */
+export function findZoneContradictions(text: string, zoneOf: (heartRate: number) => number): string[] {
+  const issues: string[] = [];
+  const pattern = /(\d{2,3})\s*bpm[^.;:\n]{0,30}?\b(?:Z|zone\s*)([1-5])\b/gi;
+  for (const match of text.matchAll(pattern)) {
+    const heartRate = Number(match[1]);
+    const claimed = Number(match[2]);
+    // « 128–148 bpm (Z2) » : la borne haute d'une plage est vérifiée comme les autres.
+    if (zoneOf(heartRate) !== claimed) issues.push(`${heartRate} bpm n'est pas en Z${claimed}`);
+  }
+  return [...new Set(issues)];
+}

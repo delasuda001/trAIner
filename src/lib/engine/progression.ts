@@ -1,6 +1,6 @@
 import { addDays, daysBetween } from "@/lib/dates";
 import type { ActivityMetrics } from "./activity-metrics";
-import { mean, median, present, round, standardDeviation } from "./stats";
+import { median, present, round, standardDeviation } from "./stats";
 
 /**
  * Indicateur de progression, 100 % déterministe.
@@ -16,7 +16,6 @@ export type ProgressionRun = {
   id: string;
   localDate: string;
   distanceM: number | null;
-  averageTemperatureC: number | null;
   metrics: Pick<ActivityMetrics, "aerobic" | "structure" | "restingHeartRateUsed" | "family">;
   sport: string;
 };
@@ -32,7 +31,6 @@ export type PeriodSummary = {
   speedAtReferenceHr: number | null;
   aerobicMinutes: number;
   runKmPerWeek: number;
-  averageTemperatureC: number | null;
 };
 
 export type Progression = {
@@ -45,6 +43,8 @@ export type Progression = {
   /** > 0 : plus rapide à FC égale (s/km). */
   paceGainSPerKm: number | null;
   changePct: number | null;
+  /** Variation typique d'une sortie facile à l'autre (écart-type, s/km) : sert à dire si l'écart sort du bruit. */
+  runToRunSpreadSPerKm: number | null;
   vo2max: { latest: number | null; weeksAgo: number | null; delta: number | null };
   /** Points (une course qualifiante = un point) pour la courbe, 16 semaines. */
   points: Array<{ date: string; speedAtReferenceHr: number; minutes: number }>;
@@ -73,7 +73,6 @@ function summarize(runs: ProgressionRun[], allRuns: ProgressionRun[], start: str
     return value == null ? null : { value, weight: run.metrics.aerobic?.minutes ?? 0 };
   }));
   const allInPeriod = allRuns.filter((run) => run.localDate >= start && run.localDate <= end);
-  const temperature = mean(present(inPeriod.map((run) => run.averageTemperatureC)));
   return {
     start,
     end,
@@ -82,7 +81,6 @@ function summarize(runs: ProgressionRun[], allRuns: ProgressionRun[], start: str
     speedAtReferenceHr: entries.length ? round(median(entries.map((entry) => entry.value)) as number, 4) : null,
     aerobicMinutes: entries.reduce((sum, entry) => sum + entry.weight, 0),
     runKmPerWeek: round(allInPeriod.reduce((sum, run) => sum + (run.distanceM ?? 0), 0) / 1000 / weeks, 1),
-    averageTemperatureC: temperature == null ? null : round(temperature, 0),
     values: entries.map((entry) => entry.value),
   };
 }
@@ -122,11 +120,11 @@ export function computeProgression(input: {
     .map((run) => ({ date: run.localDate, speedAtReferenceHr: round(speedAtReference(run, referenceHr) as number, 4), minutes: run.metrics.aerobic?.minutes ?? 0 }));
 
   const caveats: string[] = [];
-  const strip = (period: PeriodSummary & { values: number[] }): PeriodSummary => ({ start: period.start, end: period.end, runs: period.runs, speedAtReferenceHr: period.speedAtReferenceHr, aerobicMinutes: period.aerobicMinutes, runKmPerWeek: period.runKmPerWeek, averageTemperatureC: period.averageTemperatureC });
+  const strip = (period: PeriodSummary & { values: number[] }): PeriodSummary => ({ start: period.start, end: period.end, runs: period.runs, speedAtReferenceHr: period.speedAtReferenceHr, aerobicMinutes: period.aerobicMinutes, runKmPerWeek: period.runKmPerWeek });
 
   if (recent.runs < MIN_RUNS_PER_PERIOD || previous.runs < MIN_RUNS_PER_PERIOD || !recent.speedAtReferenceHr || !previous.speedAtReferenceHr) {
     caveats.push(`Il faut au moins ${MIN_RUNS_PER_PERIOD} sorties faciles avec ${MIN_AEROBIC_MINUTES} min stables en Z2–Z3 par période ; il y en a ${recent.runs} sur la période récente et ${previous.runs} sur la précédente.`);
-    return { state: "insufficient", confidence: null, referenceHeartRateBpm: referenceHr, windowWeeks, recent: strip(recent), previous: strip(previous), paceGainSPerKm: null, changePct: null, vo2max, points, caveats };
+    return { state: "insufficient", confidence: null, referenceHeartRateBpm: referenceHr, windowWeeks, recent: strip(recent), previous: strip(previous), paceGainSPerKm: null, changePct: null, runToRunSpreadSPerKm: null, vo2max, points, caveats };
   }
 
   const changePct = round((recent.speedAtReferenceHr / previous.speedAtReferenceHr - 1) * 100, 1);
@@ -143,14 +141,6 @@ export function computeProgression(input: {
 
   const state: ProgressionState = Math.abs(changePct) < STABLE_BAND_PCT || z < 1 ? "stable" : changePct > 0 ? "progressing" : "regressing";
 
-  if (recent.averageTemperatureC != null && previous.averageTemperatureC != null && Math.abs(recent.averageTemperatureC - previous.averageTemperatureC) >= 6) {
-    const recentWarmer = recent.averageTemperatureC > previous.averageTemperatureC;
-    const warmerLooksWorse = recentWarmer ? changePct < 0 : changePct > 0;
-    const temperatures = `${previous.averageTemperatureC} °C puis ${recent.averageTemperatureC} °C relevés par la montre`;
-    caveats.push(warmerLooksWorse
-      ? `La période ${recentWarmer ? "récente" : "précédente"} était plus chaude (${temperatures}) : une partie de l'écart vient sans doute de la chaleur, qui élève la FC.`
-      : `La période ${recentWarmer ? "récente" : "précédente"} était plus chaude (${temperatures}) et reste pourtant la meilleure : l'écart est plutôt sous-estimé.`);
-  }
   if (minRuns < 4) caveats.push(`Peu de courses par période (${recent.runs} et ${previous.runs}) : tendance à confirmer.`);
 
   return {
@@ -162,6 +152,11 @@ export function computeProgression(input: {
     previous: strip(previous),
     paceGainSPerKm: paceGain,
     changePct,
+    runToRunSpreadSPerKm: (() => {
+      const paces = [...recent.values, ...previous.values].map((speed) => 1000 / speed);
+      const spread = standardDeviation(paces);
+      return spread == null ? null : round(spread, 0);
+    })(),
     vo2max,
     points,
     caveats,

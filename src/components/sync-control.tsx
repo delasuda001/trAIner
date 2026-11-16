@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -19,25 +19,41 @@ function relative(iso: string | null): string {
   return `synchronisé il y a ${Math.round(hours / 24)} j`;
 }
 
+/** Explication actionnable d'un échec de synchro : ce qui se passe et quoi faire. */
+function explain(error: string): { title: string; action: React.ReactNode } {
+  const lower = error.toLowerCase();
+  if (lower.includes("clé") || lower.includes("401") || lower.includes("403") || lower.includes("garmin_api_key")) {
+    return {
+      title: "Garmin refuse la clé : elle a sans doute expiré ou été supprimée.",
+      action: <>Recrée une clé sur <a href="https://connect.garmin.com/app/settings/personalApiToken" target="_blank" rel="noreferrer">Garmin Connect → Personal API</a>, colle-la dans <code>GARMIN_API_KEY</code> du fichier <code>.env.local</code>, puis relance l&apos;application.</>,
+    };
+  }
+  if (lower.includes("injoignable") || lower.includes("fetch") || lower.includes("network")) {
+    return { title: "Garmin est injoignable (pas de réseau ?).", action: <>Rien à faire : réessaie plus tard avec « Synchroniser ».</> };
+  }
+  return { title: "La synchronisation Garmin a échoué.", action: <>Réessaie avec « Synchroniser » ; si ça persiste, le détail est : {error}</> };
+}
+
 /** Synchro incrémentale : au chargement (si la dernière date de plus de 15 min) et sur demande. */
-export function SyncControl({ lastSuccessAt, lastError }: { lastSuccessAt: string | null; lastError: string | null }) {
+export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt }: { lastSuccessAt: string | null; lastError: string | null; lastAttemptAt: string | null }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(lastError);
+  // Une erreur n'est pertinente que si elle est postérieure au dernier succès.
+  const [error, setError] = useState<string | null>(lastError && (!lastSuccessAt || (lastAttemptAt ?? "") > lastSuccessAt) ? lastError : null);
+  const [dismissed, setDismissed] = useState(false);
   const [label, setLabel] = useState(() => relative(lastSuccessAt));
 
   const run = useCallback(async () => {
     setBusy(true);
     setError(null);
+    setDismissed(false);
     let latestNewRunId: string | null = null;
-    let newActivities = 0;
     try {
       for (let round = 0; round < MAX_ROUNDS; round += 1) {
         const response = await fetch("/api/sync", { method: "POST" });
         const body = (await response.json()) as SyncResponse;
         if (!response.ok || body.error) throw new Error(body.error ?? "Synchronisation impossible");
-        newActivities += body.newActivities;
         latestNewRunId ??= body.latestNewRunId;
         if (body.pendingDetails === 0) break;
         setStatus(`Import des séries détaillées… ${body.pendingDetails} restantes`);
@@ -54,8 +70,6 @@ export function SyncControl({ lastSuccessAt, lastError }: { lastSuccessAt: strin
           fetch("/api/coach/outlook", { method: "POST" }),
         ]);
         setStatus(null);
-        router.refresh();
-      } else if (newActivities > 0) {
         router.refresh();
       }
     } catch (caught) {
@@ -74,15 +88,27 @@ export function SyncControl({ lastSuccessAt, lastError }: { lastSuccessAt: strin
     }
   }, [lastSuccessAt, run]);
 
+  const detail = error ? explain(error) : null;
   return (
     <>
-      <span className={`sync-status${error ? " error" : ""}`} title={error ?? undefined}>
+      <span className={`sync-status${error ? " error" : ""}`}>
         {error ? "Synchro Garmin en échec" : status ?? (busy ? "Synchronisation…" : `Garmin · ${label}`)}
       </span>
       <button type="button" className="btn" onClick={() => void run()} disabled={busy} aria-label="Synchroniser avec Garmin">
         <RefreshCw size={14} className={busy ? "spin" : undefined} />
         <span>Synchroniser</span>
       </button>
+      {detail && !dismissed ? (
+        <div className="sync-banner" role="alert">
+          <div className="sync-banner-inner">
+            <AlertTriangle size={16} style={{ color: "var(--critical-text)", flex: "none", marginTop: 2 }} />
+            <div style={{ flex: 1 }}>
+              <strong>{detail.title}</strong> Les données affichées sont celles de la dernière synchro réussie ({label.replace("synchronisé ", "")}). {detail.action}
+            </div>
+            <button type="button" className="btn btn-ghost icon-btn" onClick={() => setDismissed(true)} aria-label="Masquer"><X size={14} /></button>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

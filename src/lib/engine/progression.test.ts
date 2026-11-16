@@ -10,7 +10,6 @@ function easyRun(daysAgo: number, paceSecPerKm: number, heartRate = 135, overrid
     id: `r${daysAgo}`,
     localDate: addDays(today, -daysAgo),
     distanceM: 10000,
-    averageTemperatureC: 20,
     sport: "running",
     metrics: { structure: "continuous", family: "easy", restingHeartRateUsed: 46, aerobic: { minutes: 40, speedMps: speed, heartRateBpm: heartRate, speedPerBeat: speed / (heartRate - 46) } },
     ...overrides,
@@ -52,13 +51,11 @@ describe("computeProgression", () => {
     expect(computeProgression({ runs: noise, today, fallbackReferenceHeartRateBpm: 140, vo2maxSeries: [] }).points).toHaveLength(0);
   });
 
-  it("signale l'effet de la chaleur et suit la VO2max", () => {
-    const runs = [
-      ...[50, 55, 60, 66].map((days) => easyRun(days, 380, 135, { averageTemperatureC: 29 })),
-      ...[3, 9, 15, 21].map((days) => easyRun(days, 395, 135, { averageTemperatureC: 18 })),
-    ];
+  it("suit la VO2max et ne s'appuie jamais sur la température de la montre", () => {
+    const runs = [...[50, 55, 60, 66].map((days) => easyRun(days, 380)), ...[3, 9, 15, 21].map((days) => easyRun(days, 395))];
     const result = computeProgression({ runs, today, fallbackReferenceHeartRateBpm: 140, vo2maxSeries: [{ date: "2026-09-20", value: 58.4 }, { date: "2026-11-13", value: 58 }] });
-    expect(result.caveats.join(" ")).toContain("plus chaude");
     expect(result.vo2max.delta).toBe(-0.4);
+    expect(result.caveats.join(" ")).not.toMatch(/°C|chaud/);
+    expect(result.runToRunSpreadSPerKm).not.toBeNull();
   });
 });

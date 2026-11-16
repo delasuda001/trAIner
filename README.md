@@ -34,6 +34,10 @@ date de plus de 15 minutes, et à la demande via le bouton « Synchroniser ».
 
 Pour développer : `npm run dev`. Contrôles : `npm run check` (lint + types + tests).
 
+## Objectif
+
+La page **Objectif** (course visée, date, temps, sorties par semaine, jours possibles) est facultative ; la suggestion et le coach s'en servent quand elle est remplie. Thème sombre par défaut, clair via le bouton en haut à droite.
+
 ## Variables (`.env.local`)
 
 | Variable | Rôle |

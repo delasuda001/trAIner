@@ -1,41 +1,35 @@
 "use client";
 
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
-type Theme = "system" | "light" | "dark";
-const ORDER: Theme[] = ["system", "light", "dark"];
-const LABELS: Record<Theme, string> = { system: "Thème : système", light: "Thème : clair", dark: "Thème : sombre" };
-
+/** Sombre par défaut ; le choix clair est mémorisé dans le navigateur. */
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("system");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("theme");
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- lecture unique de la préférence locale au montage
-      if (stored === "light" || stored === "dark") setTheme(stored);
-    } catch {}
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- lecture unique du thème appliqué avant le rendu
+    setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
   }, []);
 
-  function cycle() {
-    const next = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length];
+  function toggle() {
+    const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
     try {
-      if (next === "system") {
+      if (next === "light") {
+        localStorage.setItem("theme", "light");
+        document.documentElement.dataset.theme = "light";
+      } else {
         localStorage.removeItem("theme");
         delete document.documentElement.dataset.theme;
-      } else {
-        localStorage.setItem("theme", next);
-        document.documentElement.dataset.theme = next;
       }
     } catch {}
   }
 
-  const Icon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
+  const label = theme === "dark" ? "Passer en thème clair" : "Passer en thème sombre";
   return (
-    <button type="button" className="btn btn-ghost icon-btn" onClick={cycle} title={LABELS[theme]} aria-label={LABELS[theme]}>
-      <Icon size={16} />
+    <button type="button" className="btn btn-ghost icon-btn" onClick={toggle} title={label} aria-label={label}>
+      {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
     </button>
   );
 }

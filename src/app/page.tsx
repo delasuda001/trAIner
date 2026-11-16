@@ -1,5 +1,5 @@
-import { LastSessionCard, ProgressionCard, RecentList, RecoveryRow, SuggestionCard, VolumeCard } from "@/components/dashboard/cards";
 import { CoachRequest } from "@/components/coach-request";
+import { IntensityCard, LastSessionCard, ProgressionCard, RecentList, RecoveryRow, SuggestionCard, VolumeCard } from "@/components/dashboard/cards";
 import { formatDate } from "@/lib/formatters";
 import { getDashboard } from "@/lib/server/analytics";
 import { readOutlookCoach, readSessionCoach } from "@/lib/server/coach-service";
@@ -10,7 +10,7 @@ export default function Home() {
   const dashboard = getDashboard();
   if (dashboard.activityCount === 0) {
     return (
-      <div className="card state" style={{ marginTop: 32 }}>
+      <div className="card state rise" style={{ marginTop: 32 }}>
         <h2>Première synchronisation</h2>
         <p>Les activités Garmin arrivent : l&apos;historique complet et les séries détaillées des courses prennent quelques minutes la première fois. La page se met à jour toute seule.</p>
       </div>
@@ -18,12 +18,13 @@ export default function Home() {
   }
   const outlook = readOutlookCoach(dashboard);
   const lastCoach = dashboard.lastRun ? readSessionCoach(dashboard.lastRun) : null;
+  const weekday = formatDate(dashboard.today, "long");
   return (
     <>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Bonjour Bastien</h1>
-          <p className="page-sub">{formatDate(dashboard.today, "long")} · ce que disent tes données Garmin</p>
+          <p className="eyebrow">{weekday}</p>
+          <h1 className="page-title">Ta forme, ta prochaine séance</h1>
         </div>
         {outlook.status !== "ready" ? <CoachRequest endpoint="/api/coach/outlook" label="Demander l'avis du coach" initialError={outlook.status === "error" ? outlook.message : null} /> : null}
       </div>
@@ -46,7 +47,10 @@ export default function Home() {
       </section>
 
       <section className="section grid grid-main-side" style={{ alignItems: "start" }}>
-        <VolumeCard dashboard={dashboard} />
+        <div className="stack">
+          <VolumeCard dashboard={dashboard} />
+          <IntensityCard dashboard={dashboard} />
+        </div>
         <RecentList dashboard={dashboard} />
       </section>
     </>

@@ -9,7 +9,7 @@ import { zoneOf, type ZoneIndex } from "./zones";
  * découlent : le LLM ne calcule rien.
  */
 
-export const METRICS_VERSION = 6;
+export const METRICS_VERSION = 7;
 
 export type SessionKind =
   | "recovery"
@@ -36,6 +36,44 @@ export const SESSION_KIND_LABELS: Record<SessionKind, string> = {
   intervals_tempo: "Fractionné tempo",
 };
 
+/** Sous-titre d'intensité d'un fractionné (le titre, lui, décrit la structure). */
+export const INTERVAL_INTENSITY_LABELS: Partial<Record<SessionKind, string>> = {
+  intervals_short: "vitesse",
+  intervals_vo2: "intensité VO2max",
+  intervals_threshold: "intensité seuil",
+  intervals_tempo: "intensité tempo",
+};
+
+function formatRepDistance(meters: number): string {
+  if (meters >= 1000) {
+    const km = Math.round(meters / 100) / 10;
+    return `${String(km).replace(".", ",")} km`;
+  }
+  return `${Math.round(meters / 50) * 50} m`;
+}
+
+function formatRepDuration(seconds: number): string {
+  if (seconds < 90) return `${Math.round(seconds / 5) * 5} s`;
+  const minutes = Math.round(seconds / 30) / 2;
+  return `${String(minutes).replace(".", ",")} min`;
+}
+
+/**
+ * Intitulé d'une séance décrit par sa structure : « Fractionné long 3 × 2 km »,
+ * « Fractionné court 10 × 45 s ». Les séances continues gardent leur type.
+ */
+export function sessionTitle(metrics: Pick<ActivityMetrics, "kind" | "work">): string {
+  const work = metrics.work;
+  if (!work) return SESSION_KIND_LABELS[metrics.kind];
+  const adjective = work.averageDurationS < 75 ? " court" : work.averageDurationS >= 300 ? " long" : "";
+  const distances = work.repsDetail.map((rep) => rep.distanceM ?? 0);
+  const meanDistance = distances.reduce((sum, value) => sum + value, 0) / Math.max(1, distances.length);
+  const spread = Math.max(...distances) - Math.min(...distances);
+  const byDistance = meanDistance >= 300 && distances.every((value) => value > 0) && spread / meanDistance < 0.08;
+  const format = byDistance ? formatRepDistance(meanDistance) : formatRepDuration(work.averageDurationS);
+  return `Fractionné${adjective} ${work.reps} × ${format}`;
+}
+
 export function familyOf(kind: SessionKind): SessionFamily {
   if (kind === "recovery" || kind === "endurance") return "easy";
   if (kind === "long") return "long";
@@ -59,7 +97,7 @@ export type WorkBlock = {
   fadePct: number | null;
   averageRecoveryS: number | null;
   /** Une ligne par répétition (et la récupération qui suit). */
-  repsDetail: Array<{ durationS: number; distanceM: number | null; speedMps: number; heartRateBpm: number | null; maxHeartRateBpm: number | null; recoveryAfterS: number | null }>;
+  repsDetail: Array<{ startOffsetS: number; durationS: number; distanceM: number | null; speedMps: number; heartRateBpm: number | null; maxHeartRateBpm: number | null; recoveryAfterS: number | null }>;
 };
 
 export type AerobicSample = {
@@ -251,6 +289,7 @@ export function detectWorkBlock(laps: Lap[]): WorkBlock | null {
       const position = ordered.findIndex((candidate) => candidate.index === lap.index);
       const next = ordered[position + 1];
       return {
+        startOffsetS: lap.startOffsetS,
         durationS: lap.durationS,
         distanceM: lap.distanceM,
         speedMps: lap.averageSpeedMps as number,

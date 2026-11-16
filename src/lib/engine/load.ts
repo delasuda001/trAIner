@@ -10,7 +10,8 @@ export type LoadActivity = {
   hrTimeInZonesS: number[] | null;
 };
 
-export type WeekVolume = { weekStart: string; runKm: number; runCount: number; otherMinutes: number; load: number };
+/** Minutes par intensité : Z1–Z2 / Z3 / Z4–Z5 (toutes activités avec FC). */
+export type WeekVolume = { weekStart: string; runKm: number; runCount: number; otherMinutes: number; load: number; lowMin: number; moderateMin: number; highMin: number };
 
 export type LoadSummary = {
   /** Somme des charges Garmin sur les 7 derniers jours. */
@@ -57,6 +58,11 @@ export function summarizeLoad(activities: LoadActivity[], today: string, weeksCo
       runCount: runs.length,
       otherMinutes: Math.round(list.filter((activity) => !isRun(activity.sport)).reduce((sum, activity) => sum + (activity.movingTimeS ?? 0), 0) / 60),
       load: Math.round(sumLoad(list)),
+      ...(() => {
+        const zones = [0, 0, 0, 0, 0];
+        for (const activity of list) activity.hrTimeInZonesS?.forEach((seconds, zone) => (zones[zone] += seconds));
+        return { lowMin: Math.round((zones[0] + zones[1]) / 60), moderateMin: Math.round(zones[2] / 60), highMin: Math.round((zones[3] + zones[4]) / 60) };
+      })(),
     };
   });
 

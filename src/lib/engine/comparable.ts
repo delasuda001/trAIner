@@ -23,7 +23,10 @@ export type ComparableMatch = RunForComparison & { score: number };
 
 const MAX_COMPARABLES = 5;
 const MAX_SCORE = 2.2;
-const MAX_AGE_DAYS = 540;
+/** Au-delà d'un an, la forme n'est plus comparable. */
+const MAX_AGE_DAYS = 365;
+/** En dessous, l'interface et le coach signalent que la comparaison est fragile. */
+export const MIN_SOLID_COMPARABLES = 3;
 
 /** Familles voisines acceptées en repli, avec pénalité. */
 const NEIGHBOURS: Record<SessionFamily, SessionFamily[]> = {
@@ -59,11 +62,14 @@ export function dissimilarity(current: RunForComparison, candidate: RunForCompar
   const climbB = candidate.metrics.elevationGainPerKm ?? 0;
   score += Math.min(0.8, Math.abs(climbA - climbB) / 25);
 
-  if (current.averageTemperatureC != null && candidate.averageTemperatureC != null) {
-    score += Math.min(0.5, Math.abs(current.averageTemperatureC - candidate.averageTemperatureC) / 20);
-  }
 
   if (current.metrics.work && candidate.metrics.work) {
+    // Même format exigé : comparer l'allure de répétitions de 2 km à celle de 400 m n'a pas de sens.
+    const durationRatio = current.metrics.work.averageDurationS / candidate.metrics.work.averageDurationS;
+    if (durationRatio < 0.6 || durationRatio > 1.7) return null;
+    const recoveryA = current.metrics.work.averageRecoveryS;
+    const recoveryB = candidate.metrics.work.averageRecoveryS;
+    if (recoveryA && recoveryB && (recoveryA / recoveryB < 0.4 || recoveryA / recoveryB > 2.5)) return null;
     score += 0.8 * logRatio(current.metrics.work.averageDurationS, candidate.metrics.work.averageDurationS);
     score += 0.4 * logRatio(current.metrics.work.reps, candidate.metrics.work.reps);
   }
@@ -105,6 +111,8 @@ export type ComparisonDeltas = {
   work: {
     current: { speedMps: number; heartRateBpm: number | null; speedCvPct: number | null; fadePct: number | null } | null;
     reference: { speedMps: number | null; heartRateBpm: number | null; speedCvPct: number | null; fadePct: number | null } | null;
+    /** > 0 : répétitions plus rapides à FC égale que sur les comparables (s/km). */
+    paceAtEqualHrGainSPerKm: number | null;
   } | null;
 };
 
@@ -151,8 +159,14 @@ export function computeDeltas(current: RunForComparison, comparables: RunForComp
     hrDelta = round(basisHr - expectedHrAtCurrentSpeed, 0);
   }
 
+  const workRefRatio = median(present(comparables.map((run) => speedPerBeat(run.metrics.work?.averageSpeedMps ?? null, run.metrics.work?.averageHeartRateBpm ?? null, rest))));
+  const currentWork = current.metrics.work;
+  const workGain = currentWork && workRefRatio && currentWork.averageHeartRateBpm && currentWork.averageHeartRateBpm - rest > 10
+    ? round(secondsPerKm(workRefRatio * (currentWork.averageHeartRateBpm - rest)) - secondsPerKm(currentWork.averageSpeedMps), 0)
+    : null;
   const work = current.metrics.work
     ? {
+        paceAtEqualHrGainSPerKm: comparables.length ? workGain : null,
         current: { speedMps: current.metrics.work.averageSpeedMps, heartRateBpm: current.metrics.work.averageHeartRateBpm, speedCvPct: current.metrics.work.speedCvPct, fadePct: current.metrics.work.fadePct },
         reference: comparables.some((run) => run.metrics.work)
           ? {

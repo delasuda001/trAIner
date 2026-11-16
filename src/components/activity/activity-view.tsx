@@ -5,7 +5,8 @@ import { CoachRequest } from "@/components/coach-request";
 import { Badge } from "@/components/ui/badge";
 import { Fact } from "@/components/ui/fact";
 import type { SessionCoachOutput } from "@/lib/coach/session-coach";
-import { SESSION_KIND_LABELS, type SessionKind } from "@/lib/engine/activity-metrics";
+import { INTERVAL_INTENSITY_LABELS, sessionTitle } from "@/lib/engine/activity-metrics";
+import { familyOfKind, SessionGlyph } from "@/components/ui/session-type";
 import { SPORT_LABELS, VERDICT_TONES } from "@/lib/engine/labels";
 import { VERDICT_LABELS } from "@/lib/engine/verdict";
 import { ZONE_LABELS, zoneRange } from "@/lib/engine/zones";
@@ -60,13 +61,19 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
   );
 }
 
+function ageShort(days: number): string {
+  if (days < 14) return `il y a ${days} j`;
+  if (days < 60) return `il y a ${Math.round(days / 7)} sem.`;
+  return `il y a ${Math.round(days / 30)} mois`;
+}
+
 function ComparisonCard({ analysis }: { analysis: SessionAnalysis }) {
-  const { deltas, comparables, metrics, activity } = analysis;
+  const { deltas, comparables, metrics } = analysis;
   if (deltas.count === 0) {
     return (
       <section className="card">
         <h2 className="section-title">Comparaison</h2>
-        <p className="card-text">Pas encore de séance comparable (même type, durée et dénivelé proches, moins de 18 mois) : celle-ci servira de repère.</p>
+        <p className="card-text">Pas de séance comparable récente (même type et même format, durée et dénivelé proches, moins d&apos;un an) : celle-ci servira de repère.</p>
       </section>
     );
   }
@@ -78,7 +85,7 @@ function ComparisonCard({ analysis }: { analysis: SessionAnalysis }) {
     ...comparables
       .map((run) => ({ run, speed: intervals ? run.workSpeedMps : run.mainSpeedMps, hr: intervals ? run.workHeartRateBpm : run.mainHeartRateBpm }))
       .filter((entry) => entry.speed)
-      .map((entry) => ({ label: formatDate(entry.run.localDate, "short") + (entry.run.localDate.slice(0, 4) !== activity.localDate.slice(0, 4) ? ` ${entry.run.localDate.slice(2, 4)}` : ""), secondsPerKm: 1000 / (entry.speed as number), heartRate: entry.hr, current: false })),
+      .map((entry) => ({ label: `${formatDate(entry.run.localDate, "short")} (${ageShort(entry.run.ageDays).replace("il y a ", "")})`, secondsPerKm: 1000 / (entry.speed as number), heartRate: entry.hr, current: false })),
   ];
   return (
     <section className="card">
@@ -86,6 +93,7 @@ function ComparisonCard({ analysis }: { analysis: SessionAnalysis }) {
         <h2 className="section-title">Face à tes séances comparables</h2>
         <span className="section-note">{intervals ? "allure des répétitions" : "allure hors échauffement"}</span>
       </div>
+      {analysis.verdict.fewComparables ? <p className="notice small" style={{ marginTop: 0, marginBottom: 10 }}>Seulement {deltas.count} séance{deltas.count > 1 ? "" : ""} vraiment comparable{deltas.count > 1 ? "s" : ""} (même format, moins d&apos;un an) : comparaison fragile.</p> : null}
       <ComparisonChart rows={rows} metricLabel={intervals ? "Répétitions" : "Allure"} />
       <div className="facts" style={{ marginTop: 12 }}>
         {deltas.paceAtEqualHrGainSPerKm != null ? <Fact label="Allure à FC égale" value={signed(deltas.paceAtEqualHrGainSPerKm, "s/km", "rapide", "lent")} /> : null}
@@ -100,7 +108,7 @@ function ComparisonCard({ analysis }: { analysis: SessionAnalysis }) {
           {comparables.map((run) => (
             <Link key={run.id} href={`/activities/${encodeURIComponent(run.id)}`} className="list-row">
               <span className="list-date num">{formatDate(run.localDate, "short")}</span>
-              <span className="list-title">{SESSION_KIND_LABELS[run.kind as SessionKind] ?? run.kind}</span>
+              <span><span className="list-title">{run.title}</span><span className="list-sub">{ageShort(run.ageDays)}</span></span>
               <span className="list-metric num">{formatDistance(run.distanceM, 1)}<small>{formatDuration(run.movingTimeS)}</small></span>
             </Link>
           ))}
@@ -203,15 +211,21 @@ function DetailTable({ analysis }: { analysis: SessionAnalysis }) {
 export function ActivityView({ view, coach }: { view: View; coach: CoachResult<SessionCoachOutput> | null }) {
   const { activity, analysis } = view;
   const sport = SPORT_LABELS[activity.sport as Sport] ?? activity.sport;
-  const title = analysis ? SESSION_KIND_LABELS[analysis.metrics.kind] : sport;
+  const title = analysis ? sessionTitle(analysis.metrics) : sport;
+  const intensity = analysis?.metrics.work ? INTERVAL_INTENSITY_LABELS[analysis.metrics.kind] : null;
+  const family = analysis ? familyOfKind(analysis.metrics.kind) : "other";
   const time = activity.startTimeLocal.slice(11, 16).replace(":", " h ");
+  const reps = analysis?.metrics.work?.repsDetail.map((rep) => ({ from: rep.startOffsetS, to: rep.startOffsetS + rep.durationS })) ?? [];
   return (
     <>
-      <div className="page-head" style={{ paddingTop: 12 }}>
-        <div>
-          <p className="muted">{formatDate(activity.localDate, "long")} · {time} · {sport}</p>
-          <h1 className="page-title">{title}</h1>
-          <p className="page-sub">{activity.name}</p>
+      <div className="page-head rise" style={{ paddingTop: 12 }}>
+        <div className="row">
+          <SessionGlyph family={family} sport={activity.sport} />
+          <div>
+            <p className="eyebrow">{formatDate(activity.localDate, "long")} · {time} · {sport}</p>
+            <h1 className="page-title">{title}</h1>
+            <p className="page-sub">{intensity ? `${intensity.charAt(0).toUpperCase()}${intensity.slice(1)} · ` : ""}{activity.name}</p>
+          </div>
         </div>
       </div>
 
@@ -242,7 +256,7 @@ export function ActivityView({ view, coach }: { view: View; coach: CoachResult<S
             <h2 className="section-title">Allure et fréquence cardiaque</h2>
             <span className="section-note">survole pour lire les valeurs</span>
           </div>
-          <SessionStreamCharts points={view.chart} zoneFloors={view.profile.zones.floors} />
+          <SessionStreamCharts points={view.chart} zoneFloors={view.profile.zones.floors} reps={reps} />
         </section>
       ) : null}
 

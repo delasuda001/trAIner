@@ -5,7 +5,7 @@ import type { RecoverySignals } from "@/lib/engine/recovery";
 import type { Suggestion } from "@/lib/engine/suggestion";
 import { formatDate, formatDuration, formatNumber, formatPace, formatSigned } from "@/lib/formatters";
 
-export const OUTLOOK_PROMPT_VERSION = "outlook-v1";
+export const OUTLOOK_PROMPT_VERSION = "outlook-v2";
 
 export const outlookCoachSchema = z.object({
   suggestionWhy: z.string().min(10).max(400),
@@ -20,23 +20,24 @@ export const outlookCoachJsonSchema = {
   additionalProperties: false,
   required: ["suggestionWhy", "executionTip", "progressionSentence"],
   properties: {
-    suggestionWhy: { type: "string", description: "Pourquoi cette séance maintenant, en une phrase de 250 caractères au plus." },
-    executionTip: { type: "string", description: "Un conseil d'exécution concret pour cette séance, une phrase de 220 caractères au plus." },
-    progressionSentence: { type: "string", description: "Ce que dit l'indicateur de progression, une phrase de 250 caractères au plus." },
+    suggestionWhy: { type: "string", description: "Pourquoi cette séance maintenant, en une phrase de 200 caractères au plus, sans répéter les cibles." },
+    executionTip: { type: "string", description: "Comment la réussir : un conseil concret, une phrase de 180 caractères au plus, sans répéter les cibles de FC ou d'allure." },
+    progressionSentence: { type: "string", description: "Ce que signifie l'indicateur de progression, une phrase de 200 caractères au plus, qui n'énonce pas l'état ni la confiance (déjà affichés)." },
   },
 } as const;
 
-export const OUTLOOK_SYSTEM_PROMPT = `Tu es le coach de course à pied de Bastien, coureur expérimenté qui court 1 à 2 fois par semaine. Un moteur déterministe a déjà choisi sa prochaine séance et calculé son indicateur de progression ; tu les expliques.
+export const OUTLOOK_SYSTEM_PROMPT = `Tu es le coach de course à pied de Bastien, coureur expérimenté qui court 1 à 2 fois par semaine. Un moteur déterministe a déjà choisi sa prochaine séance (et celle d'après) et calculé son indicateur de progression ; tu les expliques.
 
 Règles absolues :
 - Français, tutoiement, ton direct et précis, sans remplissage.
 - Chaque chiffre que tu écris doit apparaître tel quel dans la charge utile. N'en calcule ni n'en invente aucun.
-- Ne change pas la séance proposée ni l'état de progression : tu les expliques.
-- Si l'état de progression est « données insuffisantes », dis-le franchement et dis ce qui manque.
-- Si la confiance est faible, dis-le.
-- Pas de conseil générique. Aucune interprétation médicale, ni score de forme ou de fatigue.
+- Les cibles (durée, FC, allure) et l'état de progression sont déjà affichés à l'écran : ne les répète pas, apporte le pourquoi et le comment.
+- Ne change pas la séance proposée ni l'état de progression.
+- Relie la séance à l'objectif quand il est renseigné. Sans objectif, raisonne sur la progression aérobie.
+- Si l'écart de progression est dans la variation normale d'une sortie à l'autre, dis-le en mots simples. Si les données sont insuffisantes, dis ce qui manque.
+- Pas de conseil générique. Aucune interprétation médicale, ni score de forme ou de fatigue. Pas de remarque sur la température.
 
-Format : "suggestionWhy" (pourquoi cette séance, maintenant, une phrase), "executionTip" (comment la réussir, une phrase concrète), "progressionSentence" (une phrase).`;
+Format : "suggestionWhy" (pourquoi cette séance maintenant), "executionTip" (comment la réussir), "progressionSentence" (ce que la progression veut dire pour lui). Une phrase chacun.`;
 
 const STATE_LABELS: Record<Progression["state"], string> = {
   progressing: "en progression",
@@ -53,7 +54,7 @@ const FLAG_LABELS: Record<RecoverySignals["flags"][number], string> = {
 
 const CONFIDENCE_LABELS = { low: "faible", moderate: "moyenne", high: "bonne" } as const;
 
-export function buildOutlookPayload(input: { suggestion: Suggestion; progression: Progression; recovery: RecoverySignals; load: LoadSummary }) {
+export function buildOutlookPayload(input: { suggestion: Suggestion; progression: Progression; recovery: RecoverySignals; load: LoadSummary; goal: Record<string, string> }) {
   const { suggestion, progression, recovery, load } = input;
   const primary = suggestion.primary;
   const target = primary.target;
@@ -70,14 +71,17 @@ export function buildOutlookPayload(input: { suggestion: Suggestion; progression
       quand: suggestion.when.label,
       raison_moteur: suggestion.reason,
       alternative_si_recuperation_degradee: suggestion.alternative ? { ...describeSession(suggestion.alternative), condition: suggestion.alternative.reason } : null,
+      seance_d_apres: suggestion.then ? `${suggestion.then.title}${suggestion.then.durationMin ? ` (${formatDuration(suggestion.then.durationMin * 60)})` : ""}, ${suggestion.then.when.label.toLowerCase()}` : "—",
     },
+    objectif: input.goal,
     contexte: {
       jours_depuis_derniere_course: suggestion.facts.daysSinceLastRun,
       derniere_course: suggestion.facts.lastRunKind,
       jours_depuis_derniere_qualite: suggestion.facts.daysSinceLastQuality,
       jours_depuis_derniere_sortie_longue: suggestion.facts.daysSinceLastLong,
       courses_par_semaine_8_sem: formatNumber(suggestion.facts.runsPerWeek8w, 1),
-      charge_7j_vs_moyenne_4_sem: load.ratio == null ? "—" : `${formatNumber(load.ratio, 1)} fois`,
+      charge_garmin_7j_vs_moyenne_4_sem: load.ratio == null ? "—" : `${formatNumber(load.ratio, 1)} fois`,
+      sorties_prevues_par_semaine: String(suggestion.facts.plannedRunsPerWeek),
       temps_z4_z5_28j: load.intensity28d ? `${Math.round(load.intensity28d.high * 100)} %` : "—",
       recuperation: {
         vfc_nuit: recovery.hrv.latest != null ? `${Math.round(recovery.hrv.latest)} ms (plage habituelle ${recovery.hrv.baselineLow ?? "—"}–${recovery.hrv.baselineHigh ?? "—"} ms)` : "—",
@@ -94,6 +98,7 @@ export function buildOutlookPayload(input: { suggestion: Suggestion; progression
       periode_precedente: `${formatDate(progression.previous.start, "short")} – ${formatDate(progression.previous.end, "short")} : ${progression.previous.runs} sorties, ${formatPace(progression.previous.speedAtReferenceHr)}`,
       ecart: progression.paceGainSPerKm == null ? "—" : progression.paceGainSPerKm === 0 ? "identique" : `${formatNumber(Math.abs(progression.paceGainSPerKm))} s/km plus ${progression.paceGainSPerKm > 0 ? "rapide" : "lent"} à FC égale`,
       volume: `${formatNumber(progression.previous.runKmPerWeek, 1)} puis ${formatNumber(progression.recent.runKmPerWeek, 1)} km/semaine`,
+      variation_normale_d_une_sortie_a_l_autre: progression.runToRunSpreadSPerKm == null ? "—" : `${progression.runToRunSpreadSPerKm} s/km`,
       vo2max_montre: progression.vo2max.latest != null ? `${formatNumber(progression.vo2max.latest, 1)}${progression.vo2max.weeksAgo != null ? ` (${formatNumber(progression.vo2max.weeksAgo, 1)} il y a ${progression.windowWeeks} semaines)` : ""}` : "—",
       reserves: progression.caveats,
     },
@@ -104,5 +109,5 @@ export function buildOutlookPayload(input: { suggestion: Suggestion; progression
 export type OutlookPayload = ReturnType<typeof buildOutlookPayload>;
 
 export function buildOutlookPrompt(payload: OutlookPayload): string {
-  return `Explique la prochaine séance et l'indicateur de progression.\n\n${JSON.stringify(payload, null, 2)}`;
+  return `Explique la prochaine séance et l'indicateur de progression.\n\n${JSON.stringify(payload)}`;
 }

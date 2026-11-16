@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedNumbers, findUnsupportedNumbers } from "./number-guard";
+import { allowedNumbers, findUnsupportedNumbers, findZoneContradictions } from "./number-guard";
 
 describe("garde-fou des chiffres", () => {
   const payload = { allure: "4:10/km", fc: "168 bpm", ecart: "1,5 %", seances: [{ duree: "47:52" }], derive: "3,4 %" };
@@ -15,5 +15,15 @@ describe("garde-fou des chiffres", () => {
 
   it("signale une allure ou une FC inventée", () => {
     expect(findUnsupportedNumbers("Vise 4:05/km à 172 bpm", allowed)).toEqual(["4:05", "172"]);
+  });
+});
+
+describe("garde-fou des zones", () => {
+  const zoneOf = (hr: number) => (hr >= 167 ? 5 : hr >= 159 ? 4 : hr >= 149 ? 3 : hr >= 128 ? 2 : 1);
+  it("accepte une zone cohérente", () => {
+    expect(findZoneContradictions("Répétition à 168 bpm (Z5), puis 165 bpm en Z4.", zoneOf)).toEqual([]);
+  });
+  it("rejette 165 bpm présenté en Z5", () => {
+    expect(findZoneContradictions("La #1 à 165 bpm démarre déjà en Z5.", zoneOf)).toEqual(["165 bpm n'est pas en Z5"]);
   });
 });
