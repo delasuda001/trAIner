@@ -129,6 +129,6 @@ export function loadAlert(load: LoadSummary, corroboration: { recoveryFlags: str
   const typical = complete.length >= 4 ? Math.round(median(complete) as number) : null;
   const reasons: string[] = corroboration.recoveryFlags.map((flag) => FLAG_TEXT[flag] ?? flag);
   if (corroboration.perceivedEffort != null && corroboration.perceivedEffort >= HIGH_PERCEIVED_EFFORT) reasons.push(`effort perçu à ${corroboration.perceivedEffort}/10`);
-  if (typical != null && load.acute7d >= typical * ABSOLUTE_LOAD_FACTOR) reasons.push(`charge 7 jours à ${load.acute7d} contre ${typical} une semaine habituelle`);
+  if (typical != null && load.acute7d >= typical * ABSOLUTE_LOAD_FACTOR) reasons.push(`${load.acute7d} de charge sur 7 jours contre ${typical} une semaine habituelle`);
   return { ratio: load.ratio, ratioHigh, actionable: ratioHigh && reasons.length > 0, reasons, typicalWeekLoad: typical };
 }

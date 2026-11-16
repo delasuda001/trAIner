@@ -20,6 +20,6 @@ describe("hausse de charge corroborée", () => {
   it("ratio 1,6 et charge absolue nettement au-dessus de l'habitude (× 1,3) : consigne", () => {
     const result = loadAlert(summary(409, 1.6, habitual), { recoveryFlags: [] });
     expect(result.actionable).toBe(true);
-    expect(result.reasons).toEqual(["charge 7 jours à 409 contre 300 une semaine habituelle"]);
+    expect(result.reasons).toEqual(["409 de charge sur 7 jours contre 300 une semaine habituelle"]);
   });
 });
