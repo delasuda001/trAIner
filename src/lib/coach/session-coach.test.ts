@@ -68,3 +68,13 @@ describe("ressenti et dynamique dans la charge utile", () => {
     expect(payload.dynamique_de_course).toBeNull();
   });
 });
+
+describe("zone d'une FC arrondie", () => {
+  it("annote 166,6 bpm comme 167 bpm (Z5) et non (Z4), sinon le garde-fou rejette la réponse", () => {
+    const metrics = intervalMetrics(3);
+    const work = { ...(metrics.work as NonNullable<ActivityMetrics["work"]>), averageHeartRateBpm: 166.6 };
+    const payload = buildSessionPayload({ session, metrics: { ...metrics, work }, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 3.833, context, goal: {} });
+    expect(JSON.stringify(payload)).toContain("167 bpm (Z5)");
+    expect(JSON.stringify(payload)).not.toContain("167 bpm (Z4)");
+  });
+});

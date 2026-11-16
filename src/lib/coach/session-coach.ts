@@ -148,8 +148,10 @@ export function buildSessionPayload(input: {
   // Chaque FC porte sa zone : Claude ne peut plus se tromper de zone.
   const bpm = (value: number | null | undefined): string => {
     if (value == null) return "—";
-    const zone = zoneOf(value, zones);
-    return `${Math.round(value)} bpm (${zone === 0 ? "sous Z1" : `Z${zone}`})`;
+    // Zone de la valeur AFFICHÉE (arrondie) : 166,6 bpm s'écrit 167 bpm, donc Z5 si le plancher de Z5 est 167.
+    const rounded = Math.round(value);
+    const zone = zoneOf(rounded, zones);
+    return `${rounded} bpm (${zone === 0 ? "sous Z1" : `Z${zone}`})`;
   };
   const work = metrics.work;
   const gain = deltas.paceAtEqualHrGainSPerKm;

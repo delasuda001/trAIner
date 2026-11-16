@@ -8,7 +8,7 @@ import type { SessionCoachOutput } from "@/lib/coach/session-coach";
  * ordre tiré de façon déterministe (pour ne pas favoriser une position).
  */
 
-export const JUDGE_PROMPT_VERSION = "judge-v1";
+export const JUDGE_PROMPT_VERSION = "judge-v2";
 export const JUDGE_MODEL = "opus";
 export const CRITERIA = ["exactitude", "comparaison", "actionnable", "ton", "concision"] as const;
 export type Criterion = (typeof CRITERIA)[number];
@@ -46,7 +46,7 @@ export const judgeJsonSchema = {
         properties: { fixture: { type: "string" }, A: scoreSchema, B: scoreSchema, preferred: { type: "string", enum: ["A", "B", "égal"] }, comment: { type: "string", description: "Pourquoi, en une phrase de 200 caractères au plus." } },
       },
     },
-    overall: { type: "string", description: "Synthèse : la variante B est-elle meilleure, équivalente ou moins bonne que A, et pourquoi (400 caractères au plus)." },
+    overall: { type: "string", description: "Défauts et qualités qui reviennent d'une séance à l'autre, SANS désigner A ou B (les étiquettes changent à chaque séance), 400 caractères au plus." },
   },
 } as const;
 
@@ -59,7 +59,7 @@ Note chaque débrief de 1 à 5 sur :
 - ton : un coach qui tutoie, direct, motivant sans flatterie, ni jargon de système ;
 - concision : rien de redondant, lisible d'un coup d'œil.
 
-Indique la version préférée (ou "égal") et pourquoi. Sois exigeant : un 5 est rare. Les étiquettes A et B sont tirées au hasard : ne favorise aucune position.`;
+Indique la version préférée (ou "égal") et pourquoi. Dans "overall", décris les défauts et qualités récurrents sans parler de A ni de B : les étiquettes sont tirées séance par séance. Sois exigeant : un 5 est rare. Les étiquettes A et B sont tirées au hasard : ne favorise aucune position.`;
 
 /** Ce que le juge lit d'un débrief : sans le paragraphe détaillé, pour limiter les tokens. */
 export function judgedView(output: SessionCoachOutput) {
@@ -82,13 +82,13 @@ export function buildJudgePrompt(cases: JudgeCase[], variantName: string): strin
 }
 
 export type CriterionScores = Record<Criterion, number>;
-export type ResolvedVerdict = { fixture: string; baseline: CriterionScores; variant: CriterionScores; preferred: "en place" | "variante" | "égal"; comment: string };
+export type ResolvedVerdict = { fixture: string; baseline: CriterionScores; variant: CriterionScores; preferred: "en place" | "variante" | "égal"; comment: string; /** Étiquette donnée à la variante dans ce cas (le commentaire du juge parle en A/B). */ variantLabel: "A" | "B" };
 
 /** Remet les notes A/B dans l'ordre « en place » / « variante ». */
 export function resolveJudgement(output: JudgeOutput, variantName: string): ResolvedVerdict[] {
   return output.verdicts.map((verdict) => {
     const variantFirst = variantIsA(verdict.fixture, variantName);
     const preferred = verdict.preferred === "égal" ? "égal" : (verdict.preferred === "A") === variantFirst ? "variante" : "en place";
-    return { fixture: verdict.fixture, baseline: variantFirst ? verdict.B : verdict.A, variant: variantFirst ? verdict.A : verdict.B, preferred, comment: verdict.comment };
+    return { fixture: verdict.fixture, baseline: variantFirst ? verdict.B : verdict.A, variant: variantFirst ? verdict.A : verdict.B, preferred, comment: verdict.comment, variantLabel: variantFirst ? "A" : "B" };
   });
 }
