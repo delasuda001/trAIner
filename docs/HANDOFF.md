@@ -118,13 +118,13 @@ lancement à 22 h.
      `BENCH_MAX_SEVEN_DAY_UTILIZATION`. Usage tracé dans `coach_usage` kinds `bench` et `weekly`,
      affiché à part dans Paramètres. Ordre de grandeur : ~9,5 k par génération, ~15 k par jugement :
      une variante complète ≈ 6 générations + 1 jugement ≈ 70 k, soit environ deux nuits.
-   - Lancement à 22 h : LaunchAgent utilisateur `com.sillage.nightly`
-     (`~/Library/LaunchAgents/com.sillage.nightly.plist`), installé par
-     `scripts/launchd/install.sh`, retiré par `scripts/launchd/uninstall.sh` (aucun sudo). Tous les
-     jours à 22 h ; le dimanche il produit d'abord le bilan. Mac endormi : launchd lance au réveil,
-     et le script saute la nuit hors 22 h – 5 h ; il saute aussi si Bastien a utilisé le coach dans
-     les 2 dernières heures. Option non installée : réveil automatique du Mac
-     (`sudo pmset repeat wakeorpoweron MTWRFSU 21:58:00`, à taper par Bastien).
+   - Lancement : MANUEL (décision de Bastien du 16 nov. : il donne le feu vert quand son quota est
+     libre). `npm run bench -- --budget=150000 --max-five-hour=0.7 [--only=variante] [--weekly]
+     [--dry-run]`, ou le bouton « Lancer le banc » dans Paramètres (plafonds par défaut, en
+     arrière-plan, `POST /api/bench`). Le bilan hebdo : bouton de /bilan ou `--weekly`.
+   - OPTIONNEL, non installé : LaunchAgent `com.sillage.nightly` (`scripts/launchd/install.sh`, retrait
+     `uninstall.sh`, sans sudo) qui lance `nightly.ts --scheduled` à 22 h (fenêtre 22 h – 5 h, pas
+     d'usage de Bastien dans les 2 h, bilan le dimanche). L'installer exige l'accord écrit de Bastien.
    - Journaux : `data/bench/nightly.log` (événements), `data/bench/launchd.log` (sortie brute).
 
 ## État
