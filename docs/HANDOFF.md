@@ -130,7 +130,7 @@ lancement à 22 h.
 ## État
 
 - Branche `claude/project-thread-1m6x8x`, tout commité, rien poussé (push GitHub bloqué).
-- Appels Claude réels faits dans ce fil : 6 Sonnet (analyses du 13 et du 4 novembre, ~9 k tokens d'entrée cache compris et ~1,3 k de sortie chacun) et 1 Opus (bilan).
+- Appels Claude réels faits dans ce fil (au 16 nov. soir) : 24 Sonnet et 2 Opus dont la batterie du banc. Détail ancien : 6 Sonnet (analyses du 13 et du 4 novembre, ~9 k tokens d'entrée cache compris et ~1,3 k de sortie chacun) et 1 Opus (bilan).
 - Banc, état au 16 nov. au soir :
   - Batterie 1 (manuelle, 124,9 k tokens, 13 appels) : session-v9 3,60 au juge contre 3,57 pour la
     variante `coach-v10`. Trouvé et corrigé : zone FC annotée sur la valeur non arrondie (faux rejets du
@@ -143,6 +143,12 @@ lancement à 22 h.
   - Reste à tester au prochain feu vert de Bastien (~55 k pour refaire la référence v11 sur les 6
     séances, puis ~70 k par variante) : référence v11 avec juge ; `sans-dynamique` ;
     `sans-liste-comparables`. La variante `coach-v10` a été retirée (intégrée à v11). Penser à `npm run bench:freeze` si le moteur a changé depuis le gel.
-  - Nuance vue sur le 10 nov. : la hausse de charge est présentée comme « cause probable » d'un écart
-    favorable (séance au-dessus des repères). À surveiller au prochain bilan.
+  - Corrections du moteur après relecture du coordinateur (prompt `session-v12`) : une seule référence
+    de charge par contexte, `LoadFigure` (valeur, référence, ratio calculés ensemble, test
+    d'invariance) ; plus de ligne « charge séance comprise » ; pas de reproche de placement pour une
+    séance « au-dessus » avec récupération normale ; répétitions trop rapides détectées une à une (≥ la
+    moitié hors fourchette) ; régularité = écart plus rapide / plus lente comparé au même indicateur des
+    comparables ; jamais de « cause probable » d'un écart favorable. Analyses du 10 et 13 nov.
+    régénérées (2 appels).
+  - Le jeu figé du banc date d'avant ces corrections : `npm run bench:freeze` avant la prochaine batterie.
 - Scripts ponctuels hors Next : `npx tsx --conditions=react-server <script>` (la condition contourne `server-only`).
