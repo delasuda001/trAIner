@@ -20,6 +20,8 @@ export const goalSchema = z.object({
   /** 0 = lundi … 6 = dimanche. */
   preferredDays: z.array(z.number().int().min(0).max(6)).max(7).default([]),
   note: z.string().trim().max(300).default(""),
+  /** Objectifs chiffrés (5 km en 19:00, semi en 1:27:00…) : servent de repères aux consignes du moteur. */
+  raceTargets: z.array(z.object({ distanceKm: z.number().positive().max(250), targetTimeS: z.number().int().positive().max(48 * 3600) })).max(4).default([]),
 });
 
 export type Goal = z.infer<typeof goalSchema>;
@@ -30,6 +32,17 @@ export const EMPTY_GOAL: Goal = goalSchema.parse({});
 
 export function targetPaceMps(goal: Goal): number | null {
   return goal.distanceKm && goal.targetTimeS ? (goal.distanceKm * 1000) / goal.targetTimeS : null;
+}
+
+export const RACE_DISTANCES = [
+  { label: "5 km", value: 5 },
+  { label: "10 km", value: 10 },
+  { label: "Semi", value: 21.0975 },
+  { label: "Marathon", value: 42.195 },
+] as const;
+
+function raceLabel(distanceKm: number): string {
+  return RACE_DISTANCES.find((race) => Math.abs(race.value - distanceKm) < 0.05)?.label.toLowerCase() ?? `${String(distanceKm).replace(".", ",")} km`;
 }
 
 export function hasGoal(goal: Goal | null): goal is Goal {
@@ -50,5 +63,6 @@ export function goalForCoach(goal: Goal | null, today: string): Record<string, s
     sorties_par_semaine_possibles: String(goal.runsPerWeek),
     jours_preferes: goal.preferredDays.length ? goal.preferredDays.map((day) => WEEKDAY_LABELS[day].toLowerCase()).join(", ") : "—",
     precision: goal.note || "—",
+    ...(goal.raceTargets.length ? { objectifs_chiffres: goal.raceTargets.map((target) => `${raceLabel(target.distanceKm)} en ${formatClock(target.targetTimeS)} (${formatPace((target.distanceKm * 1000) / target.targetTimeS)})`).join(", ") } : {}),
   };
 }

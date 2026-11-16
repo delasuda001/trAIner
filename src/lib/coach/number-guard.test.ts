@@ -26,4 +26,8 @@ describe("garde-fou des zones", () => {
   it("rejette 165 bpm présenté en Z5", () => {
     expect(findZoneContradictions("La #1 à 165 bpm démarre déjà en Z5.", zoneOf)).toEqual(["165 bpm n'est pas en Z5"]);
   });
+  it("accepte une FC dans une plage de zones", () => {
+    expect(findZoneContradictions("Cible 149–166 bpm (Z3–Z4).", zoneOf)).toEqual([]);
+    expect(findZoneContradictions("Cible 170 bpm (Z3–Z4).", zoneOf)).toEqual(["170 bpm n'est pas en Z3–Z4"]);
+  });
 });

@@ -231,6 +231,9 @@ ul.bullets li::marker { color: var(--sl-pink); }
 .point-label { font-family: var(--font-data); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; display: flex; align-items: center; gap: 5px; margin-bottom: 4px; color: var(--sl-ink-muted); }
 .point-good { border-left-color: var(--sl-green); }
 .point-work { border-left-color: var(--sl-orange); }
+.point-next { border-left-color: var(--sl-blue); }
+.three-points { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+.point-target { font-family: var(--font-data); font-size: 13px; font-weight: 600; color: var(--sl-ink); margin-bottom: 4px; }
 
 details.more { margin-top: 14px; border-top: 1.5px solid var(--sl-grid); padding-top: 10px; }
 details.more summary { cursor: pointer; color: var(--sl-blue); font-weight: 700; font-size: 13.5px; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
@@ -262,6 +265,7 @@ details.more .more-body { margin-top: 10px; }
 .chip.selected { background: var(--sl-ink); border-color: var(--sl-ink); color: var(--sl-paper); }
 .chip-sm { padding: 4px 0; width: 36px; text-align: center; }
 .chip-input { width: 110px !important; border-radius: var(--sl-radius-pill) !important; padding: 6px 12px !important; background: var(--sl-paper); border: var(--sl-stroke) solid var(--sl-border); color: var(--sl-ink); font: inherit; }
+.chip-input-group { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
 .form-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 20px; }
 .saved { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
 .saved svg { color: var(--sl-ok); }
@@ -344,7 +348,7 @@ table.data td.bar-cell { width: 35%; min-width: 120px; }
 @media (max-width: 820px) {
   .grid-2, .form-grid { grid-template-columns: minmax(0, 1fr); }
   .shell, .topbar-inner, .sync-banner-inner { padding-left: 16px; padding-right: 16px; }
-  .two-points { grid-template-columns: 1fr; }
+  .two-points, .three-points { grid-template-columns: 1fr; }
   .sync-status { display: none; }
   .nav { margin-left: 0; overflow-x: auto; order: 3; width: 100%; }
   .coach-line { grid-template-columns: 1fr; gap: 2px; }

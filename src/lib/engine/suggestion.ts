@@ -6,6 +6,7 @@ import { SESSION_KIND_LABELS } from "./activity-metrics";
 import type { LoadSummary } from "./load";
 import type { RecoverySignals } from "./recovery";
 import { median, present, round } from "./stats";
+import { intervalTarget, type RaceTarget } from "./prescription";
 import { zoneRange } from "./zones";
 
 /**
@@ -83,6 +84,8 @@ export type SuggestionInput = {
   load: LoadSummary;
   recovery: RecoverySignals;
   goal?: SuggestionGoal | null;
+  /** Objectifs chiffrés : les allures des séances de qualité en tiennent compte. */
+  raceTargets?: RaceTarget[];
 };
 
 const HARD_FAMILIES: ReadonlySet<SessionFamily> = new Set(["intervals", "steady"]);
@@ -122,28 +125,30 @@ function enduranceSession(input: SuggestionInput, durationMin: number, title = "
   return { type, title, durationMin, structure, target: easyTarget(input) };
 }
 
+/** Cible partagée avec les consignes de séance : mêmes allures dans la suggestion et dans l'analyse. */
+function sharedTarget(input: SuggestionInput, kind: SessionKind, repDurationS: number, zone: string): SessionTarget | null {
+  const target = intervalTarget(kind, repDurationS, { zones: input.zones, lactateThresholdSpeedMps: input.lactateThresholdSpeedMps, raceTargets: input.raceTargets ?? [] });
+  if (!target) return null;
+  return { zone, heartRateLow: target.heartRateLow, heartRateHigh: target.heartRateHigh, paceFastMps: target.paceFastS ? round(1000 / target.paceFastS, 3) : null, paceSlowMps: target.paceSlowS ? round(1000 / target.paceSlowS, 3) : null };
+}
+
 function thresholdSession(input: SuggestionInput): SuggestedSession {
-  const [low, high] = zoneRange(4, input.zones);
-  const lt = input.lactateThresholdSpeedMps;
   return {
     type: "threshold",
     title: "Seuil : 3 × 10 min",
     durationMin: 60,
     structure: "15 min d'échauffement facile, 3 × 10 min au seuil avec 2 min de trot entre, 10 min de retour au calme.",
-    target: { zone: "Z4", heartRateLow: low, heartRateHigh: high, paceFastMps: lt ? round(lt * 1.01, 3) : null, paceSlowMps: lt ? round(lt * 0.97, 3) : null },
+    target: sharedTarget(input, "intervals_threshold", 600, "Z4"),
   };
 }
 
 function vo2Session(input: SuggestionInput): SuggestedSession {
-  const [low] = zoneRange(5, input.zones);
-  const high = input.zones.maxHeartRateBpm ? Math.round(low + (input.zones.maxHeartRateBpm - low) * 0.6) : low + 8;
-  const lt = input.lactateThresholdSpeedMps;
   return {
     type: "vo2max",
     title: "VO2max : 5 × 3 min",
     durationMin: 50,
     structure: "15 min d'échauffement avec 3 accélérations, 5 × 3 min avec 2 min de trot entre (la FC atteint la cible en fin de répétition), 10 min de retour au calme.",
-    target: { zone: "Z5", heartRateLow: low, heartRateHigh: high, paceFastMps: lt ? round(lt * 1.1, 3) : null, paceSlowMps: lt ? round(lt * 1.06, 3) : null },
+    target: sharedTarget(input, "intervals_vo2", 180, "Z5"),
   };
 }
 

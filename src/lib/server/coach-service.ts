@@ -8,7 +8,7 @@ import { allowedNumbers, collectText, excerpt, findUnsupportedNumbers, findZoneC
 import { zoneOf } from "@/lib/engine/zones";
 import { goalForCoach } from "@/lib/goal/goal";
 import { buildOutlookPayload, buildOutlookPrompt, OUTLOOK_PROMPT_VERSION, OUTLOOK_SYSTEM_PROMPT, outlookCoachJsonSchema, outlookCoachSchema, type OutlookCoachOutput } from "@/lib/coach/outlook-coach";
-import { buildSessionPayload, buildSessionPrompt, SESSION_PROMPT_VERSION, SESSION_SYSTEM_PROMPT, sessionCoachJsonSchema, sessionCoachSchema, type SessionCoachOutput } from "@/lib/coach/session-coach";
+import { buildSessionPayload, buildSessionPrompt, normalizeSessionOutput, SESSION_PROMPT_VERSION, SESSION_SYSTEM_PROMPT, sessionCoachJsonSchema, sessionCoachSchema, type SessionCoachOutput } from "@/lib/coach/session-coach";
 import { createCoachOutputRepository } from "@/lib/db/repositories/coach-output-repository";
 import { recordFailure, recordUsage } from "./usage";
 import type { Dashboard, SessionAnalysis } from "./analytics";
@@ -27,6 +27,8 @@ type Job<T> = {
   prompt: string;
   schema: z.ZodType<T>;
   jsonSchema: Record<string, unknown>;
+  /** Relit une sortie en cache (format éventuellement antérieur) ; null si illisible. */
+  normalize?: (value: unknown) => T | null;
   /** Zone FC d'une valeur, pour rejeter une zone mal attribuée dans le texte. */
   zoneOf: (heartRate: number) => number;
 };
@@ -40,9 +42,12 @@ function hashOf(job: Job<unknown>): string {
 function cached<T>(job: Job<T>): CoachResult<T> {
   const latest = createCoachOutputRepository().latest(job.kind, job.subject);
   if (!latest) return { status: "missing" };
+  const raw: unknown = JSON.parse(latest.outputJson);
+  const output = job.normalize ? job.normalize(raw) : (raw as T);
+  if (output == null) return { status: "missing" };
   // Données modifiées depuis (ressenti, nouvelles séances…) : on garde l'ancienne analyse sous la main pour l'afficher comme « à mettre à jour ».
-  if (latest.inputHash !== hashOf(job as Job<unknown>)) return { status: "missing", previous: { output: JSON.parse(latest.outputJson) as T, model: latest.model, createdAt: latest.createdAt, promptVersion: latest.promptVersion } };
-  return { status: "ready", output: JSON.parse(latest.outputJson) as T, model: latest.model, createdAt: latest.createdAt };
+  if (latest.inputHash !== hashOf(job as Job<unknown>)) return { status: "missing", previous: { output, model: latest.model, createdAt: latest.createdAt, promptVersion: latest.promptVersion } };
+  return { status: "ready", output, model: latest.model, createdAt: latest.createdAt };
 }
 
 async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
@@ -106,12 +111,13 @@ function sessionJob(analysis: SessionAnalysis): Job<SessionCoachOutput> {
     context: analysis.context,
     goal: goalForCoach(analysis.goal, analysis.activity.localDate),
     feeling: analysis.feeling,
+    prescription: analysis.prescription,
   });
-  return { zoneOf: (hr: number) => zoneOf(hr, analysis.profile.zones), kind: "session", subject: analysis.activity.id, promptVersion: SESSION_PROMPT_VERSION, payload, system: SESSION_SYSTEM_PROMPT, prompt: buildSessionPrompt(payload), schema: sessionCoachSchema, jsonSchema: sessionCoachJsonSchema as unknown as Record<string, unknown> };
+  return { normalize: normalizeSessionOutput, zoneOf: (hr: number) => zoneOf(hr, analysis.profile.zones), kind: "session", subject: analysis.activity.id, promptVersion: SESSION_PROMPT_VERSION, payload, system: SESSION_SYSTEM_PROMPT, prompt: buildSessionPrompt(payload), schema: sessionCoachSchema, jsonSchema: sessionCoachJsonSchema as unknown as Record<string, unknown> };
 }
 
 function outlookJob(dashboard: Dashboard): Job<OutlookCoachOutput> {
-  const payload = buildOutlookPayload({ suggestion: dashboard.suggestion, progression: dashboard.progression, recovery: dashboard.recovery, load: dashboard.load, goal: goalForCoach(dashboard.goal, dashboard.today) });
+  const payload = buildOutlookPayload({ suggestion: dashboard.suggestion, progression: dashboard.progression, recovery: dashboard.recovery, load: dashboard.load, goal: goalForCoach(dashboard.goal, dashboard.today), lastSameType: dashboard.lastSameType });
   return { zoneOf: (hr: number) => zoneOf(hr, dashboard.profile.zones), kind: "outlook", subject: "current", promptVersion: OUTLOOK_PROMPT_VERSION, payload, system: OUTLOOK_SYSTEM_PROMPT, prompt: buildOutlookPrompt(payload), schema: outlookCoachSchema, jsonSchema: outlookCoachJsonSchema as unknown as Record<string, unknown> };
 }
 

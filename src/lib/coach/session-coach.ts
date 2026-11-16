@@ -2,32 +2,46 @@ import { z } from "zod";
 import { INTERVAL_INTENSITY_LABELS, paceSeconds, SESSION_KIND_LABELS, sessionTitle, type ActivityMetrics, type DynamicsValues } from "@/lib/engine/activity-metrics";
 import type { ComparisonDeltas } from "@/lib/engine/comparable";
 import { readDynamics } from "@/lib/engine/dynamics-reading";
+import { goalSentence, type Prescription, type PrescriptionTarget } from "@/lib/engine/prescription";
 import { VERDICT_LABELS, type SessionVerdict } from "@/lib/engine/verdict";
 import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 
-export const SESSION_PROMPT_VERSION = "session-v6";
+export const SESSION_PROMPT_VERSION = "session-v7";
 
 export const sessionCoachSchema = z.object({
   verdict: z.string().min(10).max(260),
   bullets: z.array(z.string().min(10).max(320)).min(3).max(4),
-  wentWell: z.string().min(10).max(360),
-  toWork: z.string().min(10).max(360),
+  keep: z.string().min(10).max(260),
+  shouldHave: z.string().min(10).max(280),
+  nextTime: z.string().min(10).max(280),
   detail: z.string().min(40).max(1800),
 });
 
 export type SessionCoachOutput = z.infer<typeof sessionCoachSchema>;
 
+/** Analyses antérieures à session-v7 (« Bien fait » / « À travailler ») : relues sans planter l'affichage. */
+const legacySessionSchema = z.object({ verdict: z.string(), bullets: z.array(z.string()), wentWell: z.string(), toWork: z.string(), detail: z.string() });
+
+export function normalizeSessionOutput(value: unknown): SessionCoachOutput | null {
+  const current = sessionCoachSchema.safeParse(value);
+  if (current.success) return current.data;
+  const legacy = legacySessionSchema.safeParse(value);
+  if (!legacy.success) return null;
+  return { verdict: legacy.data.verdict, bullets: legacy.data.bullets, keep: legacy.data.wentWell, shouldHave: legacy.data.toWork, nextTime: "", detail: legacy.data.detail };
+}
+
 export const sessionCoachJsonSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["verdict", "bullets", "wentWell", "toWork", "detail"],
+  required: ["verdict", "bullets", "keep", "shouldHave", "nextTime", "detail"],
   properties: {
     verdict: { type: "string", description: "Une phrase de verdict, 180 caractères max." },
-    bullets: { type: "array", minItems: 3, maxItems: 4, items: { type: "string" }, description: "3 ou 4 constats chiffrés, 200 caractères au plus chacun." },
-    wentWell: { type: "string", description: "Une chose bien faite, chiffrée, 250 caractères au plus." },
-    toWork: { type: "string", description: "Une chose à travailler, concrète et chiffrée, 250 caractères au plus." },
+    bullets: { type: "array", minItems: 3, maxItems: 4, items: { type: "string" }, description: "3 ou 4 constats chiffrés (dont la cause probable de l'écart), 200 caractères au plus chacun." },
+    keep: { type: "string", description: "À reproduire : une chose réussie, avec le chiffre à garder. Une phrase, 160 caractères au plus." },
+    shouldHave: { type: "string", description: "Comment elle aurait dû être menée : la consigne la plus utile de consignes_moteur.aurait_du, cible chiffrée en tête. Une ou deux phrases, 200 caractères au plus." },
+    nextTime: { type: "string", description: "La prochaine séance de ce type : consignes_moteur.prochaine_fois, avec le format et la cible chiffrée. Une ou deux phrases, 200 caractères au plus." },
     detail: { type: "string", description: "Un paragraphe d'analyse plus détaillée, 1200 caractères max." },
   },
 } as const;
@@ -38,12 +52,14 @@ Règles :
 - Français, tutoiement, direct et précis, sans remplissage.
 - Chaque chiffre écrit figure tel quel dans le JSON. Rien de calculé ni d'inventé. Reprends la zone indiquée entre parenthèses après chaque FC.
 - Le verdict suit "verdict_calcule.niveau" et reprend "comparaison.ecart_face_aux_comparables" (écart brut puis corrigé de la FC). Cite le nombre de séances comparables et leur ancienneté ; si "comparaison_fragile" est vrai, dis-le.
-- Un indicateur = une seule lecture, celle de "verdict_calcule" : jamais le même fait en point fort et en point à travailler.
-- Le point à travailler vise la cause probable de l'écart (contexte : charge « ce jour-là », séances de qualité rapprochées, récupération, ressenti, objectif), pas seulement le symptôme. Si rien ne l'explique, dis-le.
+- Un indicateur = une seule lecture, celle de "verdict_calcule" : jamais le même fait dans "keep" et dans "shouldHave".
+- Les constats et la cause probable de l'écart (charge « ce jour-là », séances de qualité rapprochées, récupération, ressenti) vont dans "bullets", jamais dans "shouldHave" ni "nextTime".
+- "shouldHave" et "nextTime" sont des consignes, pas des constats : verbe d'action, cible chiffrée en tête (allure, FC, récupération, placement), reprises de "consignes_moteur". N'invente aucune autre cible. Si "consignes_moteur" n'en donne pas, dis simplement qu'il n'y a pas de consigne chiffrée pour ce format.
+- Quand "consignes_moteur.objectif" existe, situe la consigne par rapport à l'objectif en quelques mots (à portée, ou cible réaliste du moment).
 - Dynamique de course : compare-la à ses propres valeurs uniquement, et seulement si un écart ressort.
 - Pas de conseil générique, pas de température, aucune interprétation médicale.
 
-Format : "verdict" (une phrase), "bullets" (3 ou 4 constats chiffrés), "wentWell", "toWork", "detail" (un paragraphe).`;
+Format : "verdict" (une phrase), "bullets" (3 ou 4 constats chiffrés), "keep", "shouldHave", "nextTime" (une ou deux phrases courtes chacun, lisibles d'un coup d'œil), "detail" (un paragraphe).`;
 
 type Session = {
   name: string;
@@ -119,6 +135,7 @@ export function buildSessionPayload(input: {
   context: SessionContextInput | null;
   goal: Record<string, string>;
   feeling?: { perceivedEffort: number | null; note: string } | null;
+  prescription?: Prescription | null;
 }) {
   const { session, metrics, deltas, verdict, zones, context } = input;
   // Chaque FC porte sa zone : Claude ne peut plus se tromper de zone.
@@ -215,6 +232,7 @@ export function buildSessionPayload(input: {
       niveau: VERDICT_LABELS[verdict.level],
       signaux: verdict.signals.map((signal) => `${signal.primary ? "PRINCIPAL " : ""}${signal.tone === "good" ? "positif" : signal.tone === "watch" ? "à surveiller" : "neutre"} : ${signal.label}`),
     },
+    consignes_moteur: describePrescription(input.prescription ?? null),
     reperes_athlete: {
       zones_fc: Object.fromEntries(([1, 2, 3, 4, 5] as const).map((zone) => [ZONE_LABELS[zone], `${zoneRange(zone, zones)[0]}–${zoneRange(zone, zones)[1]} bpm`])),
       seuil_montre: input.lactateThresholdSpeedMps && zones.lactateThresholdHeartRateBpm ? `${formatPace(input.lactateThresholdSpeedMps)} à ${bpm(zones.lactateThresholdHeartRateBpm)}` : "—",
@@ -223,6 +241,24 @@ export function buildSessionPayload(input: {
 }
 
 export type SessionPayload = ReturnType<typeof buildSessionPayload>;
+
+/** Cible lisible : « allure 5 km réaliste : 4:03–4:09/km, 167–180 bpm (Z5) ». La plage de zones suit la FC. */
+export function targetText(target: PrescriptionTarget): string {
+  const pace = target.paceFastS != null && target.paceSlowS != null ? `${formatPace(1000 / target.paceFastS).replace("/km", "")}–${formatPace(1000 / target.paceSlowS)}, ` : "";
+  return `${target.label} : ${pace}${target.heartRateLow}–${target.heartRateHigh} bpm (${target.zone})`;
+}
+
+function describePrescription(prescription: Prescription | null) {
+  if (!prescription) return null;
+  if (prescription.status === "none") return { note: `pas de consigne chiffrée (${prescription.reason})` };
+  return {
+    cible_du_format: targetText(prescription.target),
+    aurait_du: prescription.shouldHave.length ? prescription.shouldHave : ["rien à corriger : séance dans la cible"],
+    a_reproduire: prescription.keep ?? "—",
+    prochaine_fois: prescription.next.cue,
+    ...(prescription.goal ? { objectif: goalSentence(prescription.goal) } : {}),
+  };
+}
 
 export function buildSessionPrompt(payload: SessionPayload): string {
   return `Analyse cette séance.\n\n${JSON.stringify(payload)}`;

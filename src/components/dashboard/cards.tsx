@@ -1,5 +1,6 @@
-import { ArrowRight, Gauge, HeartPulse, Moon, Target, ThumbsUp, Waves, Wrench } from "lucide-react";
+import { ArrowRight, Gauge, HeartPulse, Moon, Target, Waves } from "lucide-react";
 import Link from "next/link";
+import { SessionPoints } from "@/components/activity/session-points";
 import { CoachRequest } from "@/components/coach-request";
 import { IntensityChart, ProgressionChart, Sparkline, WeeklyVolumeChart } from "@/components/charts";
 import { Badge } from "@/components/ui/badge";
@@ -185,10 +186,6 @@ export function LastSessionCard({ dashboard, coach }: { dashboard: Dashboard; co
   const stale = coach?.status === "missing" && shown != null;
   const ready = shown ? shown.output : null;
   const headline = ready ? ready.verdict : verdict.headline;
-  const wentWell = ready?.wentWell ?? verdict.wentWell;
-  // Pas de redite : le point à travailler ne répète jamais le verdict affiché juste au-dessus.
-  const toWorkCandidate = ready?.toWork ?? verdict.toWork;
-  const toWork = toWorkCandidate === headline ? null : toWorkCandidate;
   const zone = dominantZone(metrics.zoneShares);
   const href = `/activities/${encodeURIComponent(activity.id)}`;
   return (
@@ -210,12 +207,7 @@ export function LastSessionCard({ dashboard, coach }: { dashboard: Dashboard; co
         <Fact label="Allure moy." value={formatPace(activity.averageSpeedMps).replace("/km", "")} unit="/km" />
         <Fact label="FC moy." value={activity.averageHeartRateBpm ? String(Math.round(activity.averageHeartRateBpm)) : "—"} unit="bpm" />
       </div>
-      {wentWell || toWork ? (
-        <div className="two-points">
-          {wentWell ? <div className="point point-good"><div className="point-label"><ThumbsUp size={12} /> Bien fait</div>{wentWell}</div> : null}
-          {toWork ? <div className="point point-work"><div className="point-label"><Wrench size={12} /> À travailler</div>{toWork}</div> : null}
-        </div>
-      ) : null}
+      <SessionPoints ready={ready} prescription={last.prescription} fallbackKeep={verdict.wentWell} />
       <div className="row-between" style={{ alignItems: "center", marginTop: 16, flexWrap: "wrap" }}>
         {shown && !stale ? <span className="muted small"><CoachStamp model={shown.model} createdAt={shown.createdAt} />{verdict.fewComparables ? " · comparaison fragile (moins de 3 séances comparables)" : ""}</span> : stale && shown ? <span className="row small" style={{ flexWrap: "wrap" }}><CoachStamp model={shown.model} createdAt={shown.createdAt} /><CoachRequest endpoint={`/api/activities/${encodeURIComponent(activity.id)}/coach`} label="Mettre à jour l'analyse" /></span> : <CoachRequest endpoint={`/api/activities/${encodeURIComponent(activity.id)}/coach`} label="Demander l'analyse du coach" initialError={coach?.status === "error" ? coach.message : null} />}
         <Link href={href} className="btn btn-primary">Voir la séance <ArrowRight size={14} /></Link>

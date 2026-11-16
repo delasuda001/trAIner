@@ -1,11 +1,12 @@
 import { z } from "zod";
 import type { LoadSummary } from "@/lib/engine/load";
+import { goalSentence, type Prescription } from "@/lib/engine/prescription";
 import type { Progression } from "@/lib/engine/progression";
 import type { RecoverySignals } from "@/lib/engine/recovery";
 import type { Suggestion } from "@/lib/engine/suggestion";
 import { formatDate, formatDuration, formatNumber, formatPace, formatSigned } from "@/lib/formatters";
 
-export const OUTLOOK_PROMPT_VERSION = "outlook-v2";
+export const OUTLOOK_PROMPT_VERSION = "outlook-v3";
 
 export const outlookCoachSchema = z.object({
   suggestionWhy: z.string().min(10).max(400),
@@ -21,7 +22,7 @@ export const outlookCoachJsonSchema = {
   required: ["suggestionWhy", "executionTip", "progressionSentence"],
   properties: {
     suggestionWhy: { type: "string", description: "Pourquoi cette séance maintenant, en une phrase de 200 caractères au plus, sans répéter les cibles." },
-    executionTip: { type: "string", description: "Comment la réussir : un conseil concret, une phrase de 180 caractères au plus, sans répéter les cibles de FC ou d'allure." },
+    executionTip: { type: "string", description: "Comment la réussir : une consigne d'exécution chiffrée (départ, 1re répétition, récupération, plafond de FC), une phrase de 180 caractères au plus." },
     progressionSentence: { type: "string", description: "Ce que signifie l'indicateur de progression, une phrase de 200 caractères au plus, qui n'énonce pas l'état ni la confiance (déjà affichés)." },
   },
 } as const;
@@ -31,7 +32,7 @@ export const OUTLOOK_SYSTEM_PROMPT = `Tu es le coach de course à pied de Bastie
 Règles absolues :
 - Français, tutoiement, ton direct et précis, sans remplissage.
 - Chaque chiffre que tu écris doit apparaître tel quel dans la charge utile. N'en calcule ni n'en invente aucun.
-- Les cibles (durée, FC, allure) et l'état de progression sont déjà affichés à l'écran : ne les répète pas, apporte le pourquoi et le comment.
+- La fourchette de FC et d'allure est déjà affichée : ne la recopie pas telle quelle. "executionTip" donne une consigne d'exécution chiffrée et précise (allure de départ, 1re répétition, récupération, moment où relâcher), tirée de "lecon_de_ta_derniere_seance_du_meme_type" quand elle existe, sinon du déroulé. Jamais de conseil générique du type « écoute tes sensations ».
 - Ne change pas la séance proposée ni l'état de progression.
 - Relie la séance à l'objectif quand il est renseigné. Sans objectif, raisonne sur la progression aérobie.
 - Si l'écart de progression est dans la variation normale d'une sortie à l'autre, dis-le en mots simples. Si les données sont insuffisantes, dis ce qui manque.
@@ -54,7 +55,19 @@ const FLAG_LABELS: Record<RecoverySignals["flags"][number], string> = {
 
 const CONFIDENCE_LABELS = { low: "faible", moderate: "moyenne", high: "bonne" } as const;
 
-export function buildOutlookPayload(input: { suggestion: Suggestion; progression: Progression; recovery: RecoverySignals; load: LoadSummary; goal: Record<string, string> }) {
+export type SameTypeLesson = { localDate: string; title: string; prescription: Prescription } | null;
+
+function describeLesson(lesson: SameTypeLesson) {
+  if (!lesson || lesson.prescription.status !== "ok") return null;
+  return {
+    seance: `${lesson.title}, ${formatDate(lesson.localDate, "medium")}`,
+    a_corriger: lesson.prescription.shouldHave.length ? lesson.prescription.shouldHave : ["rien : séance dans la cible"],
+    consigne: lesson.prescription.next.cue,
+    ...(lesson.prescription.goal ? { objectif: goalSentence(lesson.prescription.goal) } : {}),
+  };
+}
+
+export function buildOutlookPayload(input: { suggestion: Suggestion; progression: Progression; recovery: RecoverySignals; load: LoadSummary; goal: Record<string, string>; lastSameType?: SameTypeLesson }) {
   const { suggestion, progression, recovery, load } = input;
   const primary = suggestion.primary;
   const target = primary.target;
@@ -74,6 +87,7 @@ export function buildOutlookPayload(input: { suggestion: Suggestion; progression
       seance_d_apres: suggestion.then ? `${suggestion.then.title}${suggestion.then.durationMin ? ` (${formatDuration(suggestion.then.durationMin * 60)})` : ""}, ${suggestion.then.when.label.toLowerCase()}` : "—",
     },
     objectif: input.goal,
+    lecon_de_ta_derniere_seance_du_meme_type: describeLesson(input.lastSameType ?? null),
     contexte: {
       jours_depuis_derniere_course: suggestion.facts.daysSinceLastRun,
       derniere_course: suggestion.facts.lastRunKind,

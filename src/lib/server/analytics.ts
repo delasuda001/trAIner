@@ -12,6 +12,7 @@ import { isRun, summarizeLoad, type LoadSummary } from "@/lib/engine/load";
 import { computeProgression, referenceHeartRate, type Progression } from "@/lib/engine/progression";
 import { assessRecovery, type RecoverySignals } from "@/lib/engine/recovery";
 import { median, present } from "@/lib/engine/stats";
+import { prescribe, type Prescription } from "@/lib/engine/prescription";
 import { suggestNextSession, type Suggestion } from "@/lib/engine/suggestion";
 import { classifyVerdict, type SessionVerdict } from "@/lib/engine/verdict";
 import { fallbackZones } from "@/lib/engine/zones";
@@ -45,7 +46,7 @@ export function loadProfile(wellness: WellnessDay[], runs: ActivityRow[]): Profi
 
 export function readGoal(): Goal | null {
   const goal = createAppStateRepository().get(GOAL_KEY, goalSchema);
-  return goal && (goal.title || goal.eventDate || goal.preferredDays.length || goal.runsPerWeek !== EMPTY_GOAL.runsPerWeek) ? goal : null;
+  return goal && (goal.title || goal.eventDate || goal.preferredDays.length || goal.raceTargets.length || goal.runsPerWeek !== EMPTY_GOAL.runsPerWeek) ? goal : null;
 }
 
 export function readSyncState(): SyncState | null {
@@ -117,6 +118,8 @@ export type SessionAnalysis = {
   feeling: Feeling | null;
   /** Contexte du jour de la séance : ce qui peut expliquer un écart. */
   context: SessionContext;
+  /** Consignes chiffrées du moteur : comment la mener, et la prochaine fois. */
+  prescription: Prescription;
 };
 
 export type SessionContext = {
@@ -154,6 +157,19 @@ export function analyzeSession(activityId: string, context: Context = loadContex
   const history = context.runs.filter((run) => run.startTimeUtc < current.startTimeUtc);
   const comparables = selectComparables(current, history);
   const deltas = computeDeltas(current, comparables);
+  const sessionCtx = sessionContext(current, context);
+  // Efficacité des sorties faciles des 6 semaines précédant la séance : traduit une FC cible en allure.
+  const perBeat = present(history.filter((run) => run.localDate >= addDays(current.localDate, -42) && (run.metrics.family === "easy" || run.metrics.family === "long")).map((run) => run.metrics.aerobic?.speedPerBeat ?? null));
+  const prescription = prescribe({
+    metrics: current.metrics,
+    zones: context.profile.zones,
+    lactateThresholdSpeedMps: context.profile.lactateThresholdSpeedMps,
+    restingHeartRateBpm: context.profile.restingHeartRateBpm,
+    recentSpeedPerBeat: perBeat.length ? median(perBeat) : null,
+    movingTimeS: current.movingTimeS,
+    raceTargets: context.goal?.raceTargets ?? [],
+    context: { loadRatio: sessionCtx.loadRatio, qualityBefore: sessionCtx.qualityBefore14d },
+  });
   return {
     activity: current.row,
     metrics: current.metrics,
@@ -163,7 +179,8 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     profile: context.profile,
     goal: context.goal,
     feeling: createFeelingRepository().get(current.id),
-    context: sessionContext(current, context),
+    context: sessionCtx,
+    prescription,
   };
 }
 
@@ -225,8 +242,20 @@ export type Dashboard = {
   activityCount: number;
   sync: SyncState | null;
   goal: Goal | null;
+  /** Dernière séance du même type que la prochaine proposée, et sa consigne « prochaine fois ». */
+  lastSameType: { id: string; localDate: string; title: string; prescription: Prescription } | null;
   /** Semaine en cours, lundi → dimanche : séances faites et séances proposées. */
   week: Array<{ date: string; done: Array<{ kind: string | null; sport: string }>; planned: string | null }>;
+};
+
+/** Types de séance réalisés qui correspondent à une suggestion (pour reprendre la consigne de la dernière fois). */
+const SAME_TYPE_KINDS: Partial<Record<Suggestion["primary"]["type"], string[]>> = {
+  threshold: ["intervals_threshold", "threshold"],
+  vo2max: ["intervals_vo2"],
+  specific: ["intervals_threshold", "intervals_tempo", "tempo"],
+  endurance: ["endurance", "recovery"],
+  recovery_run: ["recovery", "endurance"],
+  long: ["long"],
 };
 
 export function getDashboard(): Dashboard {
@@ -256,10 +285,14 @@ export function getDashboard(): Dashboard {
     easyHeartRateBpm: progression.referenceHeartRateBpm,
     load,
     recovery,
+    raceTargets: goal?.raceTargets ?? [],
     goal: goal ? { eventDate: goal.eventDate, distanceKm: goal.distanceKm, targetPaceMps: targetPaceMps(goal), runsPerWeek: goal.runsPerWeek, preferredDays: goal.preferredDays } : null,
   });
 
   const last = runs.at(-1);
+  const sameKinds = SAME_TYPE_KINDS[suggestion.primary.type] ?? [];
+  const sameRun = [...runs].reverse().find((run) => sameKinds.includes(run.metrics.kind) && run.localDate >= addDays(today, -60));
+  const sameAnalysis = sameRun ? analyzeSession(sameRun.id, context) : null;
   const runById = new Map(runs.map((run) => [run.id, run]));
   return {
     today,
@@ -269,6 +302,7 @@ export function getDashboard(): Dashboard {
     progression,
     suggestion,
     lastRun: last ? analyzeSession(last.id, context) : null,
+    lastSameType: sameRun && sameAnalysis ? { id: sameRun.id, localDate: sameRun.localDate, title: sessionTitle(sameRun.metrics), prescription: sameAnalysis.prescription } : null,
     recent: [...rows].reverse().slice(0, 10).map((row) => ({ id: row.id, name: row.name, sport: row.sport, localDate: row.localDate, startTimeLocal: row.startTimeLocal, distanceM: row.distanceM, movingTimeS: row.movingTimeS, averageSpeedMps: row.averageSpeedMps, averageHeartRateBpm: row.averageHeartRateBpm, kind: runById.get(row.id)?.metrics.kind ?? null, title: runById.get(row.id) ? sessionTitle((runById.get(row.id) as AnalyzedRun).metrics) : null, zoneShares: runById.get(row.id)?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null) })),
     activityCount: rows.length,
     sync: readSyncState(),

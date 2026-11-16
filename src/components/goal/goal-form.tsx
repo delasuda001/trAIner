@@ -3,14 +3,9 @@
 import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { WEEKDAY_LABELS, type Goal } from "@/lib/goal/goal";
+import { RACE_DISTANCES, WEEKDAY_LABELS, type Goal } from "@/lib/goal/goal";
 
-const DISTANCES = [
-  { label: "5 km", value: 5 },
-  { label: "10 km", value: 10 },
-  { label: "Semi", value: 21.0975 },
-  { label: "Marathon", value: 42.195 },
-];
+const DISTANCES = RACE_DISTANCES;
 
 function parseTime(text: string): number | null {
   const parts = text.trim().split(":").map(Number);
@@ -36,6 +31,8 @@ export function GoalForm({ initial }: { initial: Goal }) {
   const router = useRouter();
   const [goal, setGoal] = useState<Goal>(initial);
   const [time, setTime] = useState(formatTime(initial.targetTimeS));
+  // Objectifs chiffrés par distance (texte saisi, converti à l'enregistrement).
+  const [raceTimes, setRaceTimes] = useState<Record<string, string>>(() => Object.fromEntries(RACE_DISTANCES.map((race) => [race.label, formatTime(initial.raceTargets.find((target) => Math.abs(target.distanceKm - race.value) < 0.05)?.targetTimeS ?? null)])));
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const update = (changes: Partial<Goal>) => {
     setGoal((current) => ({ ...current, ...changes }));
@@ -43,11 +40,15 @@ export function GoalForm({ initial }: { initial: Goal }) {
   };
   const targetTimeS = parseTime(time);
   const pace = paceText(goal.distanceKm, targetTimeS);
+  const raceTargets = RACE_DISTANCES.flatMap((race) => {
+    const seconds = parseTime(raceTimes[race.label] ?? "");
+    return seconds ? [{ distanceKm: race.value, targetTimeS: Math.round(seconds) }] : [];
+  });
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setState("saving");
-    const response = await fetch("/api/goal", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...goal, targetTimeS: targetTimeS ? Math.round(targetTimeS) : null }) });
+    const response = await fetch("/api/goal", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...goal, targetTimeS: targetTimeS ? Math.round(targetTimeS) : null, raceTargets }) });
     setState(response.ok ? "saved" : "error");
     if (response.ok) router.refresh();
   }
@@ -92,6 +93,23 @@ export function GoalForm({ initial }: { initial: Goal }) {
               <button key={label} type="button" className={`chip${goal.preferredDays.includes(day) ? " selected" : ""}`} onClick={() => update({ preferredDays: goal.preferredDays.includes(day) ? goal.preferredDays.filter((value) => value !== day) : [...goal.preferredDays, day].sort() })}>{label.slice(0, 3)}</button>
             ))}
           </div>
+        </div>
+        <div className="field wide">
+          <span>Objectifs chiffrés</span>
+          <div className="chips">
+            {RACE_DISTANCES.map((race) => {
+              const value = raceTimes[race.label] ?? "";
+              const racePace = paceText(race.value, parseTime(value));
+              return (
+                <label key={race.label} className="chip-input-group">
+                  <small className="muted">{race.label}</small>
+                  <input className="chip-input" value={value} placeholder={race.value >= 21 ? "1:27:00" : "19:00"} onChange={(event) => { setRaceTimes((current) => ({ ...current, [race.label]: event.target.value })); setState("idle"); }} />
+                  {racePace ? <small className="muted">{racePace}</small> : null}
+                </label>
+              );
+            })}
+          </div>
+          <small className="muted">Le coach s&apos;en sert pour fixer les allures cibles des séances et te dire si l&apos;objectif est à portée.</small>
         </div>
         <label className="field wide">
           <span>À savoir pour le coach</span>

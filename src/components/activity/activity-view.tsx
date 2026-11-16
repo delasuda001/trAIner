@@ -1,9 +1,10 @@
-import { ChevronRight, ThumbsUp, Wrench } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { ComparisonChart, SessionStreamCharts } from "@/components/charts";
 import { CoachRequest } from "@/components/coach-request";
 import { CoachStamp } from "@/components/ui/coach-stamp";
 import { FeelingForm } from "./feeling-form";
+import { SessionPoints } from "./session-points";
 import { Badge } from "@/components/ui/badge";
 import { Fact } from "@/components/ui/fact";
 import type { SessionCoachOutput } from "@/lib/coach/session-coach";
@@ -34,8 +35,6 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
   const previous = coach?.status === "missing" ? coach.previous ?? null : null;
   const shown = coach?.status === "ready" ? coach : previous;
   const ready = shown ? shown.output : null;
-  const wentWell = ready?.wentWell ?? verdict.wentWell;
-  const toWork = ready?.toWork ?? verdict.toWork;
   const endpoint = `/api/activities/${encodeURIComponent(activity.id)}/coach`;
   return (
     <section className="card card-hero" style={{ ["--shadow-color" as string]: "var(--sl-pink)" }} aria-label="Verdict du coach">
@@ -53,12 +52,7 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
       <ul className="bullets">
         {(ready ? ready.bullets : verdict.signals.map((signal) => signal.label).filter((label) => label !== verdict.wentWell && label !== verdict.toWork)).map((line) => <li key={line}>{line}</li>)}
       </ul>
-      {wentWell || toWork ? (
-        <div className="two-points">
-          {wentWell ? <div className="point point-good"><div className="point-label"><ThumbsUp size={12} /> Bien fait</div>{wentWell}</div> : null}
-          {toWork ? <div className="point point-work"><div className="point-label"><Wrench size={12} /> À travailler</div>{toWork}</div> : null}
-        </div>
-      ) : null}
+      <SessionPoints ready={ready} prescription={analysis.prescription} fallbackKeep={verdict.wentWell} />
       {ready ? (
         <details className="more">
           <summary><ChevronRight size={14} className="chev" /> Analyse détaillée</summary>

@@ -85,12 +85,15 @@ export function collectText(value: unknown): string {
  */
 export function findZoneContradictions(text: string, zoneOf: (heartRate: number) => number): string[] {
   const issues: string[] = [];
-  const pattern = /(\d{2,3})\s*bpm[^.;:\n]{0,30}?\b(?:Z|zone\s*)([1-5])\b/gi;
+  const pattern = /(\d{2,3})\s*bpm[^.;:\n]{0,30}?\b(?:Z|zone\s*)([1-5])(?:\s*[–-]\s*Z?([1-5]))?\b/gi;
   for (const match of text.matchAll(pattern)) {
     const heartRate = Number(match[1]);
     const claimed = Number(match[2]);
+    // « Z3–Z4 » : une plage de zones accepte toute FC comprise dans la plage.
+    const claimedHigh = match[3] ? Number(match[3]) : claimed;
+    const zone = zoneOf(heartRate);
     // « 128–148 bpm (Z2) » : la borne haute d'une plage est vérifiée comme les autres.
-    if (zoneOf(heartRate) !== claimed) issues.push(`${heartRate} bpm n'est pas en Z${claimed}`);
+    if (zone < claimed || zone > claimedHigh) issues.push(`${heartRate} bpm n'est pas en Z${claimed}${claimedHigh !== claimed ? `–Z${claimedHigh}` : ""}`);
   }
   return [...new Set(issues)];
 }

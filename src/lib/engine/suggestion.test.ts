@@ -39,7 +39,8 @@ describe("suggestNextSession", () => {
     const result = suggestNextSession(input([run(12, "intervals_vo2", "intervals"), run(4, "endurance", "easy")]));
     expect(result.primary.type).toBe("threshold");
     expect(result.primary.target?.heartRateLow).toBe(159);
-    expect(Math.round(1000 / (result.primary.target?.paceSlowMps ?? 1))).toBe(Math.round(1000 / (3.833 * 0.97)));
+    // Même cible que les consignes de séance : seuil montre (4:21/km) de −3 à +4 s/km.
+    expect(Math.round(1000 / (result.primary.target?.paceSlowMps ?? 1))).toBe(265);
   });
 
   it("alterne seuil et VO2max d'une séance de qualité à l'autre", () => {
