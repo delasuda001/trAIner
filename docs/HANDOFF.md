@@ -47,11 +47,30 @@ Lancer : `npm run build && npm start` → http://localhost:3000. Contrôles : `n
 Plan validé par le coordinateur le 16 novembre. Ordre : 1, partie gratuite du banc, 2, banc complet,
 lancement à 22 h.
 
-1. « À travailler » actionnable — en cours.
+1. « À travailler » actionnable — fait (commit « Consignes chiffrées »), en attente du jugement du coordinateur.
+   - `src/lib/engine/prescription.ts` calcule pour chaque séance : la cible du format (allure + FC),
+     « aurait dû » (départ, récupération, allure, intensité, placement), « à reproduire » et « prochaine
+     fois » (même format, +1 répétition, ou 3 s/km plus vite si l'objectif est à portée).
+   - Allures de course réalistes estimées depuis le seuil montre (`RACE_RATIO_FROM_THRESHOLD` : 5 km
+     ×1,06, 10 km ×1,025, semi ×0,975, marathon ×0,92). Objectif jugé à portée (≤ 3 s/km d'écart),
+     ambitieux (≤ 8) ou hors de portée (on donne alors la cible réaliste).
+   - Pas de consigne (`status: "none"`) si la séance est à plus de 25 s/km de la cible de son format :
+     séance probablement mal reconnue.
+   - Objectifs chiffrés stockés dans l'objectif (`raceTargets`), saisissables sur la page Objectif.
+     Bastien : 5 km en 19:00, semi en 1:27:00.
+   - `suggestion.ts` utilise les mêmes cibles (`intervalTarget`) pour seuil et VO2max.
+   - Prompt `session-v7` : champs `keep`, `shouldHave`, `nextTime` (anciens `wentWell`/`toWork` relus
+     par `normalizeSessionOutput`). Prompt `outlook-v3` : le conseil d'exécution reprend la consigne de
+     la dernière séance du même type (`Dashboard.lastSameType`).
+   - UI : `src/components/activity/session-points.tsx` (trois cases, cible chiffrée du moteur en tête),
+     utilisé sur la page séance et la carte « Dernière séance ». Sans analyse Claude, le texte du moteur
+     s'affiche directement.
+   - Garde-fou : une plage de zones (« Z3–Z4 ») est acceptée.
 2. Bilan hebdomadaire (Opus) — à faire.
 3. Banc de tests nocturne à 22 h (LaunchAgent utilisateur) — à faire.
 
 ## État
 
 - Branche `claude/project-thread-1m6x8x`, tout commité, rien poussé (push GitHub bloqué).
-- Appels Claude réels faits dans ce fil : 0.
+- Appels Claude réels faits dans ce fil : 3 (Sonnet, analyses du 13 et du 4 novembre, ~5 k tokens chacun).
+- Scripts ponctuels hors Next : `npx tsx --conditions=react-server <script>` (la condition contourne `server-only`).

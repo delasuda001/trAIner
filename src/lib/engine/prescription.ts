@@ -35,6 +35,8 @@ const FADE_LIMIT_S = 5;
 const HIGH_LOAD_RATIO = 1.5;
 /** Au-delà de cet écart (s/km) avec la cible du format, la séance est sans doute d'un autre type : pas de consigne. */
 const MISMATCH_LIMIT_S = 25;
+/** Marge (s/km) au-delà de la fourchette avant de dire « plus rapide / plus lent que la cible ». */
+const ON_TARGET_TOLERANCE_S = 1;
 const MISMATCH_REASON = "allure trop éloignée de la cible du format reconnu, séance probablement d'un autre type";
 
 export type PrescriptionTarget = {
@@ -249,13 +251,13 @@ export function prescribe(input: PrescriptionInput): Prescription {
       else if (shortRecovery) lines.push(`Récupération : ${formatClock(recovery)} entre les répétitions pour ${formatClock(plan.recoveryS)} conseillées sur ce format ; c'est le levier le plus direct contre les ${fade} s/km perdus sur la dernière.`);
       else lines.push(`Gestion : ${fade} s/km perdus de la 1re à la dernière répétition ; pars à ${hasPace ? pace(slow) : "l'allure de la dernière"} dès la 1re pour finir à la même allure.`);
     }
-    if (hasPace && averageS > slow + 3 && fade < FADE_LIMIT_S) lines.push(`Allure : répétitions à ${pace(averageS)}, plus lentes que la cible ${band(target)}, sans perte en fin de séance : l'effort était plafonné dès le départ.`);
-    if (hasPace && averageS < fast - 3 && fade < FADE_LIMIT_S) lines.push(`Allure : répétitions à ${pace(averageS)}, plus rapides que la cible ${band(target)} ; reste dans la fourchette pour garder la bonne intensité.`);
+    if (hasPace && averageS > slow + ON_TARGET_TOLERANCE_S && fade < FADE_LIMIT_S) lines.push(`Allure : répétitions à ${pace(averageS)}, plus lentes que la cible ${band(target)}, sans perte en fin de séance : l'effort était plafonné dès le départ.`);
+    if (hasPace && averageS < fast - ON_TARGET_TOLERANCE_S && fade < FADE_LIMIT_S) lines.push(`Allure : répétitions à ${pace(averageS)}, plus rapides que la cible ${band(target)} ; reste dans la fourchette pour garder la bonne intensité.`);
     if (repHr != null && repHr > target.heartRateHigh && metrics.kind !== "intervals_short" && metrics.kind !== "intervals_vo2") lines.push(`Intensité : FC des répétitions à ${repHr} bpm, au-dessus de la cible ${target.heartRateLow}–${target.heartRateHigh} bpm (${target.zone}) ; ralentir jusqu'à repasser sous ${target.heartRateHigh} bpm.`);
     if (shortRecovery && !lines.some((line) => line.startsWith("Récupération"))) lines.push(`Récupération : ${formatClock(recovery)} prises, ${formatClock(plan.recoveryS)} conseillées pour ce format.`);
     lines.push(...placementLines(input, isQuality));
 
-    const onTarget = hasPace && averageS >= fast - 3 && averageS <= slow + 3 && fade < FADE_LIMIT_S;
+    const onTarget = hasPace && averageS >= fast - ON_TARGET_TOLERANCE_S && averageS <= slow + ON_TARGET_TOLERANCE_S && fade < FADE_LIMIT_S;
     const keep = onTarget ? `Répétitions à ${pace(averageS)} dans la cible ${band(target)}, avec ${Math.abs(fade)} s/km d'écart entre premières et dernières : à reproduire.` : fade < FADE_LIMIT_S ? `Régularité : ${Math.abs(fade)} s/km d'écart entre premières et dernières répétitions, à garder.` : null;
 
     const format = `${work.reps} × ${repFormat(work.averageDistanceM, work.averageDurationS)}`;

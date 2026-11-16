@@ -87,3 +87,13 @@ describe("prescribe, séances mal reconnues", () => {
     expect(result.next.format).toBe("9 × 70 s");
   });
 });
+
+describe("prescribe, répétitions trop rapides (4/11)", () => {
+  it("4:00/km pour une cible 4:03–4:09/km : le dit, et ne propose pas d'en ajouter", () => {
+    const metrics = { ...base, work: { ...(base.work as NonNullable<ActivityMetrics["work"]>), averageSpeedMps: 1000 / 240, fadeSPerKm: -6, averageRecoveryS: 184, repsDetail: [rep(1000 / 243, 184), rep(1000 / 241, 184), rep(1000 / 237, 184)] } };
+    const result = prescribe(input(metrics, { context: null }));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.shouldHave[0]).toContain("plus rapides que la cible 4:03–4:09/km");
+    expect(result.next.format).toBe("3 × 2 km");
+  });
+});
