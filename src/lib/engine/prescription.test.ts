@@ -75,18 +75,18 @@ describe("prescribe, fractionné", () => {
   it("même séance avec une VFC sous sa plage : le placement devient la consigne principale, unique", () => {
     const result = prescribe(input(base, { context: { loadAlert: alert(["VFC sous ta plage habituelle"]), qualityBefore: [] } }));
     if (result.status !== "ok") throw new Error("attendu ok");
-    expect(result.shouldHave).toEqual(["Placement : charge 7 jours déjà à 1,6 fois ta moyenne avant la séance, avec VFC sous ta plage habituelle ; reporte de 1 à 2 jours ou remplace par une endurance facile."]);
+    expect(result.shouldHave).toEqual(["Placement : charge 7 jours déjà à 1,6 fois ta moyenne, avec VFC sous ta plage habituelle ; reporte de 1 à 2 jours ou remplace par une endurance facile."]);
     expect(result.next.cue).toContain("sur une semaine sans pic de charge");
   });
 
   it("dégradation au-delà des comparables et récupération courte : la récupération devient la consigne", () => {
-    const result = prescribe(input(withWork({ fadeSPerKm: 14, repsDetail: [rep(244), rep(249), rep(258)] }), { context: null }));
+    const result = prescribe(input(withWork({ fadeSPerKm: 14, paceSpreadSPerKm: 14, repsDetail: [rep(244), rep(249), rep(258)] }), { context: null }));
     if (result.status !== "ok") throw new Error("attendu ok");
     expect(result.shouldHave[0]).toBe("Récupération : 3:00 entre les répétitions au lieu de 2:02, pour ne plus perdre 14 s/km sur la dernière.");
   });
 
   it("départ trop rapide quand la 1re répétition est sous la fourchette", () => {
-    const result = prescribe(input(withWork({ fadeSPerKm: 14, averageRecoveryS: 180, repsDetail: [rep(236, 180), rep(246, 180), rep(252, 180)] }), { context: null }));
+    const result = prescribe(input(withWork({ fadeSPerKm: 14, paceSpreadSPerKm: 16, averageRecoveryS: 180, repsDetail: [rep(236, 180), rep(246, 180), rep(252, 180)] }), { context: null }));
     if (result.status !== "ok") throw new Error("attendu ok");
     expect(result.shouldHave[0]).toContain("Départ : 1re répétition à 3:56/km");
   });
@@ -134,5 +134,26 @@ describe("prescribe, continu", () => {
   it("pas de consigne pour un « tempo » couru 40 s/km sous la cible", () => {
     const metrics: ActivityMetrics = { ...base, kind: "tempo", family: "steady", structure: "continuous", work: null, mainSpeedMps: 1000 / 314, mainHeartRateBpm: 156, halves: { first: { speedMps: 1000 / 302, heartRateBpm: 152 }, second: { speedMps: 1000 / 327, heartRateBpm: 160 }, fadePct: 8, driftPct: 10, fadeSPerKm: 25 } };
     expect(prescribe(input(metrics))).toMatchObject({ status: "none" });
+  });
+});
+
+describe("prescribe, séance réussie (10/11)", () => {
+  const short = (paceS: number) => ({ ...rep(paceS, 60), durationS: 70, distanceM: 312 });
+  const paces = [228, 222, 227, 228, 229, 220, 221, 222];
+  const metrics: ActivityMetrics = { ...base, kind: "intervals_short", work: { ...(base.work as Work), reps: 8, averageDurationS: 70, averageDistanceM: 312, averageSpeedMps: 1000 / 225, paceSpreadSPerKm: 9, fadeSPerKm: -3, averageRecoveryS: 60, repsDetail: paces.map(short) } };
+
+  it("au-dessus des repères et récupération normale : pas de reproche de placement, mais les répétitions trop rapides", () => {
+    const result = prescribe(input(metrics, { reference: { repSpeedMps: 1000 / 233, repHeartRateBpm: 171, repSpreadSPerKm: 28, halvesFadeSPerKm: null }, context: { loadAlert: alert(["charge inhabituelle sur 12 semaines (semaine médiane 189)"]), qualityBefore: [], recoveryFlags: [], verdictLevel: "above" } }));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.shouldHave).toHaveLength(1);
+    expect(result.shouldHave[0]).toMatch(/^Allure : reste dans 3:46–3:52\/km sur chaque répétition ; 4 sur 8 étaient plus rapides \(3:40–3:42\/km\)/);
+    // Régularité comparée au même indicateur des comparables (écart plus rapide / plus lente).
+    expect(result.keep).toBe("Régularité : 9 s/km entre la répétition la plus rapide et la plus lente, mieux que tes comparables (28 s/km).");
+  });
+
+  it("même séance avec une VFC basse : le placement redevient la consigne", () => {
+    const result = prescribe(input(metrics, { context: { loadAlert: alert(["VFC sous ta plage habituelle"]), qualityBefore: [], recoveryFlags: ["hrv_low"], verdictLevel: "above" } }));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.shouldHave[0]).toMatch(/^Placement/);
   });
 });

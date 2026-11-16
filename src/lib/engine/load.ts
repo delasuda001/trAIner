@@ -96,6 +96,16 @@ export function summarizeLoad(activities: LoadActivity[], today: string, weeksCo
   };
 }
 
+/**
+ * Charge 7 jours, sa référence (moyenne hebdo des 4 semaines) et leur rapport,
+ * calculés ensemble : le ratio affiché vaut toujours valeur / référence citée à côté.
+ */
+export type LoadFigure = { value: number; reference: number; ratio: number | null };
+
+export function loadFigure(load: Pick<LoadSummary, "acute7d" | "chronicWeekly28d">): LoadFigure {
+  return { value: load.acute7d, reference: load.chronicWeekly28d, ratio: load.chronicWeekly28d > 0 ? round(load.acute7d / load.chronicWeekly28d, 2) : null };
+}
+
 /** Ratio charge 7 jours / moyenne 4 semaines à partir duquel la hausse est « marquée ». */
 export const HIGH_LOAD_RATIO = 1.5;
 /** Charge 7 jours « nettement » au-dessus de l'habitude : × 1,3 la semaine médiane des 12 dernières. */
@@ -124,11 +134,12 @@ const FLAG_TEXT: Record<string, string> = { hrv_low: "VFC sous ta plage habituel
  * absolue nettement au-dessus de l'habitude sur 12 semaines.
  */
 export function loadAlert(load: LoadSummary, corroboration: { recoveryFlags: string[]; perceivedEffort?: number | null }): LoadAlert {
-  const ratioHigh = load.ratio != null && load.ratio >= HIGH_LOAD_RATIO;
+  const ratio = loadFigure(load).ratio;
+  const ratioHigh = ratio != null && ratio >= HIGH_LOAD_RATIO;
   const complete = load.weeks.slice(0, -1).map((week) => week.load).filter((value) => value > 0);
   const typical = complete.length >= 4 ? Math.round(median(complete) as number) : null;
   const reasons: string[] = corroboration.recoveryFlags.map((flag) => FLAG_TEXT[flag] ?? flag);
   if (corroboration.perceivedEffort != null && corroboration.perceivedEffort >= HIGH_PERCEIVED_EFFORT) reasons.push(`effort perçu à ${corroboration.perceivedEffort}/10`);
-  if (typical != null && load.acute7d >= typical * ABSOLUTE_LOAD_FACTOR) reasons.push(`${load.acute7d} de charge sur 7 jours contre ${typical} une semaine habituelle`);
-  return { ratio: load.ratio, ratioHigh, actionable: ratioHigh && reasons.length > 0, reasons, typicalWeekLoad: typical };
+  if (typical != null && load.acute7d >= typical * ABSOLUTE_LOAD_FACTOR) reasons.push(`charge inhabituelle sur 12 semaines (semaine médiane ${typical})`);
+  return { ratio, ratioHigh, actionable: ratioHigh && reasons.length > 0, reasons, typicalWeekLoad: typical };
 }

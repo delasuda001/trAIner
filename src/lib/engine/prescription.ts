@@ -2,7 +2,7 @@ import { formatClock, formatDate, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 import type { ActivityMetrics, SessionKind } from "./activity-metrics";
 import { paceSeconds } from "./activity-metrics";
-import type { LoadAlert } from "./load";
+import type { LoadAlert, LoadFigure } from "./load";
 import { zoneRange } from "./zones";
 
 /**
@@ -123,7 +123,16 @@ export type PrescriptionInput = {
   efforts: RecentEffort[];
   reference: ComparableReference | null;
   /** `loadAlert` : charge des 7 jours AVANT la séance, corroborée ou non (voir load.ts). */
-  context: { loadAlert: LoadAlert | null; qualityBefore: Array<{ title: string; daysBefore: number }> } | null;
+  context: {
+    loadAlert: LoadAlert | null;
+    /** Charge 7 jours avant la séance, sa référence et leur rapport (cités ensemble). */
+    loadFigure?: LoadFigure | null;
+    qualityBefore: Array<{ title: string; daysBefore: number }>;
+    /** Signaux de récupération dégradés le jour de la séance. */
+    recoveryFlags?: string[];
+    /** Niveau du verdict : une séance réussie avec une récupération normale ne reçoit pas de reproche de placement. */
+    verdictLevel?: string;
+  } | null;
 };
 
 type PaceInputs = Pick<PrescriptionInput, "zones" | "lactateThresholdSpeedMps" | "raceTargets" | "efforts">;
@@ -324,10 +333,14 @@ function repFormat(distanceM: number | null, durationS: number): string {
 function placementLine(input: PrescriptionInput): string | null {
   const context = input.context;
   if (!context) return null;
+  // Séance réussie et récupération normale : pas de reproche de placement (la prudence vaut pour les jours suivants).
+  if (context.verdictLevel === "above" && !(context.recoveryFlags ?? []).length) return null;
   // Le ratio seul ne suffit pas (1 à 2 sorties par semaine) : il faut un signal qui le corrobore.
   const alert = context.loadAlert;
   if (alert?.actionable && alert.ratio != null) {
-    return `Placement : charge 7 jours déjà à ${decimal(alert.ratio)} fois ta moyenne avant la séance, avec ${alert.reasons.join(", ")} ; reporte de 1 à 2 jours ou remplace par une endurance facile.`;
+    const figure = context.loadFigure;
+    const load = figure?.ratio != null ? `charge 7 jours déjà à ${figure.value}, soit ${decimal(figure.ratio)} fois ta moyenne des 4 semaines précédentes (${figure.reference})` : `charge 7 jours déjà à ${decimal(alert.ratio)} fois ta moyenne`;
+    return `Placement : ${load}, avec ${alert.reasons.join(", ")} ; reporte de 1 à 2 jours ou remplace par une endurance facile.`;
   }
   const close = context.qualityBefore.find((entry) => entry.daysBefore < 3);
   if (close) return `Placement : ${close.title} seulement ${close.daysBefore} jour${close.daysBefore > 1 ? "s" : ""} avant ; laisse 72 h entre deux séances de qualité.`;
@@ -360,14 +373,18 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
   const recovery = work.averageRecoveryS != null ? Math.round(work.averageRecoveryS) : null;
   const shortRecovery = plan.recoveryS != null && recovery != null && recovery < plan.recoveryS - 15;
   // Dégradation réelle seulement si elle dépasse celle de ses comparables.
+  // Régularité : écart entre la répétition la plus rapide et la plus lente, comparé au MÊME indicateur des comparables.
   const referenceSpread = reference?.repSpreadSPerKm ?? null;
-  const fadeDegraded = fade >= FADE_LIMIT_S && (referenceSpread == null || fade >= referenceSpread + FADE_ABOVE_REFERENCE_S);
+  const spread = work.paceSpreadSPerKm;
+  const fadeDegraded = fade >= FADE_LIMIT_S && (referenceSpread == null || spread == null || spread >= referenceSpread + FADE_ABOVE_REFERENCE_S);
   // Coût cardiaque : FC nettement plus haute que les comparables pour une allure à peine meilleure.
   const refHr = reference?.repHeartRateBpm != null ? Math.round(reference.repHeartRateBpm) : null;
   const refPaceS = reference?.repSpeedMps ? paceSeconds(reference.repSpeedMps) : null;
   const hrCost = repHr != null && refHr != null && refPaceS != null && repHr >= refHr + HR_COST_BPM && refPaceS - averageS <= GAIN_SMALL_S;
   const tooSlow = hasPace && averageS > slow + MARGINAL_S;
-  const tooFast = hasPace && averageS < fast - MARGINAL_S;
+  // Trop vite : la moyenne, ou au moins la moitié des répétitions, sous la fourchette (au-delà de l'écart marginal).
+  const fastReps = hasPace ? reps.filter((value) => value < fast - MARGINAL_S) : [];
+  const tooFast = hasPace && (averageS < fast - MARGINAL_S || fastReps.length * 2 >= reps.length);
 
   const execution: string[] = [];
   if (fadeDegraded) {
@@ -376,7 +393,11 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
     else execution.push(`Gestion : pars à ${hasPace ? pace(slow) : "l'allure de ta dernière répétition"} dès la 1re pour ne plus perdre ${fade} s/km en fin de séance.`);
   }
   if (hrCost) execution.push(`Intensité : tiens ${band(target)} sans chercher plus vite ; FC des répétitions à ${repHr} bpm contre ${refHr} bpm sur tes comparables pour ${Math.max(0, (refPaceS as number) - averageS)} s/km de mieux seulement.`);
-  else if (tooFast && !fadeDegraded) execution.push(`Allure : reste dans ${band(target)} ; ${pace(averageS)} t'a fait travailler au-dessus de l'intensité visée.`);
+  else if (tooFast && !fadeDegraded) {
+    execution.push(fastReps.length && fastReps.length < reps.length
+      ? `Allure : reste dans ${band(target)} sur chaque répétition ; ${fastReps.length} sur ${reps.length} étaient plus rapides (${paceRange(Math.min(...fastReps), Math.max(...fastReps))}), au-dessus de l'intensité visée.`
+      : `Allure : reste dans ${band(target)} ; ${pace(averageS)} t'a fait travailler au-dessus de l'intensité visée.`);
+  }
   if (repHr != null && repHr > target.heartRateHigh && (metrics.kind === "intervals_threshold" || metrics.kind === "intervals_tempo")) execution.push(`Intensité : repasse sous ${target.heartRateHigh} bpm (${target.zone}) ; ${repHr} bpm, c'est déjà plus que ce format.`);
   const placement = placementLine(input);
   // Une allure trop lente expliquée par la charge relève du placement, pas de l'exécution.
@@ -386,8 +407,8 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
   const onTarget = hasPace && !tooFast && !tooSlow && !fadeDegraded && !hrCost;
   const strictlyOnTarget = onTarget && averageS >= fast && averageS <= slow;
   const keep = strictlyOnTarget
-    ? `Répétitions à ${pace(averageS)} dans la cible ${band(target)}, régulières (${Math.abs(fade)} s/km entre premières et dernières) : à reproduire.`
-    : !fadeDegraded ? `Régularité : ${Math.abs(fade)} s/km entre premières et dernières répétitions${referenceSpread != null ? `, ${Math.abs(fade) < referenceSpread - 2 ? "mieux que" : "comme"} tes comparables (${referenceSpread} s/km)` : ""}.` : null;
+    ? `Répétitions à ${pace(averageS)} dans la cible ${band(target)}${spread != null ? `, ${spread} s/km entre la plus rapide et la plus lente` : ""} : à reproduire.`
+    : !fadeDegraded && spread != null ? `Régularité : ${spread} s/km entre la répétition la plus rapide et la plus lente${referenceSpread != null ? `, ${spread < referenceSpread - 2 ? "mieux que" : "comme"} tes comparables (${referenceSpread} s/km)` : ""}.` : null;
 
   const format = `${work.reps} × ${repFormat(work.averageDistanceM, work.averageDurationS)}`;
   const recoveryText = formatClock(plan.recoveryS ?? recovery);

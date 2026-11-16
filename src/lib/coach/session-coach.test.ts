@@ -27,7 +27,7 @@ const deltas: ComparisonDeltas = {
 };
 
 const comparables = Array.from({ length: 5 }, (_, index) => ({ localDate: `2026-10-0${index + 1}`, title: "Fractionné 6 × 500 m", ageDays: 40 + index, movingTimeS: 2800, distanceM: 9000, mainSpeedMps: 3.4, mainHeartRateBpm: 158, workSpeedMps: 4.25, workHeartRateBpm: 171 }));
-const context = { loadRatio: 1.4, acute7d: 326, chronicWeekly28d: 234, qualityBefore14d: [{ localDate: "2026-11-04", title: "Fractionné 5 × 1 km", daysBefore: 9 }], daysSincePreviousRun: 3, recovery: { hrv: { latest: 60, baselineLow: 52, baselineHigh: 73 }, restingHr: { latest: 46, delta: -1 }, sleep: { latest: 29000, delta: 600 }, flags: [] } };
+const context = { loadRatio: 1.4, loadBefore: { value: 326, reference: 234, ratio: 1.39 }, acute7d: 326, chronicWeekly28d: 234, qualityBefore14d: [{ localDate: "2026-11-04", title: "Fractionné 5 × 1 km", daysBefore: 9 }], daysSincePreviousRun: 3, recovery: { hrv: { latest: 60, baselineLow: 52, baselineHigh: 73 }, restingHr: { latest: 46, delta: -1 }, sleep: { latest: 29000, delta: 600 }, flags: [] } };
 
 function payloadFor(reps: number) {
   const metrics = intervalMetrics(reps);
@@ -76,5 +76,18 @@ describe("zone d'une FC arrondie", () => {
     const payload = buildSessionPayload({ session, metrics: { ...metrics, work }, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 3.833, context, goal: {} });
     expect(JSON.stringify(payload)).toContain("167 bpm (Z5)");
     expect(JSON.stringify(payload)).not.toContain("167 bpm (Z4)");
+  });
+});
+
+describe("charge dans le résumé : une seule référence, ratio = valeur / référence", () => {
+  it("chaque « X, soit R fois … (Y) » respecte R ≈ X / Y", () => {
+    const text = JSON.stringify(payloadFor(6));
+    const triplets = [...text.matchAll(/(\d+), soit (\d+(?:,\d+)?) fois [^()"]*\((\d+)\)/g)];
+    expect(triplets.length).toBeGreaterThan(0);
+    for (const [, value, ratio, reference] of triplets) {
+      expect(Math.abs(Number(ratio.replace(",", ".")) - Number(value) / Number(reference))).toBeLessThanOrEqual(0.051);
+    }
+    // Plus de seconde ligne de charge « séance comprise » avec une autre référence.
+    expect(text).not.toContain("seance_comprise");
   });
 });

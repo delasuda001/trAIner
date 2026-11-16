@@ -8,7 +8,7 @@ import { createFeelingRepository, type Feeling } from "@/lib/db/repositories/fee
 import type { ActivityRow, WellnessRow } from "@/lib/db/types";
 import { computeActivityMetrics, METRICS_VERSION, sessionTitle, type ActivityMetrics } from "@/lib/engine/activity-metrics";
 import { computeDeltas, selectComparables, type ComparisonDeltas, type RunForComparison } from "@/lib/engine/comparable";
-import { isRun, loadAlert, summarizeLoad, type LoadAlert, type LoadSummary } from "@/lib/engine/load";
+import { isRun, loadAlert, loadFigure, summarizeLoad, type LoadAlert, type LoadFigure, type LoadSummary } from "@/lib/engine/load";
 import { computeProgression, referenceHeartRate, type Progression } from "@/lib/engine/progression";
 import { assessRecovery, type RecoverySignals } from "@/lib/engine/recovery";
 import { median, present } from "@/lib/engine/stats";
@@ -129,6 +129,8 @@ export type SessionContext = {
   /** Hausse de charge avant la séance, corroborée ou non. */
   loadAlertBefore: LoadAlert;
   acute7dBefore: number;
+  /** Charge 7 jours AVANT la séance, sa moyenne 4 semaines et leur rapport (une seule référence). */
+  loadBefore: LoadFigure;
   acute7d: number;
   chronicWeekly28d: number;
   /** Séances de qualité (fractionné, tempo, seuil) des 14 jours précédents. */
@@ -158,6 +160,7 @@ function sessionContext(current: AnalyzedRun, context: Context): SessionContext 
     loadRatioBefore: loadBefore.ratio,
     loadAlertBefore: alertBefore,
     acute7dBefore: loadBefore.acute7d,
+    loadBefore: loadFigure(loadBefore),
     acute7d: load.acute7d,
     chronicWeekly28d: load.chronicWeekly28d,
     qualityBefore14d: quality,
@@ -195,7 +198,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     raceTargets: context.goal?.raceTargets ?? [],
     efforts: recentEfforts(history, current.localDate),
     reference: deltas.count ? { repSpeedMps: deltas.work?.reference?.speedMps ?? null, repHeartRateBpm: deltas.work?.reference?.heartRateBpm ?? null, repSpreadSPerKm: deltas.work?.reference?.paceSpreadSPerKm ?? null, halvesFadeSPerKm: deltas.fadeSPerKm.reference } : null,
-    context: { loadAlert: sessionCtx.loadAlertBefore, qualityBefore: sessionCtx.qualityBefore14d },
+    context: { loadAlert: sessionCtx.loadAlertBefore, loadFigure: sessionCtx.loadBefore, qualityBefore: sessionCtx.qualityBefore14d, recoveryFlags: sessionCtx.recovery.flags, verdictLevel: classifyVerdict(current.metrics, deltas).level },
   });
   return {
     activity: current.row,

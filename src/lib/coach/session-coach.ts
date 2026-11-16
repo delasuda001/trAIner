@@ -8,7 +8,7 @@ import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 
-export const SESSION_PROMPT_VERSION = "session-v11";
+export const SESSION_PROMPT_VERSION = "session-v12";
 
 export const sessionCoachSchema = z.object({
   verdict: z.string().min(10).max(260),
@@ -55,7 +55,7 @@ Règles :
 - Si "format_reconnu" commence par « non », dis simplement que la séance ne correspond pas au format reconnu, ne force aucun verdict ni comparaison, et limite-toi aux constats sûrs (durée, allure, FC, zones).
 - Pas de redite : le verdict donne l'écart principal une fois ; chaque puce apporte un fait nouveau (la première ne répète pas l'écart du verdict).
 - Un indicateur = une seule lecture, celle de "verdict_calcule" : jamais le même fait dans "keep" et dans "shouldHave".
-- Cause probable : si "hausse_de_charge" est corroborée, c'est la cause probable, avec ses raisons. Sinon, une cause seulement si un facteur du contexte la soutient (séance de qualité à moins de 72 h, signal de récupération dégradé, ressenti). S'il n'y en a aucun, n'écris pas de ligne « cause probable » du tout. Une cause retenue doit être cohérente avec "shouldHave".
+- Cause probable : si "hausse_de_charge" est corroborée, c'est la cause probable, avec ses raisons. Sinon, une cause seulement si un facteur du contexte la soutient (séance de qualité à moins de 72 h, signal de récupération dégradé, ressenti). S'il n'y en a aucun, n'écris pas de ligne « cause probable » du tout. Une cause retenue doit être cohérente avec "shouldHave". Un écart favorable (séance au-dessus de tes repères) n'a jamais de « cause probable » : une hausse de charge devient au plus une précaution pour les jours suivants.
 - Dynamique de course : compare-la à ses propres valeurs uniquement, et seulement si un écart ressort. L'allure est le produit de la cadence et de la longueur de pas : un pas plus court à cadence égale EST l'allure plus lente, ce n'est jamais une cause. Un indicateur de foulée n'explique quelque chose que s'il bouge indépendamment de l'allure (contact au sol, oscillation, ratio vertical, dérive entre début et fin).
 - Les constats et la cause probable vont dans "bullets", jamais dans "shouldHave" ni "nextTime".
 - "shouldHave" et "nextTime" sont des consignes, pas des constats : verbe d'action, cible chiffrée en tête (allure, FC, récupération, placement), reprises de "consignes_moteur". N'invente aucune autre cible. Si "consignes_moteur" n'en donne pas, dis simplement qu'il n'y a pas de consigne chiffrée pour ce format.
@@ -86,6 +86,8 @@ export type SessionContextInput = {
   /** Hausse de charge corroborée (récupération, ressenti, charge absolue) ou simple repère. */
   loadAlertBefore?: { ratioHigh: boolean; actionable: boolean; reasons: string[] };
   acute7dBefore?: number;
+  /** Charge 7 jours avant la séance, sa référence et leur rapport, calculés ensemble. */
+  loadBefore?: { value: number; reference: number; ratio: number | null };
   acute7d: number;
   chronicWeekly28d: number;
   qualityBefore14d: Array<{ localDate: string; title: string; daysBefore: number }>;
@@ -119,6 +121,11 @@ function describeDynamics(metrics: ActivityMetrics, deltas: ComparisonDeltas) {
     lecture: readDynamics(metrics, deltas),
     comparables: deltas.dynamicsReference ? `${dynamicsLine(deltas.dynamicsReference.values)} (${deltas.dynamicsReference.count} séance${deltas.dynamicsReference.count > 1 ? "s" : ""})` : "—",
   };
+}
+
+/** « 261, soit 1,5 fois ta moyenne hebdo des 4 semaines précédentes (174) » : valeur, ratio et référence ensemble. */
+export function loadLine(figure: { value: number; reference: number; ratio: number | null }): string {
+  return figure.ratio == null ? `${figure.value} (pas encore de moyenne de référence)` : `${figure.value}, soit ${formatNumber(figure.ratio, 1)} fois ta moyenne hebdo des 4 semaines précédentes (${figure.reference})`;
 }
 
 function pct(value: number | null | undefined, digits = 1): string {
@@ -228,9 +235,8 @@ export function buildSessionPayload(input: {
     },
     contexte_de_la_seance: context
       ? {
-          charge_garmin_7_jours_avant_la_seance: context.acute7dBefore != null ? `${context.acute7dBefore}, soit ${context.loadRatioBefore == null ? "—" : `${formatNumber(context.loadRatioBefore, 1)} fois`} la moyenne hebdo de 4 semaines (${context.chronicWeekly28d})` : "—",
+          charge_garmin_7_jours_avant_la_seance: context.loadBefore ? loadLine(context.loadBefore) : "—",
           hausse_de_charge: !context.loadAlertBefore?.ratioHigh ? "non" : context.loadAlertBefore.actionable ? `corroborée : ${context.loadAlertBefore.reasons.join(", ")}` : "ratio élevé mais non corroboré (ni signal de récupération, ni ressenti élevé, ni charge inhabituelle) : simple repère",
-          charge_garmin_7_jours_seance_comprise: `${context.acute7d}, soit ${context.loadRatio == null ? "—" : `${formatNumber(context.loadRatio, 1)} fois`} la moyenne`,
           jours_depuis_course_precedente: context.daysSincePreviousRun == null ? "—" : String(context.daysSincePreviousRun),
           seances_de_qualite_14_jours_avant: context.qualityBefore14d.length ? context.qualityBefore14d.map((entry) => `${entry.title}, ${entry.daysBefore} jours avant`) : "aucune",
           recuperation_du_jour: {
