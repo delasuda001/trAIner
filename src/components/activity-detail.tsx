@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, BarChart3, Sparkles, Timer } from "lucide-react";
+import { ArrowLeft, BarChart3, MessageCircle, Sparkles, Timer } from "lucide-react";
 import Link from "next/link";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { NormalizedStreams } from "@/lib/db/contracts";
@@ -12,8 +12,16 @@ import { selectConfidenceBannerState, isAlarmingBanner, showsStalenessNote } fro
 
 type Detail = { activity: Activity; intervals: Lap[]; dataAvailability: { intervals: boolean }; sourceMetadata: { cacheStatus: string; fetchedAt: string; sourceUpdatedAt: string | null } };
 type Tab = "summary" | "intervals" | "charts";
+type VerdictEvidenceItem = { metric: string; currentValue: number; comparisonValue: number | null; unit: string; direction: string; label: string };
+type Level1 = {
+  verdict: "well_executed" | "partly_successful" | "miscalibrated" | "not_evaluable";
+  verdictEvidence: VerdictEvidenceItem[];
+  notableVsHistory: string | null;
+  mainFocus: string | null;
+  nextExperiment: string | null;
+};
 type Analysis = {
-  key_takeaways: string[];
+  level1: Level1;
   summary: string;
   observed_facts: string[];
   historical_comparison: string | null;
@@ -38,7 +46,22 @@ type ThresholdEstimateView = {
   biasHint?: string | null;
   staleWarning?: { isStale: boolean; message: string | null; stalePointCount?: number; oldestRetainedPointWeeks?: number | null } | null;
 };
-type AnalysisPayload = { id: string; analysis: Analysis | null; formatOutdated?: boolean; logicStale?: boolean; thresholdEstimate?: ThresholdEstimateView | null; model: string; promptVersion: string; currentPromptVersion?: string; createdAt: string };
+type HistoricalComparisonView = {
+  comparableActivitiesCount: number;
+  insufficientDataReason: string | null;
+  usedDeclaredReferenceFallback: boolean;
+  comparabilityBreakdown: { activityId: string; score: number; tier: "high" | "moderate" | "excluded"; guardrailsApplied: string[] }[] | null;
+};
+type AnalysisPayload = { id: string; analysis: Analysis | null; formatOutdated?: boolean; logicStale?: boolean; thresholdEstimate?: ThresholdEstimateView | null; historicalComparison?: HistoricalComparisonView | null; model: string; promptVersion: string; currentPromptVersion?: string; createdAt: string };
+
+const COMPARABILITY_TIER_LABEL: Record<"high" | "moderate" | "excluded", string> = { high: "élevée", moderate: "modérée", excluded: "faible" };
+const GUARDRAIL_LABEL: Record<string, string> = { recovery_mismatch: "récupération très différente", elevation_mismatch: "dénivelé très différent" };
+const VERDICT_LABEL: Record<Level1["verdict"], string> = {
+  well_executed: "Bien exécutée",
+  partly_successful: "Partiellement réussie",
+  miscalibrated: "Mal calibrée",
+  not_evaluable: "Non évaluable",
+};
 
 const toList = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []);
 
@@ -116,11 +139,13 @@ export function ActivityDetail({ id }: { id: string }) {
 
   const { activity, intervals } = detail;
   const segmented = segmentActivity({ laps: intervals, streams }, strategy);
+  const activityLabel = `${formatDate(activity.start_date_local ?? activity.start_date)} · ${activity.name ?? "séance"}`;
+  const assistantHref = `/assistant?activityId=${encodeURIComponent(id)}&activityLabel=${encodeURIComponent(activityLabel)}`;
   return <main className="shell">
     <Link className="back-link" href="/"><ArrowLeft size={16} /> Toutes les activités</Link>
     <section className="detail-head"><div><p className="kicker">{formatDate(activity.start_date_local ?? activity.start_date)} · {activity.type}</p><h1>{activity.name}</h1></div><span className="detail-mark"><Timer size={19} /> {detail.sourceMetadata.cacheStatus === "fresh" ? "Cache récent" : "Données source"}</span></section>
     <div className="summary-grid"><Summary label="Distance" value={formatDistance(activity.distance)} /><Summary label="Durée" value={formatDuration(activity.moving_time ?? activity.elapsed_time)} /><Summary label="Allure moyenne" value={formatPace(activity.average_speed)} /><Summary label="FC moyenne" value={activity.average_heartrate ? `${Math.round(activity.average_heartrate)} bpm` : "—"} /></div>
-    <div className="analysis-action"><div><p className="kicker">Débrief assisté</p><p className="data-note">L’analyse est déclenchée uniquement à votre demande.</p></div><button className="button" onClick={runAnalysis} disabled={analysisLoading}><Sparkles size={16} /> {analysisLoading ? "Analyse en cours..." : analysis ? "Régénérer l’analyse" : "Analyser cette séance"}</button></div>
+    <div className="analysis-action"><div><p className="kicker">Débrief assisté</p><p className="data-note">L’analyse est déclenchée uniquement à votre demande.</p></div><div className="analysis-action-buttons"><button className="button" onClick={runAnalysis} disabled={analysisLoading}><Sparkles size={16} /> {analysisLoading ? "Analyse en cours..." : analysis ? "Régénérer l’analyse" : "Analyser cette séance"}</button><Link className="button secondary" href={assistantHref}><MessageCircle size={16} /> Poser une question sur cette séance</Link></div></div>
     {analysisError && <section className="panel state error"><strong>L’analyse est indisponible.</strong><p>{analysisError}</p></section>}
     <nav className="detail-tabs" aria-label="Détail de l’activité">{([['summary', 'Résumé'], ['intervals', 'Intervalles'], ['charts', 'Courbes']] as const).map(([key, label]) => <button className={tab === key ? "active" : ""} key={key} onClick={() => setTab(key)}>{label}</button>)}</nav>
     {tab === "summary" && <section className="panel laps-panel"><p className="kicker">Données disponibles</p><h2>Résumé de la séance</h2><p className="data-note">Métadonnées et intervalles chargés depuis Intervals.icu. Les constats IA apparaissent après analyse explicite.</p></section>}
@@ -133,6 +158,16 @@ export function ActivityDetail({ id }: { id: string }) {
 
 function ContextForm({ context, setContext, onSubmit, saving, message }: { context: ActivityContext; setContext: (value: ActivityContext) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; saving: boolean; message?: string }) {
   return <section className="panel laps-panel context-activity"><div className="section-heading"><div><p className="kicker">Contexte personnel</p><h2>Comment s’est passée la séance ?</h2></div></div><form className="form-grid" onSubmit={onSubmit}><label>Objectif de séance<input value={context.sessionGoal ?? ""} onChange={(event) => setContext({ ...context, sessionGoal: event.target.value })} /></label><label>Effort perçu<select value={context.perceivedExertion ?? ""} onChange={(event) => setContext({ ...context, perceivedExertion: event.target.value })}><option value="">Non renseigné</option><option value="facile">Facile</option><option value="modéré">Modéré</option><option value="difficile">Difficile</option><option value="maximal">Très difficile</option></select></label><label className="preference-row"><input type="checkbox" checked={context.unusualFatigue === 1} onChange={(event) => setContext({ ...context, unusualFatigue: event.target.checked ? 1 : 0 })} /> Fatigue inhabituelle</label><label className="preference-row"><input type="checkbox" checked={context.painFlag === 1} onChange={(event) => setContext({ ...context, painFlag: event.target.checked ? 1 : 0 })} /> Douleur ou gêne signalée</label><label className="wide">Note libre<textarea rows={3} value={context.note ?? ""} onChange={(event) => setContext({ ...context, note: event.target.value })} /></label><div className="form-actions wide"><button className="button" type="submit" disabled={saving}>{saving ? "Enregistrement..." : "Enregistrer le contexte"}</button>{message && <span className="data-note">{message}</span>}</div></form></section>;
+}
+
+function Level1Block({ level1 }: { level1: Level1 }) {
+  const items = [level1.notableVsHistory, level1.mainFocus, level1.nextExperiment].filter((item): item is string => Boolean(item));
+  return <div className="analysis-block highlight level1-block">
+    <span className={`verdict-badge verdict-${level1.verdict}`}>{VERDICT_LABEL[level1.verdict]}</span>
+    {items.length > 0
+      ? <ul>{items.map((item, index) => <li key={`level1-${index}`}>{item}</li>)}</ul>
+      : <p className="data-note">Pas assez de signal pour aller au-delà du constat.</p>}
+  </div>;
 }
 
 function ThresholdProvenance({ estimate }: { estimate?: ThresholdEstimateView | null }) {
@@ -170,17 +205,28 @@ function AnalysisPanel({ payload }: { payload: AnalysisPayload }) {
       <p className="data-note">Générée le {new Date(payload.createdAt).toLocaleString("fr-FR")} (format {payload.promptVersion}).</p></section>;
   }
 
-  const keyTakeaways = toList(analysis.key_takeaways);
   const hypotheses = toList(analysis.hypotheses);
   const paceGuidance = analysis.next_session_pace_guidance;
   return <section className="analysis-panel"><div className="section-heading"><div><p className="kicker"><Sparkles size={14} /> Débrief IA</p><h2>{analysis.summary}</h2></div><span className="detail-mark">{payload.model}</span></div>
     {payload.logicStale && <p className="data-note">Généré avec une version antérieure de l’analyse (format {payload.promptVersion}{payload.currentPromptVersion ? `, actuel ${payload.currentPromptVersion}` : ""}). Régénérez pour bénéficier des dernières améliorations (comparaison historique, estimation de seuil).</p>}
+    <Level1Block level1={analysis.level1} />
     <ThresholdProvenance estimate={payload.thresholdEstimate} />
-    {keyTakeaways.length > 0 && <div className="analysis-block highlight"><h3>Points clés</h3><ul>{keyTakeaways.map((item, index) => <li key={`key-${index}`}>{item}</li>)}</ul></div>}
     <AnalysisList title="Recommandations techniques" items={toList(analysis.technical_recommendations)} />
     {paceGuidance && <div className="analysis-block"><h3>Allure cible pour la prochaine séance similaire</h3><strong>{paceGuidance.recommendedPaceDisplay}</strong><p>{paceGuidance.rationale}</p><AnalysisList title="Ajustements" items={toList(paceGuidance.adjustments)} /></div>}
     <div className="analysis-block"><h3>Hypothèses</h3><ul>{hypotheses.map((item, index) => <li key={`hyp-${index}`}>{item}</li>)}</ul></div>
-    <details className="analysis-block"><summary>Voir le détail complet</summary><div className="detail-extra"><AnalysisList title="Constats factuels" items={toList(analysis.observed_facts)} /><div className="analysis-block"><h3>Classification en zones</h3><p>{analysis.zone_classification_summary}</p></div><div className="analysis-block"><h3>Comparaison historique</h3><p>{analysis.historical_comparison ?? "Comparaison historique insuffisante."}</p></div><AnalysisList title="Limites et fiabilité" items={toList(analysis.limitations)} /><AnalysisList title="Prochaines étapes" items={toList(analysis.next_steps)} />{analysis.safety_note && <div className="analysis-block safety-note"><h3>Note de sécurité</h3><p>{analysis.safety_note}</p></div>}<p className="data-note">Source : activité et métriques déterministes calculées. Généré le {new Date(payload.createdAt).toLocaleString("fr-FR")}.</p></div></details></section>;
+    <details className="analysis-block"><summary>Voir le détail complet</summary><div className="detail-extra"><AnalysisList title="Constats factuels" items={toList(analysis.observed_facts)} /><div className="analysis-block"><h3>Classification en zones</h3><p>{analysis.zone_classification_summary}</p></div><div className="analysis-block"><h3>Comparaison historique</h3><p>{analysis.historical_comparison ?? "Comparaison historique insuffisante."}</p><ComparabilityBreakdown comparison={payload.historicalComparison} /></div><AnalysisList title="Limites et fiabilité" items={toList(analysis.limitations)} /><AnalysisList title="Prochaines étapes" items={toList(analysis.next_steps)} />{analysis.safety_note && <div className="analysis-block safety-note"><h3>Note de sécurité</h3><p>{analysis.safety_note}</p></div>}<p className="data-note">Source : activité et métriques déterministes calculées. Généré le {new Date(payload.createdAt).toLocaleString("fr-FR")}.</p></div></details></section>;
+}
+
+function ComparabilityBreakdown({ comparison }: { comparison?: HistoricalComparisonView | null }) {
+  if (!comparison) return null;
+  if (comparison.usedDeclaredReferenceFallback) {
+    return <p className="data-note">Comparaison basée sur votre repère de performance déclaré (seuil calculé insuffisant), jamais une estimation automatique.</p>;
+  }
+  if (!comparison.comparabilityBreakdown || comparison.comparabilityBreakdown.length === 0) return null;
+  return <ul className="comparability-breakdown">{comparison.comparabilityBreakdown.map((entry) => <li key={entry.activityId}>
+    Séance {entry.activityId} — comparabilité {COMPARABILITY_TIER_LABEL[entry.tier]} ({Math.round(entry.score * 100)} %)
+    {entry.guardrailsApplied.length > 0 ? ` — ${entry.guardrailsApplied.map((g) => GUARDRAIL_LABEL[g] ?? g).join(", ")}` : ""}
+  </li>)}</ul>;
 }
 
 function AnalysisList({ title, items }: { title: string; items: string[] }) { return <div className="analysis-block"><h3>{title}</h3>{items.length ? <ul>{items.map((item, index) => <li key={`${title}-${index}`}>{item}</li>)}</ul> : <p className="data-note">Aucun élément fourni.</p>}</div>; }

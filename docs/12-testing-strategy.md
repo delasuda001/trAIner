@@ -25,7 +25,9 @@ Suites concernées aujourd'hui : `repositories.test.ts`, `context-goals.test.ts`
 `activities/[id]/streams/route.test.ts`, `sync/activities/route.test.ts`,
 `performance-profile/recalculate/route.test.ts`,
 `analysis/performance-profile.test.ts`, `analysis/threshold-basis.test.ts`,
-`llm/context.test.ts`, `intervals/sync.test.ts`, `dashboard/dashboard.test.ts`.
+`llm/context.test.ts`, `intervals/sync.test.ts`, `dashboard/dashboard.test.ts`,
+`conversations/route.test.ts`, `conversations/[id]/route.test.ts`,
+`llm/evidence-labels.test.ts`, `activities/[id]/analysis/route.test.ts`.
 
 La suite repository couvre les contraintes uniques, l'upsert des activités
 synchronisées, la validation des séances manuelles, les confirmations, l'upsert
@@ -37,9 +39,25 @@ strip de `questions_to_consider`), la persistance de `model` et `prompt_version`
 sur le message `assistant` d'une conversation, les payloads JSON et les
 transactions garantissant un contexte actif et un objectif principal actif.
 
-Le format de sortie du débrief (`schemas.test.ts`) : contrat `1.2` sans
-`questions_to_consider`, bornes `key_takeaways` (1–3), compat ascendante par
-strip, et `performanceProfileSchema`.
+Le format de sortie du débrief (`schemas.test.ts`) : contrat `1.4` avec
+`level1` structuré (verdict parmi les 4 valeurs autorisées, au moins une
+preuve, narratif nullable), rejet d'un payload `<= 1.3` (sans `level1`),
+compat ascendante par strip d'anciens champs retirés (`questions_to_consider`,
+`key_takeaways`), `performanceProfileSchema`, et `debriefLlmOutputSchema`
+(vérifie que `verdict`/`verdictEvidence` sont absents du schéma soumis à
+Gemini).
+
+Le verdict de niveau 1 (`analysis/verdict.test.ts`) : une table de cas par
+verdict — séance homogène (`well_executed`), fartlek/progressive/technical_
+variation_possible jamais `miscalibrated` sans intention déclarée contredite,
+intention déclarée et contredite (`miscalibrated`), intention `libre`/`autre`
+jamais suffisante, séance irrégulière sans structure fiable
+(`partly_successful` au plus), `not_evaluable` sans aucun signal exploitable.
+La régularité intra-séance (`analysis/regularity.test.ts`) : dégradation
+calculée uniquement sur les segments `work` d'une séance structurée (jamais
+warmup/cooldown/récupération), repli sur l'ensemble des segments pour une
+séance continue sans segment de travail, données insuffisantes en dessous de
+2 segments exploitables.
 
 Le calcul de résumé de streams (`analysis/stream-summary.test.ts`) : meilleur
 effort par durée de référence, fenêtres courtes plus rapides que les longues,
@@ -48,7 +66,9 @@ activités trop courtes et de l'absence de FC/distance.
 
 Le profil de performance (`analysis/performance-profile.test.ts`) : agrégation
 du meilleur effort par durée sur plusieurs activités, date de l'activité source
-sur chaque effort retenu, `key_takeaways` des débriefs récents, comptages,
+sur chaque effort retenu, `recentKeyTakeaways` agrégés depuis les champs
+narratifs de niveau 1 (`level1.notableVsHistory`/`mainFocus`/`nextExperiment`)
+des débriefs récents, comptages,
 profil vide cohérent, exclusion des résumés d'une autre version de format et
 des résumés hors fenêtre de 20 semaines (comptés au total, pas dans la
 fenêtre).
@@ -60,8 +80,25 @@ plus rapides, `freshnessAlert` levé si aucun point retenu n'a moins de
 
 `llm/context.test.ts` couvre en plus : le `thresholdEstimate` du débrief
 alimenté par les résumés en cache dans la fenêtre (confiance ≠ `insufficient`,
-`criticalSpeedMps` non nul) et le maintien de la confiance `insufficient` sans
-résumé en cache.
+`criticalSpeedMps` non nul), le maintien de la confiance `insufficient` sans
+résumé en cache, ainsi que la comparaison historique structurée — candidat
+avec cache de détail utilisé comme signature mesurée, candidat sans cache
+exclu (avec le message dédié « pas encore préparé localement »), et
+l'absence de repli silencieux vers le mode continu quand ni seuil dynamique
+ni référence déclarée ne sont exploitables (`recentTrendDays` reste 112,
+jamais 90, dans ce cas).
+
+Les modules de signature de séance sont testés indépendamment, en pur :
+`analysis/segment-roles.test.ts` (attribution warmup/work/recovery/cooldown,
+confiance basse si moins de 2 segments exploitables ou plus de 30 %
+`unknown`) ; `analysis/variation-profile.test.ts` (steady/progressive/
+intervalled/fartlek_like/technical_variation_possible, y compris la
+non-confusion entre une progression continue et une accélération finale
+isolée) ; `analysis/session-signature.test.ts` (signature `measured`/
+`unavailable`, score de comparabilité, garde-fous récupération/dénivelé,
+similarité neutre quand une donnée manque) ; `analysis/declared-reference.test.ts`
+(conversion stricte d'un repère déclaré en vitesse, `null` — jamais une
+valeur devinée — pour tout texte hors du format d'allure reconnu).
 
 La route `POST /api/performance-profile/recalculate` : rejet hors bornes
 `weeks`, fenêtre bornée (activités hors période non appelées), activités déjà

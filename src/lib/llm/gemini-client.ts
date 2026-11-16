@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { activityAnalysisResponseSchema, conversationResponseSchema, type ActivityAnalysisContext } from "./schemas";
+import { activityAnalysisResponseSchema, debriefLlmOutputSchema, conversationResponseSchema, type ActivityAnalysisContext } from "./schemas";
 import type { ConversationContext } from "./conversation-context";
 import { z } from "zod";
 
@@ -18,14 +18,18 @@ CRITICAL BOUNDARIES (non-negotiable):
 - NEVER mention internal variable names or technical field names such as validPointCount, thresholdEstimate, percentOfThreshold, or any other private implementation names in the final text. Rewrite them in plain language instead.
 
 INSTRUCTIONS:
-1. Write 1 to 3 short key_takeaways at the top, in simple language, without jargon.
+1. The context includes verdictSignals.verdict (one of well_executed, partly_successful, miscalibrated, not_evaluable) and verdictSignals.verdictEvidence, both computed deterministically by the server. This verdict is a FIXED FACT: you MUST NOT restate, rename, contradict, or produce a different verdict anywhere in your output — there is no field for it in the schema you must fill. Your job is only to fill level1.notableVsHistory, level1.mainFocus, level1.nextExperiment, each a short plain-language sentence consistent with verdictSignals, or null when not clearly supported by the evidence (never pad with generic text — null is a normal, expected value for any of the three).
+   - notableVsHistory: what is notable versus this athlete's habits, only if well supported by historicalComparison or verdictSignals.verdictEvidence.
+   - mainFocus: the single most useful point to work on, only if the evidence justifies one; otherwise null.
+   - nextExperiment: one concrete experiment/target to try in a similar future session, only if justified; otherwise null.
+   - If verdictSignals.verdictEvidence mentions a variation signal described as not clearly attributable to a specific intent (e.g. brief intensity variations with unclear intent), never rephrase it as a confirmed technical drill, strides, or deliberate technique work — describe it exactly as prudently as the evidence states it.
 2. Cite the metrics and comparisons supporting each recommendation.
 3. Every speed mentioned in summary, observed_facts, technical_recommendations, or next_session_pace_guidance MUST be expressed as min:sec/km pace in French format (for example, "4:12/km" or "4:12 /km"). Never use m/s or km/h in textual output. You may reason internally in other units, but all output text must use min/km pace.
 4. Fill next_session_pace_guidance.recommendedPaceDisplay with the recommended min:sec /km pace. Keep recommendedPaceMps only as the internal numeric value.
 5. For exercises, provide concrete structure (duration, reps, intensity zone).
 6. Distinguish facts (observed), comparisons (historical), and hypotheses.
 7. ROUNDING (strict, prose AND JSON): heart rate to the nearest whole bpm, pace values to the nearest whole second, percentages to the nearest whole percent. Never emit more precision than that.
-8. NEVER write internal field or variable names in any output string (examples of forbidden tokens: validPointCount, thresholdEstimate, percentOfThreshold, criticalSpeedMps, confidenceLevel, coverageByZone, biasHint, key_takeaways). Always paraphrase in plain French.
+8. NEVER write internal field or variable names in any output string (examples of forbidden tokens: validPointCount, thresholdEstimate, percentOfThreshold, criticalSpeedMps, confidenceLevel, coverageByZone, biasHint, verdictSignals, verdictEvidence). Always paraphrase in plain French.
 9. There is no "questions to consider" section. Any clarification that affects the reliability of a conclusion goes into limitations. Everything else that is not an actionable recommendation or a concrete next step is omitted. Keep technical_recommendations and next_session_pace_guidance distinct and non-duplicative.
 10. zone_classification_summary MUST state which threshold pace value was used to classify the zones AND where it comes from. thresholdEstimate.basis is always "recent_history": the threshold is computed from the athlete's best efforts over the last thresholdEstimate.windowWeeks weeks across several sessions (thresholdEstimate.retainedPoints lists the source activities and dates), NOT from this single session — say this plainly so the reader is not misled. If thresholdEstimate.usedDeclaredReferenceFallback is true, the computed estimate is too weak (confidence "insufficient" or "low"): classify the zones using the user-declared performance reference from the athlete context instead, and state explicitly that the zones rely on that declared reference and not on a computed threshold. Also reflect thresholdEstimate.staleWarning.message in limitations when it is non-null.
 11. Always include limitations and data gaps.
@@ -57,7 +61,15 @@ Respond with ONLY the JSON object, no markdown wrapper or additional text.`;
 //          plausibilité (efforts longs non maximaux désormais écartés).
 //          Détectée par comparaison stricte prompt_version stocké vs courant
 //          -> bandeau "fraîcheur de logique", non bloquant (cf. docs/07).
-export const DEBRIEF_PROMPT_VERSION = "1.3";
+//   1.4 -> remplacement de key_takeaways par un niveau 1 structuré
+//          (level1) : verdict catégoriel calculé côté serveur par
+//          analysis/verdict.ts (jamais par le LLM — absent du schéma
+//          soumis à Gemini, cf. debriefLlmOutputSchema) + preuves
+//          déterministes (verdictEvidence) ; notableVsHistory/mainFocus/
+//          nextExperiment restent narratifs, nullables, remplis par le LLM
+//          dans les limites du verdict fourni. Les analyses <=1.3 n'ont pas
+//          ce champ requis : détectées "outdated" à la lecture, à régénérer.
+export const DEBRIEF_PROMPT_VERSION = "1.4";
 //
 // CONVERSATION_PROMPT_VERSION
 //   1.0 -> premier format explicitement versionné de conversationResponseSchema.
@@ -116,7 +128,7 @@ Provide a structured technical analysis following the output schema.`;
             config: {
               systemInstruction: SYSTEM_PROMPT,
               responseMimeType: "application/json",
-              responseJsonSchema: z.toJSONSchema(activityAnalysisResponseSchema),
+              responseJsonSchema: z.toJSONSchema(debriefLlmOutputSchema),
             },
           });
           break;
@@ -172,12 +184,27 @@ Provide a structured technical analysis following the output schema.`;
       });
     }
 
-    let validatedResponse: z.infer<typeof activityAnalysisResponseSchema>;
+    let narrativeResponse: z.infer<typeof debriefLlmOutputSchema>;
     try {
-      validatedResponse = activityAnalysisResponseSchema.parse(parsedResponse);
+      narrativeResponse = debriefLlmOutputSchema.parse(parsedResponse);
     } catch (error) {
       throw new InvalidResponseError(`Response validation failed: ${error instanceof Error ? error.message : "unknown"}`, {
         response: parsedResponse,
+      });
+    }
+
+    // Fusion serveur (verdict + preuves, jamais produits par le LLM) + LLM
+    // (narratif) — validée dans son ensemble contre le contrat complet avant
+    // d'être renvoyée. Cf. Décision D4 du plan de consolidation.
+    let validatedResponse: z.infer<typeof activityAnalysisResponseSchema>;
+    try {
+      validatedResponse = activityAnalysisResponseSchema.parse({
+        ...narrativeResponse,
+        level1: { ...context.verdictSignals, ...narrativeResponse.level1 },
+      });
+    } catch (error) {
+      throw new InvalidResponseError(`Response validation failed after merging server-computed verdict: ${error instanceof Error ? error.message : "unknown"}`, {
+        response: narrativeResponse,
       });
     }
 

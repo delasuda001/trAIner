@@ -6,6 +6,7 @@ import { createConversationRepository } from "@/lib/db/repositories/conversation
 import { buildConversationContext } from "@/lib/llm/conversation-context";
 import { buildPerformanceProfile } from "@/lib/analysis/performance-profile";
 import { GeminiAnalysisClient } from "@/lib/llm/gemini-client";
+import { buildActivityLookup, extractEvidenceActivityIds } from "@/lib/llm/evidence-labels";
 
 const inputSchema = z.object({ question: z.string().trim().min(1).max(4000) });
 
@@ -26,7 +27,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const context = await buildConversationContext(question, database, previousMessages, { performanceProfile });
     const generated = await new GeminiAnalysisClient().analyzeConversation(context);
     const assistant = await repository.addMessage({ id: randomUUID(), threadId: id, role: "assistant", contentJson: JSON.stringify(generated.response), model: generated.model, promptVersion: generated.promptVersion, createdAt: new Date().toISOString() });
-    return NextResponse.json({ threadId: id, messageId: assistant.id, response: generated.response, scope: context.scope, model: generated.model }, { status: 201 });
+    const activityLookup = await buildActivityLookup(database, extractEvidenceActivityIds([generated.response]));
+    return NextResponse.json({ threadId: id, messageId: assistant.id, response: generated.response, scope: context.scope, model: generated.model, activityLookup }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "La question est invalide", requestId } }, { status: 400 });
     console.error("[conversations] message error", { requestId, message: error instanceof Error ? error.message : "unknown" });

@@ -104,6 +104,15 @@ export const segmentZoneSchema = z.object({
   percentOfThreshold: z.number().nullable(),
 });
 
+export const comparabilityGuardrailSchema = z.enum(["recovery_mismatch", "elevation_mismatch"]);
+
+export const comparabilityBreakdownEntrySchema = z.object({
+  activityId: z.string(),
+  score: z.number(),
+  tier: z.enum(["high", "moderate", "excluded"]),
+  guardrailsApplied: z.array(comparabilityGuardrailSchema),
+});
+
 export const historicalComparisonSchema = z.object({
   comparableActivitiesCount: z.number(),
   recentTrendDays: z.number(),
@@ -112,7 +121,50 @@ export const historicalComparisonSchema = z.object({
   hrDeltaBpm: z.number().nullable(),
   cadenceDeltaSpm: z.number().nullable(),
   observations: z.array(z.string()),
+  /** true si la comparaison structurée s'appuie sur un repère déclaré (seuil calculé insuffisant), jamais présenté comme une estimation automatique. */
+  usedDeclaredReferenceFallback: z.boolean().default(false),
+  /** Détail par candidat retenu (score, tier, garde-fous), pour la transparence méthodologique du niveau 3. `null` en mode continu ou si aucun candidat mesuré. */
+  comparabilityBreakdown: z.array(comparabilityBreakdownEntrySchema).nullable().default(null),
 });
+
+export type HistoricalComparison = z.infer<typeof historicalComparisonSchema>;
+
+export const debriefVerdictSchema = z.enum(["well_executed", "partly_successful", "miscalibrated", "not_evaluable"]);
+
+export const verdictEvidenceItemSchema = z.object({
+  metric: z.enum([
+    "pace_degradation_first_vs_second_half",
+    "pace_cv_work_segments",
+    "pace_delta_vs_comparable",
+    "declared_intent_contradiction",
+    "variation_profile_signal",
+    "not_evaluable_reason",
+  ]),
+  currentValue: z.number(),
+  comparisonValue: z.number().nullable(),
+  unit: z.enum(["%", "s_per_km", "bpm", "ratio"]),
+  direction: z.enum(["higher", "lower", "equal", "n/a"]),
+  label: z.string(),
+});
+
+/** Calculé côté serveur par `classifySessionVerdict` (analysis/verdict.ts) — jamais soumis au LLM en écriture. */
+export const level1VerdictSchema = z.object({
+  verdict: debriefVerdictSchema,
+  verdictEvidence: z.array(verdictEvidenceItemSchema).min(1),
+});
+
+/** Ce que le LLM est autorisé à produire : narratif uniquement, jamais le verdict lui-même. */
+export const level1NarrativeSchema = z.object({
+  notableVsHistory: z.string().nullable(),
+  mainFocus: z.string().nullable(),
+  nextExperiment: z.string().nullable(),
+});
+
+/** Objet final persisté : fusion serveur (verdict) + LLM (narratif), cf. route POST /api/activities/[id]/analysis. */
+export const level1SynthesisSchema = level1VerdictSchema.merge(level1NarrativeSchema);
+
+export type Level1Synthesis = z.infer<typeof level1SynthesisSchema>;
+export type Level1Narrative = z.infer<typeof level1NarrativeSchema>;
 
 export const activityAnalysisContextSchema = z.object({
   activityId: z.string(),
@@ -153,6 +205,8 @@ export const activityAnalysisContextSchema = z.object({
   thresholdEstimate: thresholdEstimateSchema,
   segmentZones: z.array(segmentZoneSchema),
   historicalComparison: historicalComparisonSchema.nullable(),
+  /** Verdict + preuves calculés côté serveur (analysis/verdict.ts) : le LLM les reçoit comme des faits, ne les produit ni ne les modifie jamais. */
+  verdictSignals: level1VerdictSchema,
   activeGoals: z.array(
     z.object({
       id: z.string(),
@@ -177,7 +231,7 @@ export const activityAnalysisContextSchema = z.object({
 export type ActivityAnalysisContext = z.infer<typeof activityAnalysisContextSchema>;
 
 export const activityAnalysisResponseSchema = z.object({
-  key_takeaways: z.array(z.string()).min(1).max(3),
+  level1: level1SynthesisSchema,
   summary: z.string(),
   observed_facts: z.array(z.string()),
   historical_comparison: z.string().nullable(),
@@ -198,6 +252,16 @@ export const activityAnalysisResponseSchema = z.object({
 });
 
 export type ActivityAnalysisResponse = z.infer<typeof activityAnalysisResponseSchema>;
+
+/**
+ * Schéma réellement soumis à Gemini pour le débrief : `level1` y est
+ * remplacé par sa seule partie narrative (`level1NarrativeSchema`). Le
+ * modèle ne voit jamais `verdict`/`verdictEvidence` dans le schéma qu'il
+ * doit remplir — structurellement incapable de les produire ou de les
+ * modifier (cf. Décision D4 du plan de consolidation).
+ */
+export const debriefLlmOutputSchema = activityAnalysisResponseSchema.omit({ level1: true }).extend({ level1: level1NarrativeSchema });
+export type DebriefLlmOutput = z.infer<typeof debriefLlmOutputSchema>;
 
 export const conversationScopeSchema = z.object({
   kind: z.enum(["activity", "trend", "goal", "data_gap"]),

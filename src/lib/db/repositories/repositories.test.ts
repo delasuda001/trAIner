@@ -85,8 +85,10 @@ describe("repositories SQLite", () => {
 
   it("signale une analyse persistée dans un ancien format sans planter à la lecture", async () => {
     const repository = createAnalysisRepository(database);
-    // Payload conforme au contrat de réponse *avant* l'ajout de key_takeaways.
+    // Payload conforme au contrat de réponse *avant* le niveau 1 structuré
+    // (contrats <= 1.3, key_takeaways au lieu de level1).
     const legacyResponse = {
+      key_takeaways: ["Séance réussie."],
       summary: "Séance de seuil régulière.",
       observed_facts: ["Allure stable autour de 4:10/km."],
       historical_comparison: null,
@@ -106,7 +108,7 @@ describe("repositories SQLite", () => {
       historicalComparisonJson: null,
       llmResponseJson: JSON.stringify(legacyResponse),
       llmModel: "gemini-legacy",
-      promptVersion: "1.0",
+      promptVersion: "1.3",
       createdAt: now,
       updatedAt: now,
     });
@@ -117,19 +119,29 @@ describe("repositories SQLite", () => {
     const parsed = parseStoredAnalysis(stored!);
     expect(parsed.status).toBe("outdated");
     if (parsed.status === "outdated") {
-      expect(parsed.issues.some((issue) => issue.includes("key_takeaways"))).toBe(true);
+      expect(parsed.issues.some((issue) => issue.includes("level1"))).toBe(true);
     }
 
-    // Une analyse "1.1" (avec key_takeaways ET l'ancien questions_to_consider)
-    // reste lisible sous le contrat 1.2 : le champ retiré est simplement strippé.
+    // Une analyse au format 1.4 (avec level1 ET l'ancien questions_to_consider,
+    // resté par erreur) reste lisible : le champ retiré est simplement strippé.
+    const currentResponse = {
+      ...legacyResponse,
+      level1: {
+        verdict: "well_executed",
+        verdictEvidence: [{ metric: "pace_cv_work_segments", currentValue: 2, comparisonValue: null, unit: "%", direction: "n/a", label: "Variation d'allure de 2 % sur les segments analysés." }],
+        notableVsHistory: null,
+        mainFocus: null,
+        nextExperiment: null,
+      },
+    };
     await repository.create({
       id: "analysis-current",
       intervalsActivityId: "i179394628",
       deterministicMetricsJson: "{}",
       historicalComparisonJson: null,
-      llmResponseJson: JSON.stringify({ ...legacyResponse, key_takeaways: ["Séance réussie."], questions_to_consider: ["ancienne question"] }),
+      llmResponseJson: JSON.stringify(currentResponse),
       llmModel: "gemini-3.8-flash",
-      promptVersion: "1.1",
+      promptVersion: "1.4",
       createdAt: "2026-08-25T12:05:00.000Z",
       updatedAt: "2026-08-25T12:05:00.000Z",
     });
@@ -137,7 +149,8 @@ describe("repositories SQLite", () => {
     expect(current.status).toBe("ok");
     if (current.status === "ok") {
       expect(current.analysis).not.toHaveProperty("questions_to_consider");
-      expect(current.analysis.key_takeaways).toEqual(["Séance réussie."]);
+      expect(current.analysis).not.toHaveProperty("key_takeaways");
+      expect(current.analysis.level1.verdict).toBe("well_executed");
     }
   });
 

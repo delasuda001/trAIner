@@ -106,6 +106,16 @@ Le système utilise trois horizons différents, chacun adapté à sa grandeur :
 Elles ne sont pas harmonisées volontairement : les rapprocher dégraderait au
 moins un des trois usages.
 
+**Précision** : la requête du vivier de candidats (`findByPeriod`) est bien
+bornée à 90 jours dans les deux modes de comparaison (structuré et continu,
+cf. `docs/06`). Le champ `recentTrendDays` renvoyé dans
+`historicalComparisonSchema` vaut cependant **112** en mode structuré (pas
+90) — une constante préexistante, distincte de la fenêtre de requête
+réelle, non corrigée par le chantier de comparaison structurée (cf.
+`src/lib/llm/context.ts`, `buildHistoricalComparisonForWorkout`). À
+clarifier ou harmoniser dans un chantier ultérieur si cette différence
+prête à confusion.
+
 ### Limites connues du filtrage sur points agrégés
 
 - Le **filtre de plausibilité de dégradation** compare la vitesse d'un point

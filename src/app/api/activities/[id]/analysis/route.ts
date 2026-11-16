@@ -5,10 +5,11 @@ import { createAnalysisRepository, parseStoredAnalysis } from "@/lib/db/reposito
 import { buildActivityAnalysisContext } from "@/lib/llm/context";
 import { GeminiAnalysisClient, DEBRIEF_PROMPT_VERSION } from "@/lib/llm/gemini-client";
 import { serializeJson } from "@/lib/db/contracts";
-import { activityAnalysisResponseSchema, thresholdEstimateSchema } from "@/lib/llm/schemas";
+import { activityAnalysisResponseSchema, thresholdEstimateSchema, historicalComparisonSchema } from "@/lib/llm/schemas";
 import type { z } from "zod";
 
 type FullThresholdEstimate = z.infer<typeof thresholdEstimateSchema>;
+type FullHistoricalComparison = z.infer<typeof historicalComparisonSchema>;
 
 /** Sous-ensemble du bloc seuil exposé au client (provenance + confiance + fraîcheur). */
 function toClientThresholdEstimate(estimate: FullThresholdEstimate) {
@@ -44,6 +45,34 @@ function extractStoredThresholdEstimate(deterministicMetricsJson: string): Retur
   return parsed.success ? toClientThresholdEstimate(parsed.data) : null;
 }
 
+/** Sous-ensemble de la comparaison historique exposé au client (transparence méthodologique, niveau 3). */
+function toClientHistoricalComparison(comparison: FullHistoricalComparison) {
+  return {
+    comparableActivitiesCount: comparison.comparableActivitiesCount,
+    insufficientDataReason: comparison.insufficientDataReason,
+    usedDeclaredReferenceFallback: comparison.usedDeclaredReferenceFallback,
+    comparabilityBreakdown: comparison.comparabilityBreakdown,
+  };
+}
+
+/**
+ * Relit la comparaison historique persistée dans `historical_comparison_json`.
+ * Les analyses antérieures au chantier de comparaison structurée n'ont pas
+ * les champs `usedDeclaredReferenceFallback`/`comparabilityBreakdown` ->
+ * `null` proprement plutôt qu'une valeur fabriquée.
+ */
+function extractStoredHistoricalComparison(historicalComparisonJson: string | null): ReturnType<typeof toClientHistoricalComparison> | null {
+  if (!historicalComparisonJson) return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(historicalComparisonJson);
+  } catch {
+    return null;
+  }
+  const parsed = historicalComparisonSchema.safeParse(raw);
+  return parsed.success ? toClientHistoricalComparison(parsed.data) : null;
+}
+
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const requestId = randomUUID();
@@ -75,6 +104,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       // Logique : non bloquant, contenu affichable, mais généré avec un prompt antérieur.
       logicStale: latest.promptVersion !== DEBRIEF_PROMPT_VERSION,
       thresholdEstimate: extractStoredThresholdEstimate(latest.deterministicMetricsJson),
+      historicalComparison: extractStoredHistoricalComparison(latest.historicalComparisonJson),
       model: latest.llmModel,
       promptVersion: latest.promptVersion,
       currentPromptVersion: DEBRIEF_PROMPT_VERSION,
@@ -131,6 +161,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       formatOutdated: false,
       logicStale: false,
       thresholdEstimate: toClientThresholdEstimate(context.thresholdEstimate),
+      historicalComparison: context.historicalComparison ? toClientHistoricalComparison(context.historicalComparison) : null,
       model: analysis.llmModel,
       promptVersion: analysis.promptVersion,
       currentPromptVersion: DEBRIEF_PROMPT_VERSION,

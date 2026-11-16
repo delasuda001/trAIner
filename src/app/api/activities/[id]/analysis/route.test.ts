@@ -14,7 +14,11 @@ let database: AppDatabase;
 const now = "2026-09-01T00:00:00.000Z";
 
 const debriefPayload = {
-  key_takeaways: ["Séance régulière"],
+  level1: {
+    verdict: "well_executed",
+    verdictEvidence: [{ metric: "pace_cv_work_segments", currentValue: 1, comparisonValue: null, unit: "%", direction: "n/a", label: "Variation d'allure de 1 % sur les segments analysés." }],
+    notableVsHistory: null, mainFocus: null, nextExperiment: null,
+  },
   summary: "s", observed_facts: [], historical_comparison: null, zone_classification_summary: "z",
   technical_recommendations: [], next_session_pace_guidance: null, hypotheses: [], limitations: [], next_steps: [], safety_note: null,
 };
@@ -93,12 +97,12 @@ describe("GET /api/activities/[id]/analysis", () => {
     const stale = await (await GET(new Request("http://localhost"), params("i3"))).json();
     expect(stale.logicStale).toBe(true);
     expect(stale.promptVersion).toBe("1.2");
-    expect(stale.currentPromptVersion).toBe("1.3");
+    expect(stale.currentPromptVersion).toBe("1.4");
     // le contenu reste affichable (forme valide)
     expect(stale.formatOutdated).toBe(false);
     expect(stale.analysis).not.toBeNull();
 
-    await insertAnalysis("an-fresh", "i4", now, { threshold: storedThreshold }, "1.3");
+    await insertAnalysis("an-fresh", "i4", now, { threshold: storedThreshold }, "1.4");
     const fresh = await (await GET(new Request("http://localhost"), params("i4"))).json();
     expect(fresh.logicStale).toBe(false);
   });
@@ -106,5 +110,43 @@ describe("GET /api/activities/[id]/analysis", () => {
   it("404 quand aucune analyse n'existe", async () => {
     const response = await GET(new Request("http://localhost"), params("absent"));
     expect(response.status).toBe(404);
+  });
+
+  it("relit la comparaison historique persistée (comparabilityBreakdown, usedDeclaredReferenceFallback)", async () => {
+    const storedComparison = {
+      comparableActivitiesCount: 1,
+      recentTrendDays: 112,
+      insufficientDataReason: null,
+      paceDeltaPct: -1.2,
+      hrDeltaBpm: null,
+      cadenceDeltaSpm: null,
+      observations: ["1 séance comparable détectée (structure réellement mesurée) pour cette zone et ce format de répétition."],
+      usedDeclaredReferenceFallback: true,
+      comparabilityBreakdown: [{ activityId: "i-hist", score: 0.82, tier: "high", guardrailsApplied: [] }],
+    };
+    await database.insert(analyses).values({
+      id: "an-hist", intervalsActivityId: "i5",
+      deterministicMetricsJson: JSON.stringify({ historicalComparison: storedComparison }),
+      historicalComparisonJson: JSON.stringify(storedComparison),
+      llmResponseJson: JSON.stringify(debriefPayload), llmModel: "gemini-test", promptVersion: "1.3",
+      createdAt: now, updatedAt: now,
+    });
+
+    const response = await GET(new Request("http://localhost"), params("i5"));
+    const payload = await response.json();
+
+    expect(payload.historicalComparison).toEqual({
+      comparableActivitiesCount: 1,
+      insufficientDataReason: null,
+      usedDeclaredReferenceFallback: true,
+      comparabilityBreakdown: [{ activityId: "i-hist", score: 0.82, tier: "high", guardrailsApplied: [] }],
+    });
+  });
+
+  it("renvoie historicalComparison: null pour une analyse ancienne sans ce champ", async () => {
+    await insertAnalysis("an-old-hist", "i6", now, { threshold: storedThreshold });
+    const response = await GET(new Request("http://localhost"), params("i6"));
+    const payload = await response.json();
+    expect(payload.historicalComparison).toBeNull();
   });
 });

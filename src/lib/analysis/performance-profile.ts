@@ -142,8 +142,9 @@ async function buildRecentKeyTakeaways(database: AppDatabase): Promise<string[]>
   for (const llmResponseJson of latestPerActivity) {
     const parsed = activityAnalysisResponseSchema.safeParse(safeJsonParse(llmResponseJson));
     if (!parsed.success) continue;
-    for (const takeaway of parsed.data.key_takeaways) {
-      if (!takeaways.includes(takeaway)) takeaways.push(takeaway);
+    const narrative = [parsed.data.level1.notableVsHistory, parsed.data.level1.mainFocus, parsed.data.level1.nextExperiment];
+    for (const takeaway of narrative) {
+      if (takeaway && !takeaways.includes(takeaway)) takeaways.push(takeaway);
     }
   }
   return takeaways.slice(0, MAX_KEY_TAKEAWAYS);

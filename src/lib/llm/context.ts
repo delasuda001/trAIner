@@ -4,18 +4,53 @@ import { createActivityContextRepository } from "../db/repositories/activity-con
 import { createAthleteContextRepository } from "../db/repositories/athlete-context-repository";
 import { createGoalRepository } from "../db/repositories/goal-repository";
 import { createSyncedActivityRepository } from "../db/repositories/synced-activity-repository";
+import { createActivityDetailCacheRepository } from "../db/repositories/activity-detail-cache-repository";
 import { loadActivityDetail } from "../activities/detail";
 import { estimateThreshold } from "../analysis/thresholds";
 import { aggregateCachedEfforts, toThresholdInput } from "../analysis/threshold-basis";
 import { buildThresholdStaleMessage } from "../analysis/confidence-banner";
 import { classifySegmentInZone } from "../analysis/zones";
 import { segmentActivity } from "../analysis/segmentation";
-import { parseJson, athleteContextSchema } from "../db/contracts";
+import { buildSessionSignature, computeComparability, type SessionSignature } from "../analysis/session-signature";
+import { resolveDeclaredReferenceSpeedMps } from "../analysis/declared-reference";
+import { classifySegmentRoles } from "../analysis/segment-roles";
+import { classifySessionVariationProfile } from "../analysis/variation-profile";
+import { assessSessionRegularity } from "../analysis/regularity";
+import { classifySessionVerdict } from "../analysis/verdict";
+import { parseJson, athleteContextSchema, cachedIntervalsSchema } from "../db/contracts";
+import type { AthleteContext } from "../db/contracts";
+import type { SyncedActivity } from "../db/types";
 import { buildPerformanceProfile } from "../analysis/performance-profile";
-import type { ActivityAnalysisContext } from "./schemas";
+import type { ActivityAnalysisContext, HistoricalComparison } from "./schemas";
 
 function safeNumber(value: number | null | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+export type ComparisonThresholdSource = "dynamic" | "declared_reference" | "none";
+
+/**
+ * Résout la vitesse de référence utilisée par la comparaison historique
+ * structurée, en 3 cas explicites (jamais de repli silencieux vers une
+ * comparaison d'allure brute quand aucune des deux n'est exploitable — ce
+ * cas est traité par l'appelant, pas ici) :
+ * 1. seuil dynamique exploitable ;
+ * 2. seuil dynamique insuffisant, référence déclarée exploitable ;
+ * 3. ni l'un ni l'autre.
+ */
+export function resolveComparisonThresholdSpeedMps(
+  criticalSpeedMps: number | null,
+  confidenceLevel: "insufficient" | "low" | "moderate" | "good",
+  performanceReferences: ReadonlyArray<{ value: string }> | undefined
+): { speedMps: number | null; source: ComparisonThresholdSource } {
+  if (criticalSpeedMps != null && confidenceLevel !== "insufficient") {
+    return { speedMps: criticalSpeedMps, source: "dynamic" };
+  }
+  const declaredSpeedMps = resolveDeclaredReferenceSpeedMps(performanceReferences);
+  if (declaredSpeedMps != null) {
+    return { speedMps: declaredSpeedMps, source: "declared_reference" };
+  }
+  return { speedMps: null, source: "none" };
 }
 
 export function getWorkRepBucket(durationS: number): "short" | "medium" | "long" {
@@ -24,59 +59,55 @@ export function getWorkRepBucket(durationS: number): "short" | "medium" | "long"
   return "long";
 }
 
+/**
+ * Comparaison historique d'une séance structurée, fondée sur des signatures
+ * de séance réellement mesurées (session-signature.ts) — jamais sur des
+ * caractéristiques fabriquées. `candidates` ne doit contenir que des
+ * signatures `signatureQuality: "measured"` (les candidats sans cache de
+ * détail local sont déjà exclus par l'appelant, cf. buildActivityAnalysisContext).
+ */
 export function buildHistoricalComparisonForWorkout(
-  current: {
-    averageSpeedMps: number | null;
-    dominantZone: string | null;
-    averagePercentOfThreshold: number | null;
-    averageWorkSegmentDurationS: number | null;
-    workSegmentCount: number;
-  },
-  candidates: Array<{
-    averageSpeedMps: number | null;
-    dominantZone: string | null;
-    averagePercentOfThreshold: number | null;
-    averageWorkSegmentDurationS: number | null;
-    workSegmentCount: number;
-    recentness?: number;
-  }>
-) {
-  const bucket = current.averageWorkSegmentDurationS == null ? null : getWorkRepBucket(current.averageWorkSegmentDurationS);
-  const comparable = candidates.filter((candidate) => {
-    const sameZone = current.dominantZone && candidate.dominantZone ? current.dominantZone === candidate.dominantZone : true;
-    const sameBucket = bucket == null || candidate.averageWorkSegmentDurationS == null ? true : bucket === getWorkRepBucket(candidate.averageWorkSegmentDurationS);
-    return sameZone && sameBucket && (candidate.workSegmentCount ?? 0) > 0;
-  });
+  current: SessionSignature,
+  candidates: SessionSignature[],
+  thresholdSource: "dynamic" | "declared_reference"
+): HistoricalComparison {
+  const usedDeclaredReferenceFallback = thresholdSource === "declared_reference";
 
-  const sortedComparable = [...comparable].sort((left, right) => {
-    const leftRecentness = left.recentness ?? Number.POSITIVE_INFINITY;
-    const rightRecentness = right.recentness ?? Number.POSITIVE_INFINITY;
-    return leftRecentness - rightRecentness;
-  });
+  const scored = candidates
+    .map((candidate) => ({ candidate, comparability: computeComparability(current, candidate) }))
+    .filter((entry): entry is { candidate: SessionSignature; comparability: NonNullable<ReturnType<typeof computeComparability>> } => entry.comparability != null && entry.comparability.tier !== "excluded");
 
-  if (sortedComparable.length === 0) {
+  if (scored.length === 0) {
     return {
       comparableActivitiesCount: 0,
       recentTrendDays: 112,
-      insufficientDataReason: "aucune séance comparable trouvée pour cette zone et ce type de répétition : comparaison historique non fiable.",
+      insufficientDataReason: "aucune séance comparable trouvée pour cette zone et ce type de répétition (structure réellement mesurée) : comparaison historique non fiable.",
       paceDeltaPct: null,
       hrDeltaBpm: null,
       cadenceDeltaSpm: null,
       observations: ["aucune séance comparable trouvée dans la fenêtre historique pour cette zone et ce type de répétition."],
+      usedDeclaredReferenceFallback,
+      comparabilityBreakdown: null,
     };
   }
 
-  const values = sortedComparable
-    .map((candidate) => candidate.averagePercentOfThreshold ?? null)
-    .filter((value): value is number => value != null);
-  const historicalAverage = values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
-  const currentPercent = current.averagePercentOfThreshold ?? current.averageSpeedMps ?? null;
-  const mostRecent = sortedComparable[0];
-  const recentPercent = mostRecent.averagePercentOfThreshold ?? mostRecent.averageSpeedMps ?? null;
+  const tierRank = (tier: "high" | "moderate" | "excluded") => (tier === "high" ? 0 : tier === "moderate" ? 1 : 2);
+  const sorted = [...scored].sort((left, right) => {
+    if (tierRank(left.comparability.tier) !== tierRank(right.comparability.tier)) return tierRank(left.comparability.tier) - tierRank(right.comparability.tier);
+    if (left.comparability.guardrailsApplied.length !== right.comparability.guardrailsApplied.length) return left.comparability.guardrailsApplied.length - right.comparability.guardrailsApplied.length;
+    return new Date(right.candidate.activityDate).getTime() - new Date(left.candidate.activityDate).getTime();
+  });
+
+  const mostRecent = sorted[0];
+  const currentPercent = current.averagePercentOfThreshold;
+  const recentPercent = mostRecent.candidate.averagePercentOfThreshold;
   const paceDeltaPct = currentPercent != null && recentPercent != null ? ((currentPercent - recentPercent) / recentPercent) * 100 : null;
 
+  const values = sorted.map((entry) => entry.candidate.averagePercentOfThreshold).filter((value): value is number => value != null);
+  const historicalAverage = values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+
   const observations = [
-    `${sortedComparable.length} ${sortedComparable.length > 1 ? "séances" : "séance"} comparable${sortedComparable.length > 1 ? "s" : ""} détectée${sortedComparable.length > 1 ? "s" : ""} pour cette zone et ce format de répétition.`,
+    `${sorted.length} ${sorted.length > 1 ? "séances" : "séance"} comparable${sorted.length > 1 ? "s" : ""} détectée${sorted.length > 1 ? "s" : ""} (structure réellement mesurée) pour cette zone et ce format de répétition.`,
     historicalAverage != null && currentPercent != null
       ? `Moyenne historique sur cette base : ${historicalAverage.toFixed(1)} % de seuil.`
       : "Moyenne historique indisponible pour cette base de comparaison.",
@@ -84,16 +115,171 @@ export function buildHistoricalComparisonForWorkout(
       ? `Évolution vs la plus récente : ${paceDeltaPct.toFixed(1)} %.`
       : "Évolution historique non calculable.",
   ];
+  if (usedDeclaredReferenceFallback) {
+    observations.push("Comparaison basée sur votre repère de performance déclaré (seuil calculé insuffisant), jamais une estimation automatique.");
+  }
+  if (mostRecent.comparability.guardrailsApplied.includes("recovery_mismatch")) {
+    observations.push("Récupération très différente entre les séances comparées : à interpréter avec prudence.");
+  }
+  if (mostRecent.comparability.guardrailsApplied.includes("elevation_mismatch")) {
+    observations.push("Dénivelé très différent entre les séances comparées : à interpréter avec prudence.");
+  }
 
   return {
-    comparableActivitiesCount: sortedComparable.length,
+    comparableActivitiesCount: sorted.length,
     recentTrendDays: 112,
-    insufficientDataReason: sortedComparable.length < 2 ? "Seulement 1 séance comparable disponible ; interprétation prudente." : null,
+    insufficientDataReason: sorted.length < 2 ? "Seulement 1 séance comparable disponible (structure mesurée) ; interprétation prudente." : null,
     paceDeltaPct,
     hrDeltaBpm: null,
     cadenceDeltaSpm: null,
     observations,
+    usedDeclaredReferenceFallback,
+    comparabilityBreakdown: sorted.map((entry) => ({
+      activityId: entry.candidate.activityId,
+      score: entry.comparability.score,
+      tier: entry.comparability.tier,
+      guardrailsApplied: entry.comparability.guardrailsApplied,
+    })),
   };
+}
+
+/**
+ * Détecte une structure travail/récupération plausible sans aucun seuil de
+ * référence, uniquement à partir de la variabilité brute des vitesses de
+ * segment (ratio vitesse max/min). Utilisée UNIQUEMENT pour éviter qu'une
+ * séance manifestement structurée (cf. §4.2 cas 3 : ni seuil dynamique, ni
+ * référence déclarée) ne retombe silencieusement sur la comparaison d'allure
+ * brute réservée aux séances réellement continues — jamais pour calculer un
+ * pourcentage de seuil ou une zone.
+ */
+function hasPlausibleWorkStructureWithoutThreshold(segments: Array<{ averageSpeedMps: number | null }>): boolean {
+  const speeds = segments.map((segment) => segment.averageSpeedMps).filter((value): value is number => value != null && value > 0);
+  if (speeds.length < 3) return false;
+  const max = Math.max(...speeds);
+  const min = Math.min(...speeds);
+  return min > 0 && max / min >= 1.3;
+}
+
+/**
+ * Orchestration complète de la comparaison historique d'une séance :
+ * résolution de la vitesse de référence (3 cas, cf.
+ * resolveComparisonThresholdSpeedMps), décision structuré/continu à partir
+ * de CETTE résolution (jamais du seul seuil dynamique brut — un repère
+ * déclaré doit pouvoir révéler une structure que le seuil dynamique seul ne
+ * verrait pas), puis construction des signatures (courante + candidats
+ * disposant d'un cache de détail local, jamais un nouveau fetch) et scoring
+ * de comparabilité.
+ */
+async function buildHistoricalComparisonForActivity(input: {
+  database: AppDatabase;
+  activityId: string;
+  activityDate: string;
+  sportType: string;
+  totalDistanceM: number | null;
+  totalMovingTimeS: number | null;
+  averageSpeedMps: number | null;
+  elevationGainM: number | null;
+  segmented: ReturnType<typeof segmentActivity>;
+  thresholdEst: ReturnType<typeof estimateThreshold>;
+  athleteContext: AthleteContext | null;
+  recentActivities: SyncedActivity[];
+}): Promise<HistoricalComparison> {
+  const comparisonThreshold = resolveComparisonThresholdSpeedMps(
+    input.thresholdEst.criticalSpeedMps,
+    input.thresholdEst.confidenceLevel,
+    input.athleteContext?.performanceReferences
+  );
+
+  const continuousFallback = (): HistoricalComparison =>
+    toComparableActivitiesHistory(
+      { distanceM: input.totalDistanceM, movingTimeS: input.totalMovingTimeS, averageSpeedMps: input.averageSpeedMps },
+      input.recentActivities.map((candidate) => ({
+        distanceM: candidate.distanceM ?? null,
+        movingTimeS: candidate.movingTimeS ?? null,
+        averageSpeedMps: candidate.averageSpeedMps ?? null,
+        sportType: candidate.sportType ?? null,
+        startDate: candidate.startDate,
+      }))
+    );
+
+  if (comparisonThreshold.speedMps == null) {
+    // Cas 3 (§4.2) : ni seuil dynamique ni référence déclarée. On ne bascule
+    // en comparaison structurée "impossible" QUE si la séance a une
+    // structure plausible sans threshold — sinon c'est une vraie séance
+    // continue, traitée normalement.
+    if (!hasPlausibleWorkStructureWithoutThreshold(input.segmented.segments)) return continuousFallback();
+    return {
+      comparableActivitiesCount: 0,
+      recentTrendDays: 112,
+      insufficientDataReason: "aucune base de vitesse de référence exploitable (ni seuil dynamique, ni repère déclaré) : comparaison par pourcentage de seuil impossible",
+      paceDeltaPct: null,
+      hrDeltaBpm: null,
+      cadenceDeltaSpm: null,
+      observations: [],
+      usedDeclaredReferenceFallback: false,
+      comparabilityBreakdown: null,
+    };
+  }
+
+  const currentSignature = buildSessionSignature({
+    activityId: input.activityId,
+    activityDate: input.activityDate,
+    sportType: input.sportType,
+    totalDistanceM: input.totalDistanceM,
+    totalMovingTimeS: input.totalMovingTimeS,
+    elevationGainM: input.elevationGainM,
+    segmented: input.segmented,
+    thresholdSpeedMps: comparisonThreshold.speedMps,
+  });
+
+  if (currentSignature.workSegmentCount === 0) return continuousFallback();
+
+  const thresholdSource = comparisonThreshold.source as "dynamic" | "declared_reference";
+  const detailCacheRepo = createActivityDetailCacheRepository(input.database);
+  const candidateSignatures: SessionSignature[] = [];
+  let candidatesWithoutCache = 0;
+
+  for (const candidate of input.recentActivities) {
+    const cached = await detailCacheRepo.findByActivityId(candidate.intervalsActivityId).catch(() => undefined);
+    if (!cached?.intervalsJson) {
+      candidatesWithoutCache += 1;
+      continue;
+    }
+    let candidateLaps: unknown[];
+    try {
+      candidateLaps = parseJson(cachedIntervalsSchema, cached.intervalsJson).intervals;
+    } catch {
+      candidatesWithoutCache += 1;
+      continue;
+    }
+    const candidateSegmented = segmentActivity({ laps: candidateLaps as never, streams: undefined }, "adaptive");
+    candidateSignatures.push(
+      buildSessionSignature({
+        activityId: candidate.intervalsActivityId,
+        activityDate: candidate.startDate,
+        sportType: candidate.sportType ?? null,
+        totalDistanceM: candidate.distanceM ?? null,
+        totalMovingTimeS: candidate.movingTimeS ?? null,
+        elevationGainM: candidate.elevationGainM ?? null,
+        segmented: candidateSegmented,
+        thresholdSpeedMps: comparisonThreshold.speedMps,
+      })
+    );
+  }
+
+  const comparison = buildHistoricalComparisonForWorkout(currentSignature, candidateSignatures, thresholdSource);
+
+  // Cf. UX §7 du plan : distinguer "pas de séance comparable" de "des
+  // candidats existent mais leurs intervalles ne sont pas encore en cache".
+  if (comparison.comparableActivitiesCount === 0 && candidatesWithoutCache > 0) {
+    return {
+      ...comparison,
+      insufficientDataReason:
+        "Certaines séances récentes pourraient être comparables, mais leurs intervalles ne sont pas encore préparés localement. La comparaison détaillée sera enrichie à mesure que ces séances sont consultées ou préparées explicitement.",
+    };
+  }
+
+  return comparison;
 }
 
 function toComparableActivitiesHistory(
@@ -123,6 +309,8 @@ function toComparableActivitiesHistory(
       hrDeltaBpm: null,
       cadenceDeltaSpm: null,
       observations: [],
+      usedDeclaredReferenceFallback: false,
+      comparabilityBreakdown: null,
     };
   }
 
@@ -145,6 +333,8 @@ function toComparableActivitiesHistory(
           averageHistoricalSpeed != null ? `Moyenne de vitesse historique : ${averageHistoricalSpeed.toFixed(2)} m/s.` : "Moyenne de vitesse historique indisponible.",
         ]
       : [`${comparable.length} activité(s) comparable(s) détectée(s) dans la fenêtre des 90 jours.`],
+    usedDeclaredReferenceFallback: false,
+    comparabilityBreakdown: null,
   };
 }
 
@@ -220,22 +410,6 @@ export async function buildActivityAnalysisContext(
     ...classifySegmentInZone(seg.averageSpeedMps, thresholdEst.criticalSpeedMps),
   }));
 
-  const workSegments = segmentZones.filter((segment) => segment.zone && ["tempo", "threshold", "vo2max", "anaerobic"].includes(segment.zone));
-  const averagePercentOfThreshold = workSegments.length > 0
-    ? workSegments.reduce((sum, segment) => sum + (segment.percentOfThreshold ?? 0), 0) / workSegments.length
-    : null;
-  const dominantZoneCounts = workSegments.length > 0
-    ? workSegments.reduce((acc, segment) => {
-        const zone = segment.zone ?? "recovery";
-        acc[zone] = (acc[zone] ?? 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
-    : null;
-  const dominantZoneName = dominantZoneCounts ? Object.entries(dominantZoneCounts).sort(([, left], [, right]) => right - left)[0]?.[0] ?? null : null;
-  const averageWorkSegmentDurationS = workSegments.length > 0
-    ? workSegments.reduce((sum, segment) => sum + (segmented.segments[segment.segmentIndex]?.durationS ?? 0), 0) / workSegments.length
-    : null;
-
   // Prepare activity context (user-provided)
   const activityCtxRepo = createActivityContextRepository(database);
   const userContext = await activityCtxRepo.findByActivityId(activityId);
@@ -253,40 +427,21 @@ export async function buildActivityAnalysisContext(
 
   const recentWindowStart = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
   const recentActivities = await createSyncedActivityRepository(database).findByPeriod(recentWindowStart, new Date().toISOString(), 20);
-  const workComparisonInput = workSegments.length > 0 && averagePercentOfThreshold != null
-    ? {
-        averageSpeedMps: typedActivity.average_speed ?? null,
-        dominantZone: dominantZoneName,
-        averagePercentOfThreshold,
-        averageWorkSegmentDurationS,
-        workSegmentCount: workSegments.length,
-      }
-    : null;
 
-  const historicalComparison = workComparisonInput
-    ? buildHistoricalComparisonForWorkout(
-        workComparisonInput,
-        recentActivities.map((candidate) => ({
-          averageSpeedMps: candidate.averageSpeedMps ?? null,
-          dominantZone: dominantZoneName,
-          averagePercentOfThreshold: candidate.averageSpeedMps != null && (typedActivity.average_speed ?? null) != null
-            ? (candidate.averageSpeedMps / (typedActivity.average_speed ?? candidate.averageSpeedMps)) * 100
-            : null,
-          averageWorkSegmentDurationS: candidate.movingTimeS != null ? Math.min(240, Math.max(90, candidate.movingTimeS / 4)) : 180,
-          workSegmentCount: 4,
-          recentness: 90 - Math.min(90, Math.abs(new Date(candidate.startDate).getTime() - Date.now()) / 86400000),
-        }))
-      )
-    : toComparableActivitiesHistory(
-        { distanceM: typedActivity.distance ?? null, movingTimeS: typedActivity.moving_time ?? null, averageSpeedMps: typedActivity.average_speed ?? null },
-        recentActivities.map((candidate) => ({
-          distanceM: candidate.distanceM ?? null,
-          movingTimeS: candidate.movingTimeS ?? null,
-          averageSpeedMps: candidate.averageSpeedMps ?? null,
-          sportType: candidate.sportType ?? null,
-          startDate: candidate.startDate,
-        }))
-      );
+  const historicalComparison: ActivityAnalysisContext["historicalComparison"] = await buildHistoricalComparisonForActivity({
+    database,
+    activityId,
+    activityDate: typedActivity.start_date,
+    sportType: typedActivity.type ?? "running",
+    totalDistanceM: typedActivity.distance ?? null,
+    totalMovingTimeS: typedActivity.moving_time ?? null,
+    averageSpeedMps: typedActivity.average_speed ?? null,
+    elevationGainM: typedActivity.total_elevation_gain ?? null,
+    segmented,
+    thresholdEst,
+    athleteContext,
+    recentActivities,
+  });
 
   const declaredReferenceCount = athleteContext?.performanceReferences?.length ?? 0;
   const usedDeclaredReferenceFallback =
@@ -343,6 +498,27 @@ export async function buildActivityAnalysisContext(
 
   const performanceProfile = await buildPerformanceProfile(database, contextNow, thresholdBasis);
 
+  // Signaux de verdict (niveau 1) : la même résolution de seuil que la
+  // comparaison historique (3 cas, §4.2) sert à rôler les segments de CETTE
+  // séance pour la régularité et le profil de variation. `sessionIntent`
+  // reste `null` tant que sa capture n'est pas branchée (cf. plan §3.3) —
+  // état normal, pas une donnée manquante à combler.
+  const verdictComparisonThreshold = resolveComparisonThresholdSpeedMps(
+    thresholdEst.criticalSpeedMps,
+    thresholdEst.confidenceLevel,
+    athleteContext?.performanceReferences
+  );
+  const verdictRoledSegments = classifySegmentRoles(segmented.segments, verdictComparisonThreshold.speedMps).segments;
+  const verdictSignals = classifySessionVerdict({
+    regularity: assessSessionRegularity(verdictRoledSegments),
+    variationProfile: classifySessionVariationProfile(verdictRoledSegments),
+    sessionIntent: null,
+    historicalComparison: historicalComparison
+      ? { comparableActivitiesCount: historicalComparison.comparableActivitiesCount, paceDeltaPct: historicalComparison.paceDeltaPct }
+      : null,
+    thresholdConfidence: thresholdEst.confidenceLevel,
+  });
+
   return {
     activityId,
     performanceProfile,
@@ -371,6 +547,7 @@ export async function buildActivityAnalysisContext(
     thresholdEstimate,
     segmentZones,
     historicalComparison,
+    verdictSignals,
     activeGoals: activeGoals.map((goal) => ({
       id: goal.id,
       title: goal.title,

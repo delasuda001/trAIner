@@ -138,6 +138,13 @@ Toujours visibles, dans l'ordre :
   version courante) et que la forme reste valide : « Généré avec une version
   antérieure de l'analyse… Régénérez pour bénéficier des dernières
   améliorations. » Discret, non bloquant, le contenu reste affiché ;
+- **niveau 1 (`Level1Block`)**, en tête, avant la provenance du seuil : badge
+  de verdict (`well_executed`/`partly_successful`/`miscalibrated`/
+  `not_evaluable`, jamais uniquement une couleur — libellé + fond distincts)
+  calculé côté serveur, jamais par le modèle ; puis jusqu'à 3 puces
+  narratives (`notableVsHistory`, `mainFocus`, `nextExperiment`), chacune
+  omise si `null`. Si les trois sont `null`, phrase explicite « Pas assez de
+  signal pour aller au-delà du constat » plutôt qu'un encart vide ;
 - **provenance du seuil** (`ThresholdProvenance`) : allure seuil utilisée,
   niveau de confiance en toutes lettres, fenêtre d'estimation (« estimée sur
   vos N dernières semaines ») et rappel « pas seulement cette séance » avec le
@@ -154,8 +161,6 @@ Toujours visibles, dans l'ordre :
   `low`, placé avant le débrief : message de fraîcheur en français, durées de
   zone à couvrir, séances suggérées pour combler les manques, indice de biais,
   et la liste des **efforts écartés** avec leur motif ;
-- `key_takeaways` : 1 à 3 points clés en langage simple, dans un encart
-  distinct ;
 - recommandations techniques ;
 - allure cible pour la prochaine séance similaire (bloc visible, pas masqué
   derrière un accordéon) ;
@@ -166,7 +171,9 @@ Section repliable par défaut (« Voir le détail complet ») :
 - classification en zones (le texte du modèle rappelle en plus que le seuil
   vient de l'historique récent multi-séances, ou de la référence déclarée en
   repli) ;
-- comparaison historique chiffrée ;
+- comparaison historique chiffrée, avec le détail de comparabilité par
+  séance (score, tier, garde-fous récupération/dénivelé) quand la
+  comparaison est structurée (`comparabilityBreakdown`) ;
 - limites et fiabilité ;
 - prochaines étapes ;
 - `safety_note`, uniquement si présente dans la réponse ;
@@ -193,7 +200,14 @@ L'application ne présente jamais un objectif de cadence comme une norme univers
 
 ## Écran 5 : assistant
 
-Objectif : permettre des questions fondées sur les données.
+Objectif : permettre des questions fondées sur les données. Accessible
+depuis la navigation globale (lien « Assistant » du tableau de bord) et
+depuis le détail d'une activité (« Poser une question sur cette séance »,
+qui pré-remplit la question avec la date et le nom de l'activité — la
+sélection de périmètre de la conversation reste inchangée, aucun forçage de
+scope). Les preuves affichées (« Sources utilisées ») résolvent l'identifiant
+d'activité en date + nom lisibles quand l'activité est connue localement,
+avec repli sur l'identifiant brut sinon.
 
 Exemples de suggestions :
 

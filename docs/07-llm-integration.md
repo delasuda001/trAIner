@@ -17,7 +17,10 @@ Gemini ne calcule aucune métrique et ne reçoit pas de streams bruts.
   fenêtre de 20 semaines — cf. `docs/22` — sans fetch de streams déclenché) ;
 - profil de performance calculé (`performanceProfile`) : allure seuil estimée et
   sa confiance, meilleurs efforts agrégés par durée + FC moyenne, tendance de
-  volume de course sur 12 semaines, `key_takeaways` des débriefs récents. Agrégats
+  volume de course sur 12 semaines, `recentKeyTakeaways` (agrégés depuis les
+  champs narratifs `level1.notableVsHistory`/`mainFocus`/`nextExperiment` des
+  débriefs récents, depuis le chantier « niveau 1 structuré » — avant cela,
+  depuis `key_takeaways`). Agrégats
   uniquement, aucune série brute, jamais un score de charge/fatigue. Fourni en
   complément du contexte déclaré, jamais en remplacement (débrief ET conversation) ;
 - contexte utilisateur (déclaré) ;
@@ -42,8 +45,27 @@ en cas de divergence, le schéma Zod prime.
 
 Champs (tous obligatoires sauf mention contraire) :
 
-- `key_takeaways` — tableau de 1 à 3 chaînes ; synthèse en langage simple,
-  sans jargon, affichée en tête du débrief.
+- `level1` — synthèse pyramidale de niveau 1, affichée en tête du débrief,
+  maximum 4 éléments visibles :
+  - `verdict` — `well_executed` | `partly_successful` | `miscalibrated` |
+    `not_evaluable`. **Calculé côté serveur** par
+    `src/lib/analysis/verdict.ts` (`classifySessionVerdict`) à partir de
+    signaux déterministes (régularité intra-séance, profil de variation,
+    comparaison historique) — **jamais produit ni modifiable par le LLM**,
+    absent du schéma qui lui est soumis (`debriefLlmOutputSchema`).
+    `miscalibrated` exige une intention de séance **explicitement
+    déclarée** par l'utilisateur ET contredite par les données ; une
+    structure seulement détectée (même à haute confiance) ne suffit
+    jamais à elle seule.
+  - `verdictEvidence` — tableau (min. 1) de preuves structurées et
+    déterministes (`metric`, `currentValue`, `comparisonValue`, `unit`,
+    `direction`, `label`) générées par le même module — jamais du texte
+    libre du LLM.
+  - `notableVsHistory`, `mainFocus`, `nextExperiment` — chaînes ou `null`
+    chacune, remplies par le LLM en cohérence avec `verdict`/
+    `verdictEvidence`, jamais en le contredisant. `null` est un état normal
+    quand aucun signal fort ne le justifie (jamais de remplissage
+    générique).
 - `summary` — chaîne.
 - `observed_facts` — tableau de chaînes (constats déterministes).
 - `historical_comparison` — chaîne ou `null` ; formulée avec les deltas
@@ -87,7 +109,7 @@ expose donc **deux constantes distinctes**, chacune persistée dans la colonne
 
 | Usage | Schéma de réponse | Constante | Valeur | Colonne persistée |
 | --- | --- | --- | --- | --- |
-| Débrief d'activité (`analyze`) | `activityAnalysisResponseSchema` | `DEBRIEF_PROMPT_VERSION` | `"1.3"` | `analyses.prompt_version` |
+| Débrief d'activité (`analyze`) | `activityAnalysisResponseSchema` | `DEBRIEF_PROMPT_VERSION` | `"1.4"` | `analyses.prompt_version` |
 | Conversation guidée (`analyzeConversation`) | `conversationResponseSchema` | `CONVERSATION_PROMPT_VERSION` | `"1.0"` | `conversation_messages.prompt_version` (message `assistant`) |
 
 Historique `DEBRIEF_PROMPT_VERSION` :
@@ -106,6 +128,12 @@ Historique `DEBRIEF_PROMPT_VERSION` :
   plausibilité (efforts longs non maximaux désormais écartés). Les payloads
   antérieurs restent **valides et affichables** ; ils sont seulement signalés
   « logique obsolète » (voir ci-dessous).
+- `1.4` — remplacement de `key_takeaways` par `level1`, structuré (voir
+  ci-dessus) : verdict catégoriel calculé côté serveur
+  (`src/lib/analysis/verdict.ts`, jamais par le LLM), preuves déterministes
+  structurées, narratif nullable. `level1` est un nouveau champ **requis** :
+  les payloads `<= 1.3` ne l'ont pas et sont détectés `outdated` à la
+  lecture (comme la transition `1.0` → `1.1`), à régénérer.
 
 `CONVERSATION_PROMPT_VERSION` démarre à `1.0` : premier format explicitement
 versionné de `conversationResponseSchema`.
@@ -161,8 +189,9 @@ de rendu.
 ## Limites connues à surveiller
 
 - **Rétroaction `recentKeyTakeaways`** : le `performanceProfile` envoyé au
-  débrief contient les `key_takeaways` des 3–5 débriefs les plus récents. Le
-  modèle peut être tenté de recopier ses propres formulations d'une séance à
+  débrief contient les éléments narratifs de niveau 1
+  (`notableVsHistory`/`mainFocus`/`nextExperiment`) des 3–5 débriefs les plus
+  récents. Le modèle peut être tenté de recopier ses propres formulations d'une séance à
   l'autre plutôt que d'analyser la séance courante. Non bloquant (le contexte
   déterministe de la séance reste prioritaire), mais à surveiller : si les
   débriefs deviennent répétitifs, réduire ou retirer ce champ du contexte de

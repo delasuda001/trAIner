@@ -7,6 +7,7 @@ import { buildConversationContext } from "@/lib/llm/conversation-context";
 import { buildPerformanceProfile } from "@/lib/analysis/performance-profile";
 import { GeminiAnalysisClient } from "@/lib/llm/gemini-client";
 import { conversationResponseSchema } from "@/lib/llm/schemas";
+import { buildActivityLookup, extractEvidenceActivityIds } from "@/lib/llm/evidence-labels";
 
 const inputSchema = z.object({ question: z.string().trim().min(1).max(4000) });
 
@@ -28,7 +29,8 @@ export async function POST(request: Request) {
     const generated = await new GeminiAnalysisClient().analyzeConversation(context);
     const responseContent = conversationResponseSchema.parse(generated.response);
     const assistantMessage = await repository.addMessage({ id: randomUUID(), threadId, role: "assistant", contentJson: JSON.stringify(responseContent), model: generated.model, promptVersion: generated.promptVersion, createdAt: new Date().toISOString() });
-    return NextResponse.json({ threadId, messageId: assistantMessage.id, response: responseContent, scope: context.scope, model: generated.model }, { status: 201 });
+    const activityLookup = await buildActivityLookup(database, extractEvidenceActivityIds([responseContent]));
+    return NextResponse.json({ threadId, messageId: assistantMessage.id, response: responseContent, scope: context.scope, model: generated.model, activityLookup }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "La question est invalide", requestId } }, { status: 400 });
     console.error("[conversations] create error", { requestId, message: error instanceof Error ? error.message : "unknown" });

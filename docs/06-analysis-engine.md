@@ -51,46 +51,82 @@ décrites dans `docs/22-dynamic-thresholds-and-zones.md`.
 ## Comparaison historique
 
 Implémentée dans `src/lib/llm/context.ts`
-(`buildHistoricalComparisonForWorkout`, `toComparableActivitiesHistory`,
-`getWorkRepBucket`). Elle produit toujours l'objet
-`historicalComparisonSchema` : `comparableActivitiesCount`,
-`recentTrendDays`, `insufficientDataReason`, `paceDeltaPct`, `hrDeltaBpm`,
-`cadenceDeltaSpm`, `observations`.
+(`buildHistoricalComparisonForActivity`, `buildHistoricalComparisonForWorkout`,
+`toComparableActivitiesHistory`) et `src/lib/analysis/session-signature.ts`
+(`buildSessionSignature`, `computeComparability`, `getWorkRepBucket`), avec
+`src/lib/analysis/segment-roles.ts` (rôles warmup/work/recovery/cooldown) et
+`src/lib/analysis/variation-profile.ts` (profil de variation) comme
+dépendances. Elle produit toujours l'objet `historicalComparisonSchema` :
+`comparableActivitiesCount`, `recentTrendDays`, `insufficientDataReason`,
+`paceDeltaPct`, `hrDeltaBpm`, `cadenceDeltaSpm`, `observations`,
+`usedDeclaredReferenceFallback`, `comparabilityBreakdown`.
 
 ### Vivier de candidats
 
 Uniquement `synced_activities`, sur les **90 derniers jours**, au plus
 **20 activités** (`findByPeriod`). `manual_sessions` n'est jamais consulté.
+Pour le mode structuré (ci-dessous), un candidat n'est **mesuré** (et donc
+comparable) que si son détail est déjà en cache local
+(`activity_details_cache`, alimenté par la consultation de l'activité ou un
+débrief antérieur) — aucun nouveau fetch n'est déclenché pour construire le
+pool de comparaison. Un candidat sans cache est explicitement exclu, jamais
+approximé.
 
-### Deux modes, choisis automatiquement
+### Base de vitesse de référence (3 cas)
 
-Le mode dépend de la présence de **segments de travail** dans la séance
-analysée : segments classés `tempo`, `threshold`, `vo2max` ou `anaerobic`
-(cf. `docs/22`).
+`resolveComparisonThresholdSpeedMps` résout, une seule fois par débrief, la
+vitesse utilisée pour le `% de seuil` — identique pour la séance courante et
+tous les candidats :
+1. seuil dynamique exploitable (`criticalSpeedMps` non nul, confiance ≠
+   `insufficient`) ;
+2. seuil dynamique insuffisant mais référence de performance déclarée
+   exploitable (`src/lib/analysis/declared-reference.ts` — uniquement un
+   texte au format d'allure `m:ss/km` reconnu strictement, jamais une
+   valeur devinée) : `usedDeclaredReferenceFallback` passe à `true`, jamais
+   présenté comme une estimation automatique, tier de comparabilité
+   plafonné à `moderate` ;
+3. ni l'un ni l'autre : la comparaison structurée **ne s'exécute pas** —
+   `comparableActivitiesCount: 0` avec une raison explicite. Ce cas ne
+   retombe jamais silencieusement sur le mode continu ci-dessous pour une
+   séance réellement structurée.
 
-**Mode séance à intervalles** — au moins un segment de travail et une
-moyenne de `% de l'allure seuil` calculable.
+### Deux modes, choisis à partir de cette résolution
 
-- La séance est résumée par : moyenne du `% de l'allure seuil` sur les
-  segments de travail, **zone dominante** (zone la plus fréquente parmi
-  ces segments), durée moyenne des segments de travail, nombre de
-  segments de travail.
-- **Bucket de durée de répétition** (`getWorkRepBucket`) :
-  `short` < 90 s, `medium` 90–240 s, `long` > 240 s.
-- Une activité candidate est comparable si : même zone dominante (quand
-  les deux sont connues), même bucket de durée (quand les deux sont
-  connus) et au moins un segment de travail.
-- Les comparables sont triées de la plus récente à la plus ancienne.
-- `paceDeltaPct` = écart relatif, en %, entre le `% de l'allure seuil` de
-  la séance et celui de **la comparable la plus récente**. La moyenne
-  historique du `% de l'allure seuil` est aussi calculée et exposée dans
-  `observations`.
+Le mode dépend de la présence de **segments de travail** (rôle `work`,
+`segment-roles.ts`) une fois la vitesse de référence ci-dessus appliquée —
+et non plus du seul seuil dynamique brut, pour qu'une référence déclarée
+puisse elle aussi révéler une structure que le seuil dynamique seul ne
+verrait pas.
+
+**Mode séance structurée** — au moins un segment `work`.
+
+- Chaque séance (courante et candidats mesurés) reçoit une **signature**
+  (`buildSessionSignature`) : nombre et durée moyenne des segments `work`,
+  bucket de durée (`getWorkRepBucket` : `short` < 90 s, `medium` 90–240 s,
+  `long` > 240 s), zone dominante (calculée sur cette séance, jamais
+  copiée), `% de l'allure seuil` moyen, nombre/durée des segments
+  `recovery`, ratio travail/récupération, dénivelé, et profil de variation
+  (`variation-profile.ts`).
+- `computeComparability` calcule un score pondéré (zone 30 %, bucket de
+  durée 20 %, nombre de répétitions 15 %, volume de travail 15 %,
+  similarité de récupération 20 %), puis deux garde-fous plafonnent le tier
+  à `moderate` sans l'annuler : ratio travail/récupération très différent,
+  ou dénivelé par km très différent. Tiers : `high` (score ≥ 0,75),
+  `moderate` (≥ 0,5), `excluded` (< 0,5, hors du pool).
+- Les comparables retenues sont triées par tier puis par récence ;
+  `paceDeltaPct` = écart relatif entre le `% de l'allure seuil` de la
+  séance et celui de la comparable la plus récente et la mieux notée. La
+  moyenne historique est exposée dans `observations`, ainsi que le détail
+  par candidat (`comparabilityBreakdown`) pour la transparence
+  méthodologique (niveau 3 de l'UI).
 - `hrDeltaBpm` et `cadenceDeltaSpm` restent `null` dans ce mode.
-- `insufficientDataReason` : renseigné si 0 comparable (comparaison non
-  fiable) ou si une seule comparable (interprétation prudente).
+- `insufficientDataReason` : renseigné si 0 comparable mesuré (comparaison
+  non fiable — avec un message distinct si des candidats existent mais ne
+  sont pas encore en cache local) ou si une seule comparable (interprétation
+  prudente).
 - `recentTrendDays` = 112.
 
-**Mode séance continue** — aucun segment de travail (repli).
+**Mode séance continue** — aucun segment `work` (repli).
 
 - Une candidate est comparable si : distance et durée présentes, sport
   `run`/`running`, ratio de distance ≥ 0,7 et ratio de durée ≥ 0,7
@@ -102,7 +138,11 @@ moyenne de `% de l'allure seuil` calculable.
   3 comparables (écart historique faible, à interpréter avec prudence).
 - `recentTrendDays` = 90.
 
-La logique est explicite et testée (`src/lib/llm/context.test.ts`).
+La logique est explicite et testée (`src/lib/llm/context.test.ts`,
+`src/lib/analysis/session-signature.test.ts`,
+`src/lib/analysis/segment-roles.test.ts`,
+`src/lib/analysis/variation-profile.test.ts`,
+`src/lib/analysis/declared-reference.test.ts`).
 
 ## Résumé de streams et profil de performance
 

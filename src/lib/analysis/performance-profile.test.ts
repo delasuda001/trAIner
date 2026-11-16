@@ -17,7 +17,11 @@ const weeksAgo = (n: number) => new Date(BASE_MS - n * 7 * 24 * 60 * 60 * 1000).
 
 function debrief(takeaway: string) {
   return JSON.stringify({
-    key_takeaways: [takeaway],
+    level1: {
+      verdict: "well_executed",
+      verdictEvidence: [{ metric: "pace_cv_work_segments", currentValue: 1, comparisonValue: null, unit: "%", direction: "n/a", label: "test" }],
+      notableVsHistory: null, mainFocus: takeaway, nextExperiment: null,
+    },
     summary: "s", observed_facts: [], historical_comparison: null, zone_classification_summary: "z",
     technical_recommendations: [], next_session_pace_guidance: null, hypotheses: [], limitations: [], next_steps: [], safety_note: null,
   });
