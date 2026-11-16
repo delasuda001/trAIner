@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedNumbers, findUnsupportedNumbers, findZoneContradictions } from "./number-guard";
+import { allowedNumbers, findUnsupportedMultiples, findUnsupportedNumbers, findZoneContradictions } from "./number-guard";
 
 describe("garde-fou des chiffres", () => {
   const payload = { allure: "4:10/km", fc: "168 bpm", ecart: "1,5 %", seances: [{ duree: "47:52" }], derive: "3,4 %" };
@@ -29,5 +29,15 @@ describe("garde-fou des zones", () => {
   it("accepte une FC dans une plage de zones", () => {
     expect(findZoneContradictions("Cible 149–166 bpm (Z3–Z4).", zoneOf)).toEqual([]);
     expect(findZoneContradictions("Cible 170 bpm (Z3–Z4).", zoneOf)).toEqual(["170 bpm n'est pas en Z3–Z4"]);
+  });
+});
+
+describe("garde-fou des multiples", () => {
+  const payload = { charge: "326, soit 1,4 fois la moyenne (234)", zones: "1,2 % de dérive" };
+  it("accepte un ratio fourni tel quel", () => {
+    expect(findUnsupportedMultiples("Ta charge vaut 1,4 fois ta moyenne.", payload)).toEqual([]);
+  });
+  it("rejette un ratio recalculé même si le nombre existe ailleurs", () => {
+    expect(findUnsupportedMultiples("Charge à 1,2 fois la moyenne.", payload)).toEqual(["1,2 fois (ratio non fourni)"]);
   });
 });

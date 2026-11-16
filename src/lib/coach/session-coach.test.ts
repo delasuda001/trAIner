@@ -35,9 +35,9 @@ function payloadFor(reps: number) {
 }
 
 describe("charge utile du débrief", () => {
-  it("reste sous ~2 000 tokens même pour 20 répétitions (≈ 3,2 caractères par token en français)", () => {
+  it("reste sous ~2 400 tokens même pour 20 répétitions (≈ 3,2 caractères par token en français ; prompt session-v11 plus long de ~250)", () => {
     const size = buildSessionPrompt(payloadFor(20)).length + SESSION_SYSTEM_PROMPT.length;
-    expect(size / 3.2).toBeLessThan(2000);
+    expect(size / 3.2).toBeLessThan(2400);
   });
 
   it("détaille au plus 8 répétitions", () => {

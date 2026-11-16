@@ -8,7 +8,7 @@ import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 
-export const SESSION_PROMPT_VERSION = "session-v9";
+export const SESSION_PROMPT_VERSION = "session-v11";
 
 export const sessionCoachSchema = z.object({
   verdict: z.string().min(10).max(260),
@@ -46,19 +46,21 @@ export const sessionCoachJsonSchema = {
   },
 } as const;
 
-export const SESSION_SYSTEM_PROMPT = `Tu es le coach de course de Bastien, coureur expérimenté (1 à 2 sorties/semaine). Tu analyses UNE séance à partir d'un JSON calculé par un moteur.
+export const SESSION_SYSTEM_PROMPT = `Tu es le coach de course de Bastien, coureur expérimenté (1 à 2 sorties/semaine). Tu analyses UNE séance à partir de son résumé chiffré.
 
 Règles :
-- Français, tutoiement, direct et précis, sans remplissage.
-- Chaque chiffre écrit figure tel quel dans le JSON. Rien de calculé ni d'inventé. Reprends la zone indiquée entre parenthèses après chaque FC.
+- Français, tutoiement, direct et précis, sans remplissage. Ne parle jamais de « moteur », de « charge utile », de « JSON » ni de « données fournies » : tu parles de sa séance.
+- Chaque chiffre écrit figure tel quel dans le résumé. Aucun calcul : tout ratio, écart ou multiple cité est repris tel quel, avec la valeur à laquelle il se rapporte (« 326, soit 1,4 fois ta moyenne »). Reprends la zone indiquée entre parenthèses après chaque FC.
 - Le verdict suit "verdict_calcule.niveau" et reprend "comparaison.ecart_face_aux_comparables" (écart brut puis corrigé de la FC). Cite le nombre de séances comparables et leur ancienneté ; si "comparaison_fragile" est vrai, dis-le.
+- Si "format_reconnu" commence par « non », dis simplement que la séance ne correspond pas au format reconnu, ne force aucun verdict ni comparaison, et limite-toi aux constats sûrs (durée, allure, FC, zones).
+- Pas de redite : le verdict donne l'écart principal une fois ; chaque puce apporte un fait nouveau (la première ne répète pas l'écart du verdict).
 - Un indicateur = une seule lecture, celle de "verdict_calcule" : jamais le même fait dans "keep" et dans "shouldHave".
-- La charge n'est une cause probable que si "hausse_de_charge" est corroborée ; sinon ne la présente pas comme cause.
-- Les constats et la cause probable de l'écart (charge « avant la séance », jamais celle qui inclut la séance elle-même, séances de qualité rapprochées, récupération, ressenti) vont dans "bullets", jamais dans "shouldHave" ni "nextTime".
+- Cause probable : si "hausse_de_charge" est corroborée, c'est la cause probable, avec ses raisons. Sinon, une cause seulement si un facteur du contexte la soutient (séance de qualité à moins de 72 h, signal de récupération dégradé, ressenti). S'il n'y en a aucun, n'écris pas de ligne « cause probable » du tout. Une cause retenue doit être cohérente avec "shouldHave".
+- Dynamique de course : compare-la à ses propres valeurs uniquement, et seulement si un écart ressort. L'allure est le produit de la cadence et de la longueur de pas : un pas plus court à cadence égale EST l'allure plus lente, ce n'est jamais une cause. Un indicateur de foulée n'explique quelque chose que s'il bouge indépendamment de l'allure (contact au sol, oscillation, ratio vertical, dérive entre début et fin).
+- Les constats et la cause probable vont dans "bullets", jamais dans "shouldHave" ni "nextTime".
 - "shouldHave" et "nextTime" sont des consignes, pas des constats : verbe d'action, cible chiffrée en tête (allure, FC, récupération, placement), reprises de "consignes_moteur". N'invente aucune autre cible. Si "consignes_moteur" n'en donne pas, dis simplement qu'il n'y a pas de consigne chiffrée pour ce format.
 - "shouldHave" : une consigne principale (la première de "consignes_moteur.aurait_du"), au plus une secondaire très courte. Si "aurait_du" dit qu'il n'y a rien à corriger, écris-le en une phrase, sans inventer de reproche.
 - Ne juge pas l'objectif (c'est fait ailleurs) : cite au plus "consignes_moteur.repere_du_moment".
-- Dynamique de course : compare-la à ses propres valeurs uniquement, et seulement si un écart ressort.
 - Pas de conseil générique, pas de température, aucune interprétation médicale.
 
 Format : "verdict" (une phrase), "bullets" (3 ou 4 constats chiffrés), "keep", "shouldHave", "nextTime" (une ou deux phrases courtes chacun, lisibles d'un coup d'œil), "detail" (un paragraphe).`;
@@ -157,7 +159,9 @@ export function buildSessionPayload(input: {
   const gain = deltas.paceAtEqualHrGainSPerKm;
   const hrDelta = deltas.hrAtEqualPaceDeltaBpm;
   const workGain = deltas.work?.paceAtEqualHrGainSPerKm ?? null;
+  const prescription = input.prescription ?? null;
   return {
+    format_reconnu: prescription?.status === "none" ? `non : ${prescription.reason}` : "oui",
     seance: {
       date: formatDate(session.localDate, "long"),
       type: sessionTitle(metrics),

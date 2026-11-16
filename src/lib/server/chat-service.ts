@@ -3,7 +3,7 @@ import "server-only";
 import { getLlmClient } from "@/lib/coach";
 import { buildChatPrompt, CHAT_HISTORY_MESSAGES, CHAT_SYSTEM_PROMPT, chatAnswerJsonSchema, chatAnswerSchema } from "@/lib/coach/chat-coach";
 import { LLM_FAILURE_MESSAGES, LlmError, type LlmFailureKind } from "@/lib/coach/llm";
-import { allowedNumbers, collectText, excerpt, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
+import { allowedNumbers, collectText, excerpt, findUnsupportedMultiples, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
 import { createChatRepository, type ChatMessage } from "@/lib/db/repositories/chat-repository";
 import { PROGRESSION_LABELS } from "@/lib/engine/explain";
 import { VERDICT_LABELS } from "@/lib/engine/verdict";
@@ -87,7 +87,7 @@ export async function askCoach(question: string): Promise<AskResult> {
         throw error;
       }
       const text = collectText(response.data);
-      const issues = [...findUnsupportedNumbers(text, allowed), ...findZoneContradictions(text, zoneOfHr)];
+      const issues = [...findUnsupportedNumbers(text, allowed), ...findZoneContradictions(text, zoneOfHr), ...findUnsupportedMultiples(text, { context, question, history })];
       recordUsage("chat", null, response.model, issues.length ? "rejected" : "ok", response.usage);
       if (!issues.length) {
         // Certains modèles écrivent « \n » en toutes lettres dans le JSON : on rétablit les sauts de ligne.

@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { createClaudeAgentClient } from "@/lib/coach/claude-agent-client";
 import { currentCoachModel } from "@/lib/coach";
 import { LlmError, type LlmClient, type LlmUsage } from "@/lib/coach/llm";
-import { allowedNumbers, collectText, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
+import { allowedNumbers, collectText, findUnsupportedMultiples, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
 import { buildSessionPayload, buildSessionPrompt, SESSION_PROMPT_VERSION, SESSION_SYSTEM_PROMPT, sessionCoachJsonSchema, sessionCoachSchema, type SessionCoachOutput } from "@/lib/coach/session-coach";
 import { createUsageRepository } from "@/lib/db/repositories/usage-repository";
 import { zoneOf } from "@/lib/engine/zones";
@@ -79,7 +79,7 @@ async function runGeneration(task: Extract<BenchTask, { type: "generate" }>, cli
     // Un seul essai : on mesure la réponse brute, sans la seconde chance de l'application.
     const response = await client.generateStructured({ system, prompt: buildSessionPrompt(payload), schema: sessionCoachSchema, jsonSchema: sessionCoachJsonSchema as unknown as Record<string, unknown> });
     const text = collectText(response.data);
-    const issues = [...findUnsupportedNumbers(text, allowedNumbers(payload)), ...findZoneContradictions(text, (hr) => zoneOf(hr, zones))];
+    const issues = [...findUnsupportedNumbers(text, allowedNumbers(payload)), ...findZoneContradictions(text, (hr) => zoneOf(hr, zones)), ...findUnsupportedMultiples(text, payload)];
     recordUsage("bench", `${variant.name}/${fixture.id}`, response.model, issues.length ? "rejected" : "ok", response.usage);
     const grade = gradeSessionOutput({ output: response.data, payload, zoneOf: (hr) => zoneOf(hr, zones), prescription: fixture.input.prescription });
     writeOutput(variant.name, fixture.id, { key: task.key, createdAt: new Date().toISOString(), output: response.data, error: null, guardIssues: issues, deterministic: grade.score, usage: usageOf(response.usage) });

@@ -7,7 +7,7 @@ import { createClaudeAgentClient } from "@/lib/coach/claude-agent-client";
 import { LLM_FAILURE_MESSAGES, LlmError, type LlmClient, type LlmFailureKind } from "@/lib/coach/llm";
 import { buildWeeklyPrompt, WEEKLY_MODEL, WEEKLY_PROMPT_VERSION, WEEKLY_SYSTEM_PROMPT, weeklyReviewJsonSchema, weeklyReviewSchema, type WeeklyReview } from "@/lib/coach/weekly-review";
 import { buildWeeklyDossier } from "./weekly-dossier";
-import { allowedNumbers, collectText, excerpt, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
+import { allowedNumbers, collectText, excerpt, findUnsupportedMultiples, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
 import { zoneOf } from "@/lib/engine/zones";
 import { goalForCoach } from "@/lib/goal/goal";
 import { buildOutlookPayload, buildOutlookPrompt, OUTLOOK_PROMPT_VERSION, OUTLOOK_SYSTEM_PROMPT, outlookCoachJsonSchema, outlookCoachSchema, type OutlookCoachOutput } from "@/lib/coach/outlook-coach";
@@ -82,7 +82,7 @@ async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
           throw error;
         }
         const text = collectText(response.data);
-        const unsupported = [...findUnsupportedNumbers(text, allowed), ...findZoneContradictions(text, job.zoneOf)];
+        const unsupported = [...findUnsupportedNumbers(text, allowed), ...findZoneContradictions(text, job.zoneOf), ...findUnsupportedMultiples(text, job.payload)];
         recordUsage(job.kind, job.subject, response.model, unsupported.length ? "rejected" : "ok", response.usage);
         if (unsupported.length === 0) {
           const row = createCoachOutputRepository().save({ kind: job.kind, subject: job.subject, inputHash, model: response.model, promptVersion: job.promptVersion, output: response.data });

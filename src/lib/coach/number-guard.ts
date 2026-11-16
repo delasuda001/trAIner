@@ -97,3 +97,23 @@ export function findZoneContradictions(text: string, zoneOf: (heartRate: number)
   }
   return [...new Set(issues)];
 }
+
+const MULTIPLE_PATTERN = /(\d+(?:[.,]\d+)?)\s*fois\b/gi;
+
+/**
+ * Multiples recalculés : « 1,2 fois la moyenne » n'est accepté que si la charge
+ * utile contient elle-même « 1,2 fois » (un ratio fourni), pas seulement le nombre
+ * 1,2 ailleurs. Claude ne calcule aucun ratio.
+ */
+export function findUnsupportedMultiples(text: string, payload: unknown): string[] {
+  const source = collectText(payload);
+  const allowed = new Set([...source.matchAll(MULTIPLE_PATTERN)].map((match) => match[1].replace(".", ",")));
+  const issues: string[] = [];
+  for (const match of text.matchAll(MULTIPLE_PATTERN)) {
+    const value = match[1].replace(".", ",");
+    // « 2 fois » ou « 3 fois » au sens de répétition (petits entiers) restent libres.
+    if (!value.includes(",") && Number(value) <= 3) continue;
+    if (!allowed.has(value)) issues.push(`${value} fois (ratio non fourni)`);
+  }
+  return [...new Set(issues)];
+}
