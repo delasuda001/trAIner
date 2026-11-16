@@ -1,0 +1,76 @@
+/* Sillage — tokens de la charte (direction B « riso »), copie du fil design. Source unique des couleurs.
+   Clair par défaut ; sombre via prefers-color-scheme ou [data-theme="dark"].
+   Adapter le sélecteur sombre au mécanisme de thème déjà présent dans l'app. */
+:root{
+  /* Surfaces et encre */
+  --sl-paper:#F1F2EC;      /* fond de page */
+  --sl-surface:#FBFBF7;    /* cartes */
+  --sl-surface-2:#E6E8DF;  /* zones en retrait, onglet actif, encarts */
+  --sl-ink:#1C1B3A;        /* texte principal, contours 2 px */
+  --sl-ink-muted:#5A5A76;  /* texte secondaire, axes */
+  --sl-border:#1C1B3A;     /* contours des cartes */
+  --sl-grid:#D6D8CE;       /* lignes de grille des graphiques */
+
+  /* Encres d'accent (aplats, ombres, stickers) */
+  --sl-pink:#FF48B0;
+  --sl-blue:#0078BF;
+  --sl-yellow:#FFE800;
+  --sl-green:#00A95C;
+  --sl-orange:#FF6C2F;
+  --sl-on-accent:#1C1B3A;  /* texte sur rose, jaune, vert, orange : toujours l'encre */
+
+  /* Rôles */
+  --sl-highlight:var(--sl-pink);  /* série récente, point courant, médiane récente */
+  --sl-figure:var(--sl-blue);     /* gros chiffres */
+  --sl-figure-echo:rgba(255,72,176,.7); /* repérage décalé des gros chiffres */
+  --sl-past:#A9AAB8;              /* série « avant », points passés */
+  --sl-ok:var(--sl-green);
+  --sl-warn:var(--sl-orange);
+  --sl-alert:#E5004F;
+
+  /* Zones d'intensité (fills de graphiques, pastilles, barres de séance) */
+  --sl-z1:#0078BF;  /* Récup */
+  --sl-z2:#00A95C;  /* Endurance, sortie longue */
+  --sl-z3:#E8C800;  /* Tempo */
+  --sl-z4:#FF6C2F;  /* Seuil */
+  --sl-z5:#FF48B0;  /* VO2max */
+
+  /* Effets */
+  --sl-shadow:5px 5px 0;          /* + couleur : var(--sl-shadow) var(--sl-blue) */
+  --sl-shadow-hero:6px 6px 0;
+  --sl-blend:multiply;            /* surimpression du logo */
+  --sl-grain-opacity:.35;
+
+  /* Forme */
+  --sl-stroke:2px;
+  --sl-radius:18px;
+  --sl-radius-sm:10px;
+  --sl-radius-pill:999px;
+
+  /* Typo */
+  --sl-font-display:"Bricolage Grotesque","Arial Black",system-ui,sans-serif;
+  --sl-font-body:"Bricolage Grotesque",system-ui,-apple-system,sans-serif;
+  --sl-font-data:"DM Mono",ui-monospace,"SFMono-Regular",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --sl-paper:#15151E; --sl-surface:#1D1D29; --sl-surface-2:#262635;
+    --sl-ink:#F2F0E6; --sl-ink-muted:#A6A5B8; --sl-border:#E9E7DC; --sl-grid:#2E2E3E;
+    --sl-pink:#FF5CBA; --sl-blue:#3DA5F0; --sl-yellow:#FFE800; --sl-green:#2CC97A; --sl-orange:#FF7F48;
+    --sl-figure-echo:rgba(255,92,186,.7); --sl-past:#4D4D62; --sl-alert:#FF4D7A;
+    --sl-z1:#3DA5F0; --sl-z2:#2CC97A; --sl-z3:#FFE800; --sl-z4:#FF7F48; --sl-z5:#FF5CBA;
+    --sl-blend:screen; --sl-grain-opacity:.18;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --sl-paper:#15151E; --sl-surface:#1D1D29; --sl-surface-2:#262635;
+  --sl-ink:#F2F0E6; --sl-ink-muted:#A6A5B8; --sl-border:#E9E7DC; --sl-grid:#2E2E3E;
+  --sl-pink:#FF5CBA; --sl-blue:#3DA5F0; --sl-yellow:#FFE800; --sl-green:#2CC97A; --sl-orange:#FF7F48;
+  --sl-figure-echo:rgba(255,92,186,.7); --sl-past:#4D4D62; --sl-alert:#FF4D7A;
+  --sl-z1:#3DA5F0; --sl-z2:#2CC97A; --sl-z3:#FFE800; --sl-z4:#FF7F48; --sl-z5:#FF5CBA;
+  --sl-blend:screen; --sl-grain-opacity:.18;
+  color-scheme:dark;
+}
+/* Note : sur les aplats jaunes (carte prochaine séance, sticker), le texte reste #1C1B3A
+   dans les deux thèmes ; ne pas utiliser --sl-ink, qui devient clair en sombre. */

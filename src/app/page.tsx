@@ -24,7 +24,7 @@ export default function Home() {
       <div className="page-head">
         <div>
           <p className="eyebrow">{weekday}</p>
-          <h1 className="page-title">Ta forme, ta prochaine séance</h1>
+          <h1 className="page-title">Ta forme, <mark>ta prochaine séance</mark></h1>
         </div>
         {outlook.status !== "ready" ? <CoachRequest endpoint="/api/coach/outlook" label="Demander l'avis du coach" initialError={outlook.status === "error" ? outlook.message : null} /> : null}
       </div>

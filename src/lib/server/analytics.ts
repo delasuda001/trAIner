@@ -221,7 +221,7 @@ export type Dashboard = {
   progression: Progression;
   suggestion: Suggestion;
   lastRun: SessionAnalysis | null;
-  recent: Array<{ id: string; name: string; sport: string; localDate: string; startTimeLocal: string; distanceM: number | null; movingTimeS: number | null; averageSpeedMps: number | null; averageHeartRateBpm: number | null; kind: string | null; title: string | null }>;
+  recent: Array<{ id: string; name: string; sport: string; localDate: string; startTimeLocal: string; distanceM: number | null; movingTimeS: number | null; averageSpeedMps: number | null; averageHeartRateBpm: number | null; kind: string | null; title: string | null; zoneShares: number[] | null }>;
   activityCount: number;
   sync: SyncState | null;
   goal: Goal | null;
@@ -269,7 +269,7 @@ export function getDashboard(): Dashboard {
     progression,
     suggestion,
     lastRun: last ? analyzeSession(last.id, context) : null,
-    recent: [...rows].reverse().slice(0, 10).map((row) => ({ id: row.id, name: row.name, sport: row.sport, localDate: row.localDate, startTimeLocal: row.startTimeLocal, distanceM: row.distanceM, movingTimeS: row.movingTimeS, averageSpeedMps: row.averageSpeedMps, averageHeartRateBpm: row.averageHeartRateBpm, kind: runById.get(row.id)?.metrics.kind ?? null, title: runById.get(row.id) ? sessionTitle((runById.get(row.id) as AnalyzedRun).metrics) : null })),
+    recent: [...rows].reverse().slice(0, 10).map((row) => ({ id: row.id, name: row.name, sport: row.sport, localDate: row.localDate, startTimeLocal: row.startTimeLocal, distanceM: row.distanceM, movingTimeS: row.movingTimeS, averageSpeedMps: row.averageSpeedMps, averageHeartRateBpm: row.averageHeartRateBpm, kind: runById.get(row.id)?.metrics.kind ?? null, title: runById.get(row.id) ? sessionTitle((runById.get(row.id) as AnalyzedRun).metrics) : null, zoneShares: runById.get(row.id)?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null) })),
     activityCount: rows.length,
     sync: readSyncState(),
     goal,

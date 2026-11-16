@@ -11,7 +11,13 @@ export type LoadActivity = {
 };
 
 /** Minutes par intensité : Z1–Z2 / Z3 / Z4–Z5 (toutes activités avec FC). */
-export type WeekVolume = { weekStart: string; runKm: number; runCount: number; otherMinutes: number; load: number; lowMin: number; moderateMin: number; highMin: number };
+export type WeekVolume = {
+  weekStart: string; runKm: number; runCount: number; otherMinutes: number; load: number; lowMin: number; moderateMin: number; highMin: number;
+  /** Km de course par zone dominante de chaque sortie (Z1 à Z5) ; index 5 = zone inconnue. */
+  kmByZone: [number, number, number, number, number, number];
+  /** Minutes par zone FC, toutes activités (Z1 à Z5). */
+  zoneMinutes: [number, number, number, number, number];
+};
 
 export type LoadSummary = {
   /** Somme des charges Garmin sur les 7 derniers jours. */
@@ -61,7 +67,17 @@ export function summarizeLoad(activities: LoadActivity[], today: string, weeksCo
       ...(() => {
         const zones = [0, 0, 0, 0, 0];
         for (const activity of list) activity.hrTimeInZonesS?.forEach((seconds, zone) => (zones[zone] += seconds));
-        return { lowMin: Math.round((zones[0] + zones[1]) / 60), moderateMin: Math.round(zones[2] / 60), highMin: Math.round((zones[3] + zones[4]) / 60) };
+        const kmByZone: WeekVolume["kmByZone"] = [0, 0, 0, 0, 0, 0];
+        for (const run of runs) {
+          const shares = run.hrTimeInZonesS;
+          const best = shares && shares.some((value) => value > 0) ? shares.indexOf(Math.max(...shares)) : 5;
+          kmByZone[best] = round(kmByZone[best] + (run.distanceM ?? 0) / 1000, 1);
+        }
+        return {
+          lowMin: Math.round((zones[0] + zones[1]) / 60), moderateMin: Math.round(zones[2] / 60), highMin: Math.round((zones[3] + zones[4]) / 60),
+          kmByZone,
+          zoneMinutes: zones.map((seconds) => Math.round(seconds / 60)) as WeekVolume["zoneMinutes"],
+        };
       })(),
     };
   });

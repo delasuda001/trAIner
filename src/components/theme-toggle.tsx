@@ -3,26 +3,25 @@
 import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
-/** Sombre par défaut ; le choix clair est mémorisé dans le navigateur. */
+type Theme = "light" | "dark";
+
+/** Thème du système par défaut ; un clic force l'autre et le mémorise dans le navigateur. */
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
+    const explicit = document.documentElement.dataset.theme;
+    const effective: Theme = explicit === "dark" || explicit === "light" ? explicit : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     // eslint-disable-next-line react-hooks/set-state-in-effect -- lecture unique du thème appliqué avant le rendu
-    setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+    setTheme(effective);
   }, []);
 
   function toggle() {
-    const next = theme === "dark" ? "light" : "dark";
+    const next: Theme = theme === "dark" ? "light" : "dark";
     setTheme(next);
+    document.documentElement.dataset.theme = next;
     try {
-      if (next === "light") {
-        localStorage.setItem("theme", "light");
-        document.documentElement.dataset.theme = "light";
-      } else {
-        localStorage.removeItem("theme");
-        delete document.documentElement.dataset.theme;
-      }
+      localStorage.setItem("theme", next);
     } catch {}
   }
 

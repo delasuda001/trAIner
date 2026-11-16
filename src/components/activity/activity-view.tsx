@@ -9,7 +9,7 @@ import { Fact } from "@/components/ui/fact";
 import type { SessionCoachOutput } from "@/lib/coach/session-coach";
 import { INTERVAL_INTENSITY_LABELS, paceSeconds, sessionTitle } from "@/lib/engine/activity-metrics";
 import { readDynamics } from "@/lib/engine/dynamics-reading";
-import { familyOfKind, SessionGlyph } from "@/components/ui/session-type";
+import { dominantZone, familyOfKind, SessionGlyph } from "@/components/ui/session-type";
 import { SPORT_LABELS, VERDICT_TONES } from "@/lib/engine/labels";
 import { VERDICT_LABELS } from "@/lib/engine/verdict";
 import { ZONE_LABELS, zoneRange } from "@/lib/engine/zones";
@@ -38,7 +38,7 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
   const toWork = ready?.toWork ?? verdict.toWork;
   const endpoint = `/api/activities/${encodeURIComponent(activity.id)}/coach`;
   return (
-    <section className="card card-hero" aria-label="Verdict du coach">
+    <section className="card card-hero" style={{ ["--shadow-color" as string]: "var(--sl-pink)" }} aria-label="Verdict du coach">
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
         <Badge tone={tone.tone} icon={tone.icon} label={`${VERDICT_LABELS[verdict.level]}${deltas.count ? ` · ${deltas.count} séances comparables` : ""}`} />
         {shown ? <CoachStamp model={shown.model} createdAt={shown.createdAt} /> : null}
@@ -297,7 +297,7 @@ export function ActivityView({ view, coach }: { view: View; coach: CoachResult<S
     <>
       <div className="page-head rise" style={{ paddingTop: 12 }}>
         <div className="row">
-          <SessionGlyph family={family} sport={activity.sport} />
+          <SessionGlyph family={family} zone={analysis ? dominantZone(analysis.metrics.zoneShares) : null} sport={activity.sport} />
           <div>
             <p className="eyebrow">{formatDate(activity.localDate, "long")} · {time} · {sport}</p>
             <h1 className="page-title">{title}</h1>

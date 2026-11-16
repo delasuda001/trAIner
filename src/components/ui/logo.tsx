@@ -1,24 +1,30 @@
-/** Marque trAIner : une foulée qui monte, sur un carré braise. */
-export function LogoMark({ size = 30 }: { size?: number }) {
+import { BRAND } from "@/lib/brand";
+
+/**
+ * Symbole Sillage : deux pastilles rose et bleu en surimpression, point jaune.
+ * Couleurs et mode de fusion pris dans les jetons : le même SVG sert en clair et en sombre.
+ */
+export function LogoMark({ size = 32 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden>
-      <defs>
-        <linearGradient id="trainer-mark" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#ff8a3d" />
-          <stop offset="1" stopColor="#ff3d2e" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="9" fill="url(#trainer-mark)" />
-      <path d="M6 21.5h5l2.6-6.5 3.6 10 3.2-8.5H26" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="26" cy="9" r="2.4" fill="#fff" />
+    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden>
+      <g style={{ mixBlendMode: "var(--sl-blend)" as React.CSSProperties["mixBlendMode"] }}>
+        <rect x="4" y="15" width="26" height="15" rx="7.5" transform="rotate(-24 17 22.5)" fill="var(--sl-pink)" />
+        <rect x="17" y="21" width="26" height="15" rx="7.5" transform="rotate(-24 30 28.5)" fill="var(--sl-blue)" />
+      </g>
+      <circle cx="37" cy="10" r="5" fill="var(--sl-yellow)" stroke="#1C1B3A" strokeWidth="1.5" />
     </svg>
   );
 }
 
+/** Mot-symbole en texte HTML, une lettre en rose (le « i » de « sillage »). */
 export function Wordmark() {
+  const word = BRAND.wordmark;
+  const index = BRAND.highlightIndex;
   return (
     <span className="brand-word">
-      tr<span className="ai">AI</span>ner
+      {word.slice(0, index)}
+      <span className="ai">{word.charAt(index)}</span>
+      {word.slice(index + 1)}
     </span>
   );
 }
