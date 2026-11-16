@@ -14,7 +14,7 @@ import type { Dashboard, SessionAnalysis } from "./analytics";
 
 export type CoachResult<T> =
   | { status: "ready"; output: T; model: string; createdAt: string }
-  | { status: "missing" }
+  | { status: "missing"; previous?: { output: T; model: string; createdAt: string; promptVersion: string } }
   | { status: "error"; kind: LlmFailureKind; message: string };
 
 type Job<T> = {
@@ -38,7 +38,9 @@ function hashOf(job: Job<unknown>): string {
 
 function cached<T>(job: Job<T>): CoachResult<T> {
   const latest = createCoachOutputRepository().latest(job.kind, job.subject);
-  if (!latest || latest.inputHash !== hashOf(job as Job<unknown>)) return { status: "missing" };
+  if (!latest) return { status: "missing" };
+  // Données modifiées depuis (ressenti, nouvelles séances…) : on garde l'ancienne analyse sous la main pour l'afficher comme « à mettre à jour ».
+  if (latest.inputHash !== hashOf(job as Job<unknown>)) return { status: "missing", previous: { output: JSON.parse(latest.outputJson) as T, model: latest.model, createdAt: latest.createdAt, promptVersion: latest.promptVersion } };
   return { status: "ready", output: JSON.parse(latest.outputJson) as T, model: latest.model, createdAt: latest.createdAt };
 }
 
@@ -100,6 +102,7 @@ function sessionJob(analysis: SessionAnalysis): Job<SessionCoachOutput> {
     lactateThresholdSpeedMps: analysis.profile.lactateThresholdSpeedMps,
     context: analysis.context,
     goal: goalForCoach(analysis.goal, analysis.activity.localDate),
+    feeling: analysis.feeling,
   });
   return { zoneOf: (hr: number) => zoneOf(hr, analysis.profile.zones), kind: "session", subject: analysis.activity.id, promptVersion: SESSION_PROMPT_VERSION, payload, system: SESSION_SYSTEM_PROMPT, prompt: buildSessionPrompt(payload), schema: sessionCoachSchema, jsonSchema: sessionCoachJsonSchema as unknown as Record<string, unknown> };
 }

@@ -72,9 +72,33 @@ describe("computeActivityMetrics", () => {
     const sparse: ActivityStreams = { timeS: [], distanceM: [], speedMps: [], heartRateBpm: [], cadenceSpm: [], altitudeM: [] };
     dense.timeS.forEach((_, index) => {
       if (index % 5) return;
-      (Object.keys(sparse) as Array<keyof ActivityStreams>).forEach((key) => (sparse[key] as Array<number | null>).push(dense[key][index]));
+      (Object.keys(sparse) as Array<keyof ActivityStreams>).forEach((key) => (sparse[key] as Array<number | null>).push((dense[key] as Array<number | null>)[index]));
     });
     const metrics = computeActivityMetrics({ streams: sparse, laps: [], zones, restingHeartRateBpm: 46, movingTimeS: 3600, distanceM: 10000, elevationGainM: 0, averageSpeedMps: 2.8, averageHeartRateBpm: 135, averageCadenceSpm: 166, hrTimeInZonesS: null, trainingEffectLabel: null });
     expect(metrics.aerobic).not.toBeNull();
+  });
+});
+
+describe("dynamique de course", () => {
+  it("moyenne la dynamique sur les portions courues et compare les deux moitiés", () => {
+    const streams = steadyStreams(3600, () => 2.8, () => 135);
+    streams.groundContactMs = streams.timeS.map((t) => (t < 1950 ? 260 : 280));
+    streams.verticalOscillationMm = streams.timeS.map(() => 88);
+    streams.stepLengthMm = streams.timeS.map(() => 1000);
+    streams.cadenceSpm = streams.timeS.map((t) => (t < 1950 ? 170 : 166));
+    const metrics = computeActivityMetrics({ streams, laps: [], zones, restingHeartRateBpm: 46, movingTimeS: 3600, distanceM: 10000, elevationGainM: 0, averageSpeedMps: 2.8, averageHeartRateBpm: 135, averageCadenceSpm: 168, hrTimeInZonesS: null, trainingEffectLabel: null });
+    expect(metrics.dynamics?.basis).toBe("running");
+    expect(metrics.dynamics?.early.groundContactMs).toBe(260);
+    expect(metrics.dynamics?.late.groundContactMs).toBe(280);
+    expect(metrics.dynamics?.late.cadenceSpm).toBe(166);
+    expect(metrics.dynamics?.stepLengthM).toBe(1);
+    expect(metrics.dynamics?.verticalRatioPct).toBeNull();
+  });
+
+  it("ne fabrique rien quand la montre ne mesure pas la dynamique", () => {
+    const streams = steadyStreams(3600, () => 2.8, () => 135);
+    streams.cadenceSpm = streams.timeS.map(() => null);
+    const metrics = computeActivityMetrics({ streams, laps: [], zones, restingHeartRateBpm: 46, movingTimeS: 3600, distanceM: 10000, elevationGainM: 0, averageSpeedMps: 2.8, averageHeartRateBpm: 135, averageCadenceSpm: null, hrTimeInZonesS: null, trainingEffectLabel: null });
+    expect(metrics.dynamics).toBeNull();
   });
 });

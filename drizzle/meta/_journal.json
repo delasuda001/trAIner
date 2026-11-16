@@ -43,6 +43,13 @@
       "when": 1794800000000,
       "tag": "0005_garmin_pivot",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794850000000,
+      "tag": "0006_feelings_and_chat",
+      "breakpoints": true
     }
   ]
 }

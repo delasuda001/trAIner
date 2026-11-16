@@ -9,7 +9,7 @@ import { zoneOf, type ZoneIndex } from "./zones";
  * découlent : le LLM ne calcule rien.
  */
 
-export const METRICS_VERSION = 7;
+export const METRICS_VERSION = 9;
 
 export type SessionKind =
   | "recovery"
@@ -95,6 +95,10 @@ export type WorkBlock = {
   speedCvPct: number | null;
   /** > 0 : les dernières répétitions sont plus lentes que les premières (%). */
   fadePct: number | null;
+  /** Écart entre la répétition la plus rapide et la plus lente (s/km). */
+  paceSpreadSPerKm: number | null;
+  /** > 0 : dernières répétitions plus lentes que les premières (s/km). */
+  fadeSPerKm: number | null;
   averageRecoveryS: number | null;
   /** Une ligne par répétition (et la récupération qui suit). */
   repsDetail: Array<{ startOffsetS: number; durationS: number; distanceM: number | null; speedMps: number; heartRateBpm: number | null; maxHeartRateBpm: number | null; recoveryAfterS: number | null }>;
@@ -118,7 +122,7 @@ export type ActivityMetrics = {
   /** Allure et FC moyennes hors 5 premières minutes. */
   mainSpeedMps: number | null;
   mainHeartRateBpm: number | null;
-  halves: { first: HalfSplit; second: HalfSplit; fadePct: number; driftPct: number | null } | null;
+  halves: { first: HalfSplit; second: HalfSplit; fadePct: number; driftPct: number | null; /** > 0 : 2e moitié plus lente (s/km). */ fadeSPerKm: number } | null;
   work: WorkBlock | null;
   aerobic: AerobicSample | null;
   /** Part du temps (0-1) dans chaque zone FC, Z1 à Z5 (sous Z1 compté en Z1). */
@@ -127,6 +131,24 @@ export type ActivityMetrics = {
   averageCadenceSpm: number | null;
   /** Blocs de 5 km (sorties de 12 km et plus) : allure et FC par bloc. */
   blocks: Array<{ fromKm: number; toKm: number; speedMps: number; heartRateBpm: number | null }> | null;
+  /** Dynamique de course, si la montre la mesure. */
+  dynamics: RunningDynamics | null;
+};
+
+export type DynamicsValues = {
+  cadenceSpm: number | null;
+  groundContactMs: number | null;
+  verticalOscillationMm: number | null;
+  verticalRatioPct: number | null;
+  stepLengthM: number | null;
+};
+
+export type RunningDynamics = DynamicsValues & {
+  /** Sur quoi portent les moyennes : toute la séance courue, ou les répétitions seulement. */
+  basis: "running" | "reps";
+  /** Début puis fin de l'effort (1re/2e moitié, ou 1re/dernière répétition) : la dérive de foulée signale la fatigue. */
+  early: DynamicsValues;
+  late: DynamicsValues;
 };
 
 export type MetricsInput = {
@@ -226,7 +248,7 @@ function computeHalves(streams: ActivityStreams): ActivityMetrics["halves"] {
   if (!first || !second || first.speedMps <= 0 || second.speedMps <= 0) return null;
   const fadePct = round((first.speedMps / second.speedMps - 1) * 100, 1);
   const driftPct = first.heartRateBpm && second.heartRateBpm ? round(((first.speedMps / first.heartRateBpm - second.speedMps / second.heartRateBpm) / (first.speedMps / first.heartRateBpm)) * 100, 1) : null;
-  return { first, second, fadePct, driftPct };
+  return { first, second, fadePct, driftPct, fadeSPerKm: round(1000 / second.speedMps - 1000 / first.speedMps, 0) };
 }
 
 /**
@@ -284,6 +306,8 @@ export function detectWorkBlock(laps: Lap[]): WorkBlock | null {
     peakHeartRateBpm: peaks.length ? round(mean(peaks) as number, 1) : null,
     speedCvPct: reps.length >= 2 ? round(((standardDeviation(speeds) as number) / averageSpeed) * 100, 1) : null,
     fadePct: reps.length >= 3 ? round((firstSpeed / lastSpeed - 1) * 100, 1) : null,
+    paceSpreadSPerKm: reps.length >= 2 ? round(1000 / Math.min(...speeds) - 1000 / Math.max(...speeds), 0) : null,
+    fadeSPerKm: reps.length >= 3 ? round(1000 / lastSpeed - 1000 / firstSpeed, 0) : null,
     averageRecoveryS: recoveries.length ? round(mean(recoveries.map((lap) => lap.durationS)) as number) : null,
     repsDetail: reps.map((lap) => {
       const position = ordered.findIndex((candidate) => candidate.index === lap.index);
@@ -299,6 +323,48 @@ export function detectWorkBlock(laps: Lap[]): WorkBlock | null {
       };
     }),
   };
+}
+
+const DYNAMICS_KEYS = ["cadenceSpm", "groundContactMs", "verticalOscillationMm", "verticalRatioPct", "stepLengthMm"] as const;
+
+function dynamicsOver(streams: ActivityStreams, ranges: Array<[number, number]>): DynamicsValues {
+  const sums: Record<(typeof DYNAMICS_KEYS)[number], number[]> = { cadenceSpm: [], groundContactMs: [], verticalOscillationMm: [], verticalRatioPct: [], stepLengthMm: [] };
+  streams.timeS.forEach((time, index) => {
+    if (!ranges.some(([from, to]) => time >= from && time <= to)) return;
+    const speed = streams.speedMps[index];
+    // Uniquement les échantillons courus : la marche et les arrêts faussent la foulée.
+    if (speed == null || speed < MIN_RUNNING_SPEED) return;
+    for (const key of DYNAMICS_KEYS) {
+      const value = streams[key]?.[index];
+      if (value != null) sums[key].push(value);
+    }
+  });
+  const avg = (values: number[], digits: number) => (values.length >= 30 ? round(mean(values) as number, digits) : null);
+  const step = avg(sums.stepLengthMm, 0);
+  return {
+    cadenceSpm: avg(sums.cadenceSpm, 0),
+    groundContactMs: avg(sums.groundContactMs, 0),
+    verticalOscillationMm: avg(sums.verticalOscillationMm, 0),
+    verticalRatioPct: avg(sums.verticalRatioPct, 1),
+    stepLengthM: step == null ? null : round(step / 1000, 2),
+  };
+}
+
+export function computeDynamics(streams: ActivityStreams | null, work: WorkBlock | null): RunningDynamics | null {
+  if (!streams) return null;
+  const hasDynamics = DYNAMICS_KEYS.slice(1).some((key) => streams[key]?.some((value) => value != null));
+  const end = streams.timeS.at(-1) ?? 0;
+  if (work && work.repsDetail.length >= 2) {
+    const ranges = work.repsDetail.map((rep) => [rep.startOffsetS, rep.startOffsetS + rep.durationS] as [number, number]);
+    const overall = dynamicsOver(streams, ranges);
+    if (!hasDynamics && overall.cadenceSpm == null) return null;
+    return { ...overall, basis: "reps", early: dynamicsOver(streams, [ranges[0]]), late: dynamicsOver(streams, [ranges[ranges.length - 1]]) };
+  }
+  if (end < WARMUP_SKIP_S + 600) return null;
+  const middle = WARMUP_SKIP_S + (end - WARMUP_SKIP_S) / 2;
+  const overall = dynamicsOver(streams, [[WARMUP_SKIP_S, end]]);
+  if (!hasDynamics && overall.cadenceSpm == null) return null;
+  return { ...overall, basis: "running", early: dynamicsOver(streams, [[WARMUP_SKIP_S, middle]]), late: dynamicsOver(streams, [[middle, end]]) };
 }
 
 const BLOCK_M = 5000;
@@ -388,6 +454,7 @@ export function computeActivityMetrics(input: MetricsInput): ActivityMetrics {
     elevationGainPerKm: input.elevationGainM != null && input.distanceM ? round(input.elevationGainM / (input.distanceM / 1000), 1) : null,
     averageCadenceSpm: input.averageCadenceSpm,
     blocks: input.streams && !work ? computeBlocks(input.streams, input.distanceM) : null,
+    dynamics: computeDynamics(input.streams, work),
   };
 }
 

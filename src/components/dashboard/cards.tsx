@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CoachRequest } from "@/components/coach-request";
 import { IntensityChart, ProgressionChart, SparkBars, Sparkline, WeeklyVolumeChart } from "@/components/charts";
 import { Badge } from "@/components/ui/badge";
+import { CoachStamp } from "@/components/ui/coach-stamp";
 import { Fact } from "@/components/ui/fact";
 import { familyOfKind, FAMILY_STYLE, SessionGlyph, SUGGESTION_FAMILY } from "@/components/ui/session-type";
 import type { OutlookCoachOutput } from "@/lib/coach/outlook-coach";
@@ -53,6 +54,7 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
         <p className="coach-line"><span className="coach-tag">Pourquoi</span><span>{ready ? ready.suggestionWhy : suggestion.reason}</span></p>
         <p className="coach-line"><span className="coach-tag">Comment</span><span>{ready ? ready.executionTip : primary.structure}</span></p>
       </div>
+      {coach.status === "ready" ? <div style={{ marginTop: 8 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Avis" /></div> : null}
       {suggestion.alternative ? <p className="alt"><strong>Plan B · {suggestion.alternative.title}</strong> ({formatDuration(suggestion.alternative.durationMin * 60)}). {suggestion.alternative.reason}</p> : null}
       {suggestion.then ? (
         <div className="next-after">
@@ -131,6 +133,7 @@ export function ProgressionCard({ dashboard, coach }: { dashboard: Dashboard; co
         </div>
       </div>
       <p className="card-text">{coach.status === "ready" ? coach.output.progressionSentence : noise ?? progressionSentence(progression)}</p>
+      {coach.status === "ready" ? <div style={{ marginTop: 4 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Lecture" /></div> : null}
       <ProgressionChart
         points={progression.points.map((point) => ({ date: point.date, secondsPerKm: 1000 / point.speedAtReferenceHr }))}
         recentStart={progression.recent.start}
@@ -179,7 +182,7 @@ export function RecoveryRow({ dashboard }: { dashboard: Dashboard }) {
         question="Ma charge est-elle raisonnable ?"
         value={String(load.acute7d)}
         unit="charge Garmin, 7 j"
-        compare={load.ratio != null ? `${formatNumber(load.ratio, 1)} × ta moyenne hebdo (${load.chronicWeekly28d})` : "—"}
+        compare={load.ratio != null ? `contre ${load.chronicWeekly28d} par semaine en moyenne (×${formatNumber(load.ratio, 1)})` : "—"}
         meaning={loadInfo.text}
         tone={loadInfo.tone}
         chart={<SparkBars points={load.weeks.map((week) => ({ label: formatDate(week.weekStart, "short"), value: week.load }))} unit="de charge Garmin" />}
@@ -227,7 +230,7 @@ export function LastSessionCard({ dashboard, coach }: { dashboard: Dashboard; co
         </div>
       ) : null}
       <div className="row-between" style={{ alignItems: "center", marginTop: 16, flexWrap: "wrap" }}>
-        {ready ? <span className="muted small">Analyse du coach{verdict.fewComparables ? " · comparaison fragile (moins de 3 séances comparables)" : ""}</span> : <CoachRequest endpoint={`/api/activities/${encodeURIComponent(activity.id)}/coach`} label="Demander l'analyse du coach" initialError={coach?.status === "error" ? coach.message : null} />}
+        {ready && coach?.status === "ready" ? <span className="muted small"><CoachStamp model={coach.model} createdAt={coach.createdAt} />{verdict.fewComparables ? " · comparaison fragile (moins de 3 séances comparables)" : ""}</span> : <CoachRequest endpoint={`/api/activities/${encodeURIComponent(activity.id)}/coach`} label="Demander l'analyse du coach" initialError={coach?.status === "error" ? coach.message : null} />}
         <Link href={href} className="btn btn-primary">Voir la séance <ArrowRight size={14} /></Link>
       </div>
     </section>

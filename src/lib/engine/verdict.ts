@@ -79,7 +79,7 @@ export function buildSignals(metrics: ActivityMetrics, deltas: ComparisonDeltas)
     }
     const fade = metrics.halves.fadePct;
     const tone: SignalTone = fade <= -1 ? "good" : fade > 3 ? "watch" : "neutral";
-    signals.push({ key: "fade", tone, weight: 1, primary: false, label: Math.abs(fade) < 0.5 ? "Allure tenue à l'identique sur les deux moitiés." : `Deuxième moitié ${formatNumber(Math.abs(fade), 1)} % plus ${fade > 0 ? "lente" : "rapide"} que la première.` });
+    signals.push({ key: "fade", tone, weight: 1, primary: false, label: Math.abs(fade) < 0.5 ? "Allure tenue à l'identique sur les deux moitiés." : `Deuxième moitié ${formatNumber(Math.abs(metrics.halves.fadeSPerKm))} s/km plus ${fade > 0 ? "lente" : "rapide"} que la première.` });
   }
 
   if (metrics.work) {
@@ -87,11 +87,11 @@ export function buildSignals(metrics: ActivityMetrics, deltas: ComparisonDeltas)
     const progressive = work.fadePct != null && work.fadePct <= -3;
     if (work.speedCvPct != null && !progressive) {
       const tone: SignalTone = work.speedCvPct <= 3 ? "good" : work.speedCvPct > 5 ? "watch" : "neutral";
-      signals.push({ key: "rep_consistency", tone, weight: 1, primary: false, label: `Écart d'allure entre répétitions de ${formatNumber(work.speedCvPct, 1)} %.` });
+      signals.push({ key: "rep_consistency", tone, weight: 1, primary: false, label: work.paceSpreadSPerKm != null ? `${formatNumber(work.paceSpreadSPerKm)} s/km d'écart entre ta répétition la plus rapide et la plus lente.` : `Écart d'allure entre répétitions de ${formatNumber(work.speedCvPct, 1)} %.` });
     }
     if (work.fadePct != null) {
       const tone: SignalTone = work.fadePct <= 0 ? "good" : work.fadePct > 3 ? "watch" : "neutral";
-      signals.push({ key: "rep_fade", tone, weight: 1, primary: false, label: work.fadePct <= -3 ? `Répétitions de plus en plus rapides : les dernières ${formatNumber(-work.fadePct, 1)} % plus vite que les premières.` : work.fadePct <= 0 ? "Allure tenue jusqu'à la dernière répétition." : `Dernières répétitions ${formatNumber(work.fadePct, 1)} % plus lentes que les premières.` });
+      signals.push({ key: "rep_fade", tone, weight: 1, primary: false, label: work.fadePct <= -3 ? `Répétitions de plus en plus rapides : les dernières ${formatNumber(Math.abs(work.fadeSPerKm ?? 0))} s/km plus vite que les premières.` : work.fadePct <= 0 ? "Allure tenue jusqu'à la dernière répétition." : `Dernières répétitions ${formatNumber(work.fadeSPerKm ?? 0)} s/km plus lentes que les premières.` });
     }
   }
   return signals;

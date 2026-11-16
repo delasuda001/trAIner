@@ -1,4 +1,4 @@
-import type { ActivityMetrics, SessionFamily } from "./activity-metrics";
+import type { ActivityMetrics, DynamicsValues, SessionFamily } from "./activity-metrics";
 import { mean, median, present, round } from "./stats";
 
 /**
@@ -95,6 +95,8 @@ export function selectComparables(current: RunForComparison, history: RunForComp
 }
 
 export type ComparisonDeltas = {
+  /** Dynamique de course moyenne des comparables qui la mesurent (même base : séance courue ou répétitions). */
+  dynamicsReference: { count: number; values: DynamicsValues } | null;
   count: number;
   /** Allure moyenne (hors échauffement) : courant vs moyenne des comparables. */
   current: { speedMps: number | null; heartRateBpm: number | null };
@@ -107,10 +109,12 @@ export type ComparisonDeltas = {
   drift: { current: number | null; reference: number | null };
   /** Ralentissement 2e moitié vs 1re (%) : courant et moyenne comparables. */
   fade: { current: number | null; reference: number | null };
+  /** Même chose en s/km (> 0 : 2e moitié plus lente). */
+  fadeSPerKm: { current: number | null; reference: number | null };
   /** Fractionné uniquement. */
   work: {
     current: { speedMps: number; heartRateBpm: number | null; speedCvPct: number | null; fadePct: number | null } | null;
-    reference: { speedMps: number | null; heartRateBpm: number | null; speedCvPct: number | null; fadePct: number | null } | null;
+    reference: { speedMps: number | null; heartRateBpm: number | null; speedCvPct: number | null; fadePct: number | null; paceSpreadSPerKm: number | null } | null;
     /** > 0 : répétitions plus rapides à FC égale que sur les comparables (s/km). */
     paceAtEqualHrGainSPerKm: number | null;
   } | null;
@@ -174,6 +178,7 @@ export function computeDeltas(current: RunForComparison, comparables: RunForComp
               heartRateBpm: mean(present(comparables.map((run) => run.metrics.work?.averageHeartRateBpm))),
               speedCvPct: mean(present(comparables.map((run) => run.metrics.work?.speedCvPct))),
               fadePct: mean(present(comparables.map((run) => run.metrics.work?.fadePct))),
+              paceSpreadSPerKm: (() => { const value = mean(present(comparables.map((run) => run.metrics.work?.paceSpreadSPerKm))); return value == null ? null : round(value, 0); })(),
             }
           : null,
       }
@@ -187,7 +192,17 @@ export function computeDeltas(current: RunForComparison, comparables: RunForComp
     paceAtEqualHrGainSPerKm: comparables.length ? paceGain : null,
     hrAtEqualPaceDeltaBpm: comparables.length ? hrDelta : null,
     drift: { current: current.metrics.halves?.driftPct ?? null, reference: roundOrNull(mean(present(comparables.map((run) => run.metrics.halves?.driftPct))), 1) },
+    fadeSPerKm: { current: current.metrics.halves?.fadeSPerKm ?? null, reference: roundOrNull(mean(present(comparables.map((run) => run.metrics.halves?.fadeSPerKm))), 0) },
     fade: { current: current.metrics.halves?.fadePct ?? null, reference: roundOrNull(mean(present(comparables.map((run) => run.metrics.halves?.fadePct))), 1) },
     work,
+    dynamicsReference: (() => {
+      const withDynamics = comparables.map((run) => run.metrics.dynamics).filter((dynamics): dynamics is NonNullable<typeof dynamics> => dynamics != null && dynamics.groundContactMs != null);
+      if (!withDynamics.length || !current.metrics.dynamics) return null;
+      const pick = (key: keyof DynamicsValues, digits: number) => {
+        const value = median(present(withDynamics.map((dynamics) => dynamics[key])));
+        return value == null ? null : round(value, digits);
+      };
+      return { count: withDynamics.length, values: { cadenceSpm: pick("cadenceSpm", 0), groundContactMs: pick("groundContactMs", 0), verticalOscillationMm: pick("verticalOscillationMm", 0), verticalRatioPct: pick("verticalRatioPct", 1), stepLengthM: pick("stepLengthM", 2) } };
+    })(),
   };
 }

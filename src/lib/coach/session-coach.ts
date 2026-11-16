@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { INTERVAL_INTENSITY_LABELS, SESSION_KIND_LABELS, sessionTitle, type ActivityMetrics } from "@/lib/engine/activity-metrics";
+import { INTERVAL_INTENSITY_LABELS, SESSION_KIND_LABELS, sessionTitle, type ActivityMetrics, type DynamicsValues } from "@/lib/engine/activity-metrics";
 import type { ComparisonDeltas } from "@/lib/engine/comparable";
 import { VERDICT_LABELS, type SessionVerdict } from "@/lib/engine/verdict";
 import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 
-export const SESSION_PROMPT_VERSION = "session-v3";
+export const SESSION_PROMPT_VERSION = "session-v4";
 
 export const sessionCoachSchema = z.object({
   verdict: z.string().min(10).max(260),
@@ -42,6 +42,8 @@ Règles absolues :
 - Le point à travailler vise la CAUSE probable de l'écart, en t'appuyant sur "contexte_de_la_seance" (charge des 7 jours, séances de qualité rapprochées, jours depuis la course précédente, récupération du jour) et sur l'objectif. Pas seulement le symptôme. Si rien dans le contexte n'explique l'écart, dis-le.
 - Pas de conseil générique (« hydrate-toi », « écoute ton corps »). Aucune interprétation médicale, de blessure ou de fatigue globale ; la récupération se décrit par ses chiffres.
 - Pas de remarque sur la température.
+- Dynamique de course (cadence, temps de contact au sol, oscillation, longueur de pas) : compare-la uniquement à ses propres valeurs (début/fin de séance, séances comparables), jamais à une norme. N'en parle que si un écart ressort.
+- Le ressenti de l'athlète ("ressenti"), s'il est fourni, est un fait à prendre en compte : relie-le aux chiffres.
 
 Format : "verdict" (une phrase), "bullets" (3 ou 4 constats courts et chiffrés), "wentWell", "toWork", "detail" (un paragraphe qui relie les constats, le contexte et l'objectif).`;
 
@@ -73,6 +75,28 @@ export type SessionContextInput = {
   };
 };
 
+function dynamicsLine(values: DynamicsValues): string {
+  const parts: string[] = [];
+  if (values.cadenceSpm != null) parts.push(`cadence ${values.cadenceSpm} pas/min`);
+  if (values.groundContactMs != null) parts.push(`contact au sol ${values.groundContactMs} ms`);
+  if (values.verticalOscillationMm != null) parts.push(`oscillation ${formatNumber(values.verticalOscillationMm / 10, 1)} cm`);
+  if (values.verticalRatioPct != null) parts.push(`ratio vertical ${formatNumber(values.verticalRatioPct, 1)} %`);
+  if (values.stepLengthM != null) parts.push(`pas de ${formatNumber(values.stepLengthM, 2)} m`);
+  return parts.join(", ") || "—";
+}
+
+function describeDynamics(metrics: ActivityMetrics, deltas: ComparisonDeltas) {
+  const dynamics = metrics.dynamics;
+  if (!dynamics) return null;
+  return {
+    base: dynamics.basis === "reps" ? "répétitions" : "séance courue hors échauffement",
+    moyennes: dynamicsLine(dynamics),
+    [dynamics.basis === "reps" ? "premiere_repetition" : "premiere_moitie"]: dynamicsLine(dynamics.early),
+    [dynamics.basis === "reps" ? "derniere_repetition" : "deuxieme_moitie"]: dynamicsLine(dynamics.late),
+    comparables: deltas.dynamicsReference ? `${dynamicsLine(deltas.dynamicsReference.values)} (${deltas.dynamicsReference.count} séance${deltas.dynamicsReference.count > 1 ? "s" : ""})` : "—",
+  };
+}
+
 function pct(value: number | null | undefined, digits = 1): string {
   return value == null ? "—" : `${formatNumber(value, digits)} %`;
 }
@@ -95,6 +119,7 @@ export function buildSessionPayload(input: {
   lactateThresholdSpeedMps: number | null;
   context: SessionContextInput | null;
   goal: Record<string, string>;
+  feeling?: { perceivedEffort: number | null; note: string } | null;
 }) {
   const { session, metrics, deltas, verdict, zones, context } = input;
   // Chaque FC porte sa zone : Claude ne peut plus se tromper de zone.
@@ -128,8 +153,8 @@ export function buildSessionPayload(input: {
           allure_repetitions: formatPace(work.averageSpeedMps),
           fc_moyenne_repetitions: bpm(work.averageHeartRateBpm),
           fc_max_moyenne_repetitions: bpm(work.peakHeartRateBpm),
-          ecart_allure_entre_repetitions: pct(work.speedCvPct),
-          evolution_premieres_vs_dernieres: work.fadePct == null ? "—" : work.fadePct > 0 ? `dernières ${pct(work.fadePct)} plus lentes` : `dernières ${pct(-work.fadePct)} plus rapides`,
+          ecart_entre_rep_la_plus_rapide_et_la_plus_lente: work.paceSpreadSPerKm == null ? "—" : `${work.paceSpreadSPerKm} s/km`,
+          evolution_premieres_vs_dernieres: work.fadeSPerKm == null ? "—" : work.fadeSPerKm === 0 ? "même allure" : `dernières ${Math.abs(work.fadeSPerKm)} s/km plus ${work.fadeSPerKm > 0 ? "lentes" : "rapides"}`,
           recuperation_moyenne: work.averageRecoveryS ? formatDuration(work.averageRecoveryS) : "—",
           detail_repetitions: work.repsDetail.slice(0, 10).map((rep, index) => `#${index + 1} ${formatClock(rep.durationS)}${rep.distanceM ? ` ${formatDistance(rep.distanceM, 2)}` : ""} à ${formatPace(rep.speedMps)}, FC ${bpm(rep.heartRateBpm)}, max ${bpm(rep.maxHeartRateBpm)}${rep.recoveryAfterS ? `, récup ${formatClock(rep.recoveryAfterS)}` : ""}`),
         }
@@ -137,11 +162,12 @@ export function buildSessionPayload(input: {
         ? {
             premiere_moitie: `${formatPace(metrics.halves.first.speedMps)} à ${bpm(metrics.halves.first.heartRateBpm)}`,
             deuxieme_moitie: `${formatPace(metrics.halves.second.speedMps)} à ${bpm(metrics.halves.second.heartRateBpm)}`,
-            deuxieme_moitie_vs_premiere: `${pct(Math.abs(metrics.halves.fadePct))} plus ${metrics.halves.fadePct > 0 ? "lente" : "rapide"}`,
+            deuxieme_moitie_vs_premiere: metrics.halves.fadeSPerKm === 0 ? "même allure" : `${Math.abs(metrics.halves.fadeSPerKm)} s/km plus ${metrics.halves.fadeSPerKm > 0 ? "lente" : "rapide"}`,
             derive_cardiaque: pct(metrics.halves.driftPct),
             ...(metrics.blocks ? { blocs_5_km: metrics.blocks.map((block) => `${formatNumber(block.fromKm, 1)}–${formatNumber(block.toKm, 1)} km : ${formatPace(block.speedMps)}, ${bpm(block.heartRateBpm)}`) } : {}),
           }
         : { note: "Séance trop courte pour comparer deux moitiés." },
+    dynamique_de_course: describeDynamics(metrics, deltas),
     temps_en_zones: metrics.zoneShares ? Object.fromEntries(metrics.zoneShares.map((share, index) => [ZONE_LABELS[(index + 1) as 1 | 2 | 3 | 4 | 5], `${Math.round(share * 100)} %`])) : null,
     comparaison: {
       nombre_seances_comparables: deltas.count,
@@ -157,7 +183,7 @@ export function buildSessionPayload(input: {
       })),
       ...(work
         ? {
-            repetitions_comparables: deltas.work?.reference ? { allure: formatPace(deltas.work.reference.speedMps), fc: bpm(deltas.work.reference.heartRateBpm), ecart_entre_repetitions: pct(deltas.work.reference.speedCvPct) } : null,
+            repetitions_comparables: deltas.work?.reference ? { allure: formatPace(deltas.work.reference.speedMps), fc: bpm(deltas.work.reference.heartRateBpm), ecart_entre_rep_la_plus_rapide_et_la_plus_lente: deltas.work.reference.paceSpreadSPerKm == null ? "—" : `${deltas.work.reference.paceSpreadSPerKm} s/km` } : null,
             repetitions_allure_a_fc_egale: workGain == null ? "—" : Math.abs(workGain) < 2 ? "identique" : `${formatNumber(Math.abs(workGain))} s/km plus ${workGain > 0 ? "rapide" : "lent"}`,
           }
         : {
@@ -166,12 +192,12 @@ export function buildSessionPayload(input: {
             allure_a_fc_egale: gain == null ? "—" : Math.abs(gain) < 2 ? "identique" : `${formatNumber(Math.abs(gain))} s/km plus ${gain > 0 ? "rapide" : "lent"}`,
             fc_a_allure_egale: hrDelta == null ? "—" : hrDelta === 0 ? "identique" : `${formatNumber(Math.abs(hrDelta))} bpm plus ${hrDelta > 0 ? "haute" : "basse"}`,
             derive_cardiaque_comparables: pct(deltas.drift.reference),
-            deuxieme_moitie_comparables: deltas.fade.reference == null ? "—" : `${pct(Math.abs(deltas.fade.reference))} plus ${deltas.fade.reference > 0 ? "lente" : "rapide"}`,
+            deuxieme_moitie_comparables: deltas.fadeSPerKm.reference == null ? "—" : `${Math.abs(deltas.fadeSPerKm.reference)} s/km plus ${deltas.fadeSPerKm.reference > 0 ? "lente" : "rapide"}`,
           }),
     },
     contexte_de_la_seance: context
       ? {
-          charge_7_jours: `${context.acute7d} (charge Garmin), soit ${context.loadRatio == null ? "—" : `${formatNumber(context.loadRatio, 1)} fois`} la moyenne hebdo de 4 semaines (${context.chronicWeekly28d})`,
+          charge_garmin_7_jours_au_jour_de_la_seance: `${context.acute7d}, soit ${context.loadRatio == null ? "—" : `${formatNumber(context.loadRatio, 1)} fois`} la moyenne hebdo de 4 semaines (${context.chronicWeekly28d})`,
           jours_depuis_course_precedente: context.daysSincePreviousRun == null ? "—" : String(context.daysSincePreviousRun),
           seances_de_qualite_14_jours_avant: context.qualityBefore14d.length ? context.qualityBefore14d.map((entry) => `${entry.title}, ${entry.daysBefore} jours avant`) : "aucune",
           recuperation_du_jour: {
@@ -183,6 +209,7 @@ export function buildSessionPayload(input: {
         }
       : null,
     objectif: input.goal,
+    ressenti: input.feeling ? { effort_percu: input.feeling.perceivedEffort != null ? `${input.feeling.perceivedEffort}/10` : "—", note: input.feeling.note || "—" } : "non renseigné",
     verdict_calcule: {
       niveau: VERDICT_LABELS[verdict.level],
       signaux: verdict.signals.map((signal) => `${signal.primary ? "PRINCIPAL " : ""}${signal.tone === "good" ? "positif" : signal.tone === "watch" ? "à surveiller" : "neutre"} : ${signal.label}`),

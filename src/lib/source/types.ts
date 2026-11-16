@@ -59,6 +59,11 @@ export type ActivityStreams = {
   heartRateBpm: Array<number | null>;
   cadenceSpm: Array<number | null>;
   altitudeM: Array<number | null>;
+  /** Dynamique de course (montre ou capteur compatible), absente sur les appareils qui ne la mesurent pas. */
+  groundContactMs?: Array<number | null>;
+  verticalOscillationMm?: Array<number | null>;
+  verticalRatioPct?: Array<number | null>;
+  stepLengthMm?: Array<number | null>;
 };
 
 export type ActivityDetail = {

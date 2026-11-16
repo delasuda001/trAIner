@@ -92,6 +92,24 @@ export const coachOutputs = sqliteTable("coach_outputs", {
   subjectIndex: index("coach_outputs_subject_idx").on(table.kind, table.subject, table.createdAt),
 }));
 
+/** Ressenti saisi par l'athlète sur une séance : effort perçu sur 10 et note libre. */
+export const activityFeelings = sqliteTable("activity_feelings", {
+  activityId: text("activity_id").primaryKey(),
+  perceivedEffort: integer("perceived_effort"),
+  note: text("note").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+/** Fil « Demander au coach » (un seul fil, historique court envoyé à Claude). */
+export const coachChatMessages = sqliteTable("coach_chat_messages", {
+  id: text("id").primaryKey(),
+  /** user | coach */
+  role: text("role").notNull(),
+  contentJson: text("content_json").notNull(),
+  model: text("model"),
+  createdAt: text("created_at").notNull(),
+}, (table) => ({ createdIndex: index("coach_chat_messages_created_idx").on(table.createdAt) }));
+
 export const athleteContextVersions = sqliteTable("athlete_context_versions", {
   id: text("id").primaryKey(),
   status: text("status").notNull(),
@@ -122,4 +140,4 @@ export const goals = sqliteTable("goals", {
   targetDateIndex: index("goals_target_date_idx").on(table.targetDate),
 }));
 
-export const schema = { activities, activityDetails, wellnessDays, appState, coachOutputs, athleteContextVersions, goals };
+export const schema = { activities, activityDetails, wellnessDays, appState, coachOutputs, activityFeelings, coachChatMessages, athleteContextVersions, goals };

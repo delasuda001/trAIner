@@ -1,7 +1,9 @@
-import { ChevronRight, Sparkles, ThumbsUp, Wrench } from "lucide-react";
+import { ChevronRight, ThumbsUp, Wrench } from "lucide-react";
 import Link from "next/link";
 import { ComparisonChart, SessionStreamCharts } from "@/components/charts";
 import { CoachRequest } from "@/components/coach-request";
+import { CoachStamp } from "@/components/ui/coach-stamp";
+import { FeelingForm } from "./feeling-form";
 import { Badge } from "@/components/ui/badge";
 import { Fact } from "@/components/ui/fact";
 import type { SessionCoachOutput } from "@/lib/coach/session-coach";
@@ -27,15 +29,25 @@ function signed(value: number, unit: string, positiveWord: string, negativeWord:
 function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: CoachResult<SessionCoachOutput> | null }) {
   const { verdict, activity, deltas } = analysis;
   const tone = VERDICT_TONES[verdict.level];
-  const ready = coach?.status === "ready" ? coach.output : null;
+  // Analyse à jour, ou à défaut la précédente (données modifiées depuis : ressenti, nouvelles séances…).
+  const previous = coach?.status === "missing" ? coach.previous ?? null : null;
+  const shown = coach?.status === "ready" ? coach : previous;
+  const ready = shown ? shown.output : null;
   const wentWell = ready?.wentWell ?? verdict.wentWell;
   const toWork = ready?.toWork ?? verdict.toWork;
+  const endpoint = `/api/activities/${encodeURIComponent(activity.id)}/coach`;
   return (
     <section className="card card-hero" aria-label="Verdict du coach">
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
         <Badge tone={tone.tone} icon={tone.icon} label={`${VERDICT_LABELS[verdict.level]}${deltas.count ? ` · ${deltas.count} séances comparables` : ""}`} />
-        {ready && coach?.status === "ready" ? <span className="muted small" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><Sparkles size={13} /> Coach Claude · {formatDate(coach.createdAt, "medium")}</span> : null}
+        {shown ? <CoachStamp model={shown.model} createdAt={shown.createdAt} /> : null}
       </div>
+      {previous ? (
+        <div className="stale-note">
+          <span style={{ flex: 1 }}>Tes données ont changé depuis cette analyse (ressenti, nouvelles séances ou réglages du coach).</span>
+          <CoachRequest endpoint={endpoint} label="Mettre à jour l'analyse" />
+        </div>
+      ) : null}
       <p className="verdict-line">{ready ? ready.verdict : verdict.headline}</p>
       <ul className="bullets">
         {(ready ? ready.bullets : verdict.signals.map((signal) => signal.label).filter((label) => label !== verdict.wentWell && label !== verdict.toWork)).map((line) => <li key={line}>{line}</li>)}
@@ -53,10 +65,70 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
         </details>
       ) : (
         <div style={{ marginTop: 16 }}>
-          <CoachRequest endpoint={`/api/activities/${encodeURIComponent(activity.id)}/coach`} label="Demander l'analyse du coach" initialError={coach?.status === "error" ? coach.message : null} />
+          <CoachRequest endpoint={endpoint} label="Demander l'analyse du coach" initialError={coach?.status === "error" ? coach.message : null} />
           <p className="muted small" style={{ marginTop: 6 }}>Verdict ci-dessus calculé à partir de tes données ; Claude le commente et l&apos;explique.</p>
         </div>
       )}
+    </section>
+  );
+}
+
+function dynamicsRows(analysis: SessionAnalysis): Array<{ label: string; value: string; change: string; reference: string }> {
+  const dynamics = analysis.metrics.dynamics;
+  if (!dynamics) return [];
+  const reference = analysis.deltas.dynamicsReference?.values;
+  const rows: Array<{ key: keyof typeof dynamics.early; label: string; format: (value: number) => string; unit: string; delta: (a: number, b: number) => string }> = [
+    { key: "cadenceSpm", label: "Cadence", format: (value) => `${value}`, unit: "pas/min", delta: (a, b) => `${b - a >= 0 ? "+" : "−"}${Math.abs(b - a)}` },
+    { key: "stepLengthM", label: "Longueur de pas", format: (value) => formatNumber(value, 2), unit: "m", delta: (a, b) => `${b - a >= 0 ? "+" : "−"}${Math.round(Math.abs(b - a) * 100)} cm` },
+    { key: "groundContactMs", label: "Contact au sol", format: (value) => `${value}`, unit: "ms", delta: (a, b) => `${b - a >= 0 ? "+" : "−"}${Math.abs(b - a)} ms` },
+    { key: "verticalOscillationMm", label: "Oscillation verticale", format: (value) => formatNumber(value / 10, 1), unit: "cm", delta: (a, b) => `${b - a >= 0 ? "+" : "−"}${Math.abs(b - a)} mm` },
+    { key: "verticalRatioPct", label: "Ratio vertical", format: (value) => formatNumber(value, 1), unit: "%", delta: (a, b) => `${b - a >= 0 ? "+" : "−"}${formatNumber(Math.abs(b - a), 1)} pt` },
+  ];
+  return rows.filter((row) => dynamics[row.key] != null).map((row) => {
+    const value = dynamics[row.key] as number;
+    const early = dynamics.early[row.key];
+    const late = dynamics.late[row.key];
+    const ref = reference?.[row.key];
+    return { label: row.label, value: `${row.format(value)} ${row.unit}`, change: early != null && late != null ? row.delta(early, late) : "—", reference: ref != null ? `${row.format(ref)} ${row.unit}` : "—" };
+  });
+}
+
+function DynamicsCard({ analysis }: { analysis: SessionAnalysis }) {
+  const rows = dynamicsRows(analysis);
+  if (!rows.length) return null;
+  const reps = analysis.metrics.dynamics?.basis === "reps";
+  return (
+    <section className="card">
+      <div className="section-head">
+        <h2 className="section-title">Dynamique de course</h2>
+        <span className="section-note">{reps ? "sur les répétitions" : "hors échauffement, portions courues"}</span>
+      </div>
+      <div className="table-wrap">
+        <table className="data dyn-table">
+          <thead><tr><th></th><th>Séance</th><th>{reps ? "1re → dernière rep" : "1re → 2e moitié"}</th><th>Comparables{analysis.deltas.dynamicsReference ? ` (${analysis.deltas.dynamicsReference.count})` : ""}</th></tr></thead>
+          <tbody>{rows.map((row) => <tr key={row.label}><td className="muted">{row.label}</td><td><strong>{row.value}</strong></td><td className="delta">{row.change}</td><td className="delta">{row.reference}</td></tr>)}</tbody>
+        </table>
+      </div>
+      <p className="muted small" style={{ marginTop: 8 }}>Comparé à tes propres valeurs uniquement. Un contact au sol qui s&apos;allonge ou une cadence qui baisse en fin d&apos;effort trahit souvent la fatigue.</p>
+    </section>
+  );
+}
+
+function ContextCard({ analysis }: { analysis: SessionAnalysis }) {
+  const { context } = analysis;
+  const recovery = context.recovery;
+  return (
+    <section className="card">
+      <div className="section-head">
+        <h2 className="section-title">Contexte du jour</h2>
+        <span className="section-note">au {formatDate(analysis.activity.localDate, "short")}, ce que le coach prend en compte</span>
+      </div>
+      <div className="facts" style={{ marginTop: 0 }}>
+        <Fact label="Charge Garmin 7 j" value={String(context.acute7d)} sub={context.loadRatio != null ? `contre ${context.chronicWeekly28d}/sem. en moyenne` : undefined} />
+        <Fact label="Course précédente" value={context.daysSincePreviousRun != null ? `${context.daysSincePreviousRun} j` : "—"} sub="avant" />
+        <Fact label="Qualité sur 14 j" value={String(context.qualityBefore14d.length)} sub={context.qualityBefore14d.map((entry) => `${entry.daysBefore} j avant`).join(", ") || "aucune"} />
+        <Fact label="VFC de la nuit" value={recovery.hrv.latest != null ? String(Math.round(recovery.hrv.latest)) : "—"} unit="ms" sub={recovery.hrv.baselineLow != null ? `plage ${recovery.hrv.baselineLow}–${recovery.hrv.baselineHigh}` : undefined} />
+      </div>
     </section>
   );
 }
@@ -99,8 +171,9 @@ function ComparisonCard({ analysis }: { analysis: SessionAnalysis }) {
         {deltas.paceAtEqualHrGainSPerKm != null ? <Fact label="Allure à FC égale" value={signed(deltas.paceAtEqualHrGainSPerKm, "s/km", "rapide", "lent")} /> : null}
         {deltas.hrAtEqualPaceDeltaBpm != null ? <Fact label="FC à allure égale" value={signed(deltas.hrAtEqualPaceDeltaBpm, "bpm", "haute", "basse")} /> : null}
         {deltas.drift.current != null ? <Fact label="Dérive cardiaque" value={`${formatNumber(deltas.drift.current, 1)} %`} sub={deltas.drift.reference != null ? `comparables : ${formatNumber(deltas.drift.reference, 1)} %` : undefined} /> : null}
-        {deltas.fade.current != null ? <Fact label="2e moitié vs 1re" value={`${formatNumber(Math.abs(deltas.fade.current), 1)} % plus ${deltas.fade.current > 0 ? "lente" : "rapide"}`} sub={deltas.fade.reference != null ? `comparables : ${formatNumber(Math.abs(deltas.fade.reference), 1)} % plus ${deltas.fade.reference > 0 ? "lente" : "rapide"}` : undefined} /> : null}
-        {deltas.work?.current?.speedCvPct != null ? <Fact label="Écart entre reps" value={`${formatNumber(deltas.work.current.speedCvPct, 1)} %`} sub={deltas.work.reference?.speedCvPct != null ? `comparables : ${formatNumber(deltas.work.reference.speedCvPct, 1)} %` : undefined} /> : null}
+        {deltas.fade.current != null ? <Fact label="2e moitié vs 1re" value={signed(deltas.fadeSPerKm.current ?? 0, "s/km", "lente", "rapide")} sub={deltas.fadeSPerKm.reference != null ? `comparables : ${signed(deltas.fadeSPerKm.reference, "s/km", "lente", "rapide")}` : undefined} /> : null}
+        {metrics.work?.paceSpreadSPerKm != null ? <Fact label="Écart entre reps" value={`${metrics.work.paceSpreadSPerKm} s/km`} sub={deltas.work?.reference?.paceSpreadSPerKm != null ? `comparables : ${deltas.work.reference.paceSpreadSPerKm} s/km` : "entre la plus rapide et la plus lente"} /> : null}
+        {deltas.work?.paceAtEqualHrGainSPerKm != null ? <Fact label="Reps à FC égale" value={signed(deltas.work.paceAtEqualHrGainSPerKm, "s/km", "rapide", "lent")} /> : null}
       </div>
       <details className="more">
         <summary><ChevronRight size={14} className="chev" /> Les {deltas.count} séances retenues</summary>
@@ -261,9 +334,19 @@ export function ActivityView({ view, coach }: { view: View; coach: CoachResult<S
       ) : null}
 
       <div className="grid grid-main-side section" style={{ alignItems: "start" }}>
-        <LapsCard view={view} />
+        <div className="stack">
+          <LapsCard view={view} />
+          {analysis ? <DynamicsCard analysis={analysis} /> : null}
+        </div>
         <ZonesCard view={view} />
       </div>
+
+      {analysis ? (
+        <div className="grid grid-main-side section" style={{ alignItems: "start" }}>
+          <FeelingForm activityId={activity.id} initial={analysis.feeling} />
+          <ContextCard analysis={analysis} />
+        </div>
+      ) : null}
 
       {analysis ? (
         <section className="card section">

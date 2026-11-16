@@ -4,6 +4,7 @@ import { addDays, daysBetween, localDate, startOfIsoWeek } from "@/lib/dates";
 import { createActivityRepository } from "@/lib/db/repositories/activity-repository";
 import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
 import { createWellnessRepository } from "@/lib/db/repositories/wellness-repository";
+import { createFeelingRepository, type Feeling } from "@/lib/db/repositories/feeling-repository";
 import type { ActivityRow, WellnessRow } from "@/lib/db/types";
 import { computeActivityMetrics, METRICS_VERSION, sessionTitle, type ActivityMetrics } from "@/lib/engine/activity-metrics";
 import { computeDeltas, selectComparables, type ComparisonDeltas, type RunForComparison } from "@/lib/engine/comparable";
@@ -112,6 +113,8 @@ export type SessionAnalysis = {
   verdict: SessionVerdict;
   profile: Profile;
   goal: Goal | null;
+  /** Ressenti saisi par l'athlète. */
+  feeling: Feeling | null;
   /** Contexte du jour de la séance : ce qui peut expliquer un écart. */
   context: SessionContext;
 };
@@ -159,6 +162,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     verdict: classifyVerdict(current.metrics, deltas),
     profile: context.profile,
     goal: context.goal,
+    feeling: createFeelingRepository().get(current.id),
     context: sessionContext(current, context),
   };
 }
@@ -275,4 +279,27 @@ export function getDashboard(): Dashboard {
       return { date, done: rows.filter((row) => row.localDate === date).map((row) => ({ kind: runById.get(row.id)?.metrics.kind ?? null, sport: row.sport })), planned };
     }),
   };
+}
+
+export type RunSummary = { id: string; localDate: string; title: string; distanceM: number | null; movingTimeS: number | null; averageSpeedMps: number | null; averageHeartRateBpm: number | null; verdict: string; headline: string; feeling: Feeling | null };
+
+/** Résumé des dernières courses (un seul chargement du contexte) pour la conversation avec le coach. */
+export function recentRunSummaries(limit: number): RunSummary[] {
+  const context = loadContext();
+  const feelings = new Map(createFeelingRepository().findMany(context.runs.slice(-limit).map((run) => run.id)).map((feeling) => [feeling.activityId, feeling]));
+  return context.runs.slice(-limit).reverse().map((run) => {
+    const analysis = analyzeSession(run.id, context);
+    return {
+      id: run.id,
+      localDate: run.localDate,
+      title: sessionTitle(run.metrics),
+      distanceM: run.distanceM,
+      movingTimeS: run.movingTimeS,
+      averageSpeedMps: run.row.averageSpeedMps,
+      averageHeartRateBpm: run.row.averageHeartRateBpm,
+      verdict: analysis?.verdict.level ?? "no_reference",
+      headline: analysis?.verdict.headline ?? "",
+      feeling: feelings.get(run.id) ?? null,
+    };
+  });
 }

@@ -105,6 +105,13 @@ export function createActivityRepository(database: AppDatabase = getDb()) {
       });
     },
 
+    /** Repasse en « à télécharger » les détails déjà présents d'un sport depuis une date (ex. nouveau champ lu dans le FIT). */
+    requeueDetails(sports: string[], sinceUtc: string): number {
+      const rows = database.select({ id: activities.id }).from(activities).where(and(inArray(activities.sport, sports), eq(activities.detailStatus, "ready"), gte(activities.startTimeUtc, sinceUtc))).all();
+      for (const row of rows) database.update(activities).set({ detailStatus: "pending" }).where(eq(activities.id, row.id)).run();
+      return rows.length;
+    },
+
     setDetailStatus(id: string, status: DetailStatus): void {
       database.update(activities).set({ detailStatus: status, updatedAt: new Date().toISOString() }).where(eq(activities.id, id)).run();
     },

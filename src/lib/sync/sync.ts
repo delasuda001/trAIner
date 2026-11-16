@@ -13,6 +13,11 @@ const WELLNESS_BACKFILL_DAYS = 400;
 const DETAIL_CONCURRENCY = 3;
 
 export const PROFILE_KEY = "athlete_profile";
+export const DETAIL_SCHEMA_KEY = "detail_schema_version";
+/** v2 : dynamique de course (GCT, oscillation, ratio vertical, longueur de pas) lue dans le FIT. */
+export const DETAIL_SCHEMA_VERSION = 2;
+/** Les montres avec dynamique de course datent de mai 2025 : inutile de retélécharger avant. */
+const DYNAMICS_REFETCH_SINCE = "2025-04-01T00:00:00Z";
 export const SYNC_STATE_KEY = "sync_state";
 
 export const athleteProfileSchema = z.object({
@@ -81,6 +86,11 @@ export async function runSync(deps: SyncDependencies, options: { detailBudget: n
   deps.state.set(SYNC_STATE_KEY, { ...previous, lastAttemptAt: now.toISOString() });
 
   try {
+    const schema = deps.state.get(DETAIL_SCHEMA_KEY, z.number()) ?? 1;
+    if (schema < DETAIL_SCHEMA_VERSION) {
+      deps.activities.requeueDetails([...DETAILED_SPORTS], DYNAMICS_REFETCH_SINCE);
+      deps.state.set(DETAIL_SCHEMA_KEY, DETAIL_SCHEMA_VERSION);
+    }
     const latest = deps.activities.latestStart(source);
     const since = latest ? new Date(Date.parse(latest) - OVERLAP_DAYS * 86_400_000) : null;
     const summaries = await deps.source.listActivities(since);

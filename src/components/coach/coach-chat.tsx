@@ -1,0 +1,74 @@
+"use client";
+
+import { ArrowUp, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { generatedAtLabel, modelLabel } from "@/lib/coach/model-label";
+import type { ChatMessage } from "@/lib/db/repositories/chat-repository";
+
+const SUGGESTIONS = [
+  "Est-ce que je suis bien le plan cette semaine ?",
+  "Pourquoi cette séance plutôt qu'un fractionné ?",
+  "Comment interpréter mes répétitions plus lentes à FC égale ?",
+  "Que changer si je ne peux courir qu'une fois cette semaine ?",
+];
+
+export function CoachChat({ initial }: { initial: ChatMessage[] }) {
+  const [messages, setMessages] = useState<ChatMessage[]>(initial);
+  const [question, setQuestion] = useState("");
+  const [busy, setBusy] = useState(false);
+  const end = useRef<HTMLDivElement>(null);
+
+  useEffect(() => end.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [messages, busy]);
+
+  async function ask(text: string) {
+    const value = text.trim();
+    if (value.length < 2 || busy) return;
+    setBusy(true);
+    setQuestion("");
+    setMessages((current) => [...current, { id: `pending-${Date.now()}`, role: "user", content: { text: value }, model: null, createdAt: new Date().toISOString() }]);
+    try {
+      const response = await fetch("/api/coach/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: value }) });
+      const body = (await response.json()) as { messages?: ChatMessage[]; error?: string };
+      if (body.messages) setMessages(body.messages);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clear() {
+    await fetch("/api/coach/chat", { method: "DELETE" });
+    setMessages([]);
+  }
+
+  return (
+    <section className="card chat">
+      <div className="chat-log" aria-live="polite">
+        {messages.length === 0 ? (
+          <div className="chat-empty">
+            <p className="muted">Pose une question sur ton entraînement, ou ajoute du contexte (fatigue, contrainte de la semaine…).</p>
+            <div className="chips" style={{ justifyContent: "center" }}>
+              {SUGGESTIONS.map((suggestion) => <button key={suggestion} type="button" className="chip" onClick={() => void ask(suggestion)}>{suggestion}</button>)}
+            </div>
+          </div>
+        ) : null}
+        {messages.map((message) => (
+          <div key={message.id} className={`bubble ${message.role}${message.content.error ? " error" : ""}`}>
+            <p style={{ whiteSpace: "pre-wrap" }}>{message.content.text}</p>
+            {message.content.evidence?.length ? <ul className="evidence">{message.content.evidence.map((item) => <li key={item}>{item}</li>)}</ul> : null}
+            {message.role === "coach" && message.model ? <span className="coach-stamp"><Sparkles size={12} /> {modelLabel(message.model)} · {generatedAtLabel(message.createdAt)}</span> : null}
+          </div>
+        ))}
+        {busy ? <div className="bubble coach"><span className="muted"><Sparkles size={13} className="spin" /> Le coach regarde tes données… (10 à 20 s)</span></div> : null}
+        <div ref={end} />
+      </div>
+      <form className="chat-form" onSubmit={(event) => { event.preventDefault(); void ask(question); }}>
+        <textarea rows={2} maxLength={800} value={question} placeholder="Ta question au coach…" onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void ask(question); } }} />
+        <button type="submit" className="btn btn-primary icon-btn" disabled={busy || question.trim().length < 2} aria-label="Envoyer"><ArrowUp size={16} /></button>
+      </form>
+      <div className="row-between" style={{ marginTop: 8, alignItems: "center" }}>
+        <span className="muted small">Le coach voit les 6 derniers messages et un résumé de tes données, pas tes séries brutes.</span>
+        {messages.length ? <button type="button" className="btn btn-ghost" onClick={() => void clear()}><Trash2 size={13} /> Effacer</button> : null}
+      </div>
+    </section>
+  );
+}

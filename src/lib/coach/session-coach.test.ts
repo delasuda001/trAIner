@@ -13,15 +13,17 @@ function intervalMetrics(reps: number): ActivityMetrics {
   const rep = { startOffsetS: 600, durationS: 120, distanceM: 520, speedMps: 4.3, heartRateBpm: 170, maxHeartRateBpm: 176, recoveryAfterS: 90 };
   return {
     version: 6, restingHeartRateUsed: 46, kind: "intervals_vo2", family: "intervals", structure: "intervals", mainSpeedMps: 3.5, mainHeartRateBpm: 160, halves: null,
-    work: { reps, averageDurationS: 120, averageDistanceM: 520, averageSpeedMps: 4.3, averageHeartRateBpm: 170, peakHeartRateBpm: 176, speedCvPct: 2.1, fadePct: 1.4, averageRecoveryS: 90, repsDetail: Array.from({ length: reps }, () => rep) },
-    aerobic: null, zoneShares: [0.05, 0.1, 0.2, 0.25, 0.4], elevationGainPerKm: 3.5, averageCadenceSpm: 167, blocks: null,
+    work: { reps, averageDurationS: 120, averageDistanceM: 520, averageSpeedMps: 4.3, averageHeartRateBpm: 170, peakHeartRateBpm: 176, speedCvPct: 2.1, fadePct: 1.4, paceSpreadSPerKm: 6, fadeSPerKm: 3, averageRecoveryS: 90, repsDetail: Array.from({ length: reps }, () => rep) },
+    aerobic: null, zoneShares: [0.05, 0.1, 0.2, 0.25, 0.4], elevationGainPerKm: 3.5, averageCadenceSpm: 167, blocks: null, dynamics: null,
   };
 }
 
 const deltas: ComparisonDeltas = {
+  dynamicsReference: null,
+  fadeSPerKm: { current: null, reference: null },
   count: 5, current: { speedMps: 3.5, heartRateBpm: 160 }, reference: { speedMps: 3.4, heartRateBpm: 158 }, paceAtEqualHrGainSPerKm: null, hrAtEqualPaceDeltaBpm: null,
   drift: { current: null, reference: null }, fade: { current: null, reference: null },
-  work: { current: { speedMps: 4.3, heartRateBpm: 170, speedCvPct: 2.1, fadePct: 1.4 }, reference: { speedMps: 4.25, heartRateBpm: 171, speedCvPct: 3, fadePct: 2 }, paceAtEqualHrGainSPerKm: 2 },
+  work: { current: { speedMps: 4.3, heartRateBpm: 170, speedCvPct: 2.1, fadePct: 1.4 }, reference: { speedMps: 4.25, heartRateBpm: 171, speedCvPct: 3, fadePct: 2, paceSpreadSPerKm: 8 }, paceAtEqualHrGainSPerKm: 2 },
 };
 
 const comparables = Array.from({ length: 5 }, (_, index) => ({ localDate: `2026-10-0${index + 1}`, title: "Fractionné 6 × 500 m", ageDays: 40 + index, movingTimeS: 2800, distanceM: 9000, mainSpeedMps: 3.4, mainHeartRateBpm: 158, workSpeedMps: 4.25, workHeartRateBpm: 171 }));
@@ -55,5 +57,14 @@ describe("charge utile du débrief", () => {
 
   it("annote chaque FC de sa zone", () => {
     expect(JSON.stringify(payloadFor(6))).toContain("170 bpm (Z5)");
+  });
+});
+
+describe("ressenti et dynamique dans la charge utile", () => {
+  it("transmet l'effort perçu et la note au coach", () => {
+    const metrics = intervalMetrics(3);
+    const payload = buildSessionPayload({ session, metrics, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 3.833, context, goal: {}, feeling: { perceivedEffort: 8, note: "jambes lourdes, nuit courte" } });
+    expect(payload.ressenti).toEqual({ effort_percu: "8/10", note: "jambes lourdes, nuit courte" });
+    expect(payload.dynamique_de_course).toBeNull();
   });
 });

@@ -30,6 +30,10 @@ type FitRecord = {
   fractionalCadence?: number;
   enhancedAltitude?: number;
   altitude?: number;
+  stanceTime?: number;
+  verticalOscillation?: number;
+  verticalRatio?: number;
+  stepLength?: number;
 };
 
 type FitLap = {
@@ -76,6 +80,8 @@ function buildStreams(records: FitRecord[], cadenceIsPerLeg: boolean): ActivityS
   if (records.length < 2) return null;
   const stride = Math.max(1, Math.ceil(records.length / MAX_SAMPLES));
   const streams: ActivityStreams = { timeS: [], distanceM: [], speedMps: [], heartRateBpm: [], cadenceSpm: [], altitudeM: [] };
+  const dynamics = { groundContactMs: [] as Array<number | null>, verticalOscillationMm: [] as Array<number | null>, verticalRatioPct: [] as Array<number | null>, stepLengthMm: [] as Array<number | null> };
+  const positive = (value: number | undefined, digits: number) => (value != null && value > 0 ? round(value, digits) : null);
   let clock = 0;
   let previous: number | null = null;
   records.forEach((record, index) => {
@@ -92,7 +98,15 @@ function buildStreams(records: FitRecord[], cadenceIsPerLeg: boolean): ActivityS
     streams.heartRateBpm.push(record.heartRate != null && record.heartRate > 0 ? record.heartRate : null);
     streams.cadenceSpm.push(stepsPerMinute(record.cadence, record.fractionalCadence, cadenceIsPerLeg));
     streams.altitudeM.push(round(record.enhancedAltitude ?? record.altitude, 1));
+    dynamics.groundContactMs.push(positive(record.stanceTime, 0));
+    dynamics.verticalOscillationMm.push(positive(record.verticalOscillation, 1));
+    dynamics.verticalRatioPct.push(positive(record.verticalRatio, 2));
+    dynamics.stepLengthMm.push(positive(record.stepLength, 0));
   });
+  // On ne garde une série de dynamique que si l'appareil l'a réellement mesurée.
+  for (const key of Object.keys(dynamics) as Array<keyof typeof dynamics>) {
+    if (dynamics[key].some((value) => value != null)) streams[key] = dynamics[key];
+  }
   return streams;
 }
 

@@ -7,6 +7,7 @@ export function Nav() {
   const pathname = usePathname();
   const links = [
     { href: "/", label: "Tableau de bord" },
+    { href: "/coach", label: "Demander au coach" },
     { href: "/objectif", label: "Objectif" },
   ];
   return (

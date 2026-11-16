@@ -169,7 +169,7 @@ export function ProgressionChart({ points, recentStart, recentLevel, previousLev
 }
 
 /* ---------- Séance : allure et FC (deux graphiques empilés, même axe du temps) ---------- */
-type StreamPoint = { t: number; pace: number | null; hr: number | null; alt: number | null };
+type StreamPoint = { t: number; d: number | null; pace: number | null; hr: number | null; alt: number | null };
 
 function labelZoneLines(zoneFloors: number[], domain: number[], minGap: number): Array<{ floor: number; name: string; labeled: boolean }> {
   const lines: Array<{ floor: number; name: string; labeled: boolean }> = [];
@@ -207,7 +207,7 @@ export function SessionStreamCharts({ points, zoneFloors, reps }: { points: Stre
   const shading = reps.map((rep) => <ReferenceArea key={rep.from} x1={rep.from} x2={rep.to} fill="var(--accent)" fillOpacity={0.1} stroke="none" ifOverflow="hidden" />);
   const common = { margin: { top: 6, right: 30, bottom: 0, left: 0 }, syncId: "session" };
   const xAxis = <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tick={AXIS_TICK} tickLine={false} axisLine={{ stroke: GRID }} tickFormatter={minutesLabel} />;
-  const tooltip = <Tooltip cursor={{ stroke: "var(--text-3)" }} content={({ active, payload }) => (active && payload?.[0] ? <TooltipBox title={minutesLabel(Number(payload[0].payload.t))} lines={[payload[0].payload.pace != null ? `${paceLabel(Number(payload[0].payload.pace))}/km` : "—", payload[0].payload.hr != null ? `${payload[0].payload.hr} bpm` : ""].filter(Boolean)} /> : null)} />;
+  const tooltip = <Tooltip cursor={{ stroke: "var(--text-3)" }} content={({ active, payload }) => (active && payload?.[0] ? <TooltipBox title={`${minutesLabel(Number(payload[0].payload.t))}${payload[0].payload.d != null ? ` · ${(Number(payload[0].payload.d) / 1000).toFixed(2).replace(".", ",")} km` : ""}`} lines={[payload[0].payload.pace != null ? `${paceLabel(Number(payload[0].payload.pace))}/km` : "—", payload[0].payload.hr != null ? `${payload[0].payload.hr} bpm` : ""].filter(Boolean)} /> : null)} />;
   return (
     <div className="grid" style={{ gap: 6 }}>
       <div className="legend"><span><span className="legend-swatch" style={{ background: "var(--series-pace)" }} />Allure (/km)</span>{reps.length ? <span><span className="legend-swatch" style={{ background: "var(--accent-soft)", outline: "1px solid var(--accent)" }} />répétitions détectées</span> : null}</div>
