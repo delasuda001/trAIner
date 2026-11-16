@@ -1,7 +1,7 @@
 import { asMember } from "@/lib/profiles/request";
 import type { Member } from "@/lib/profiles/types";
 import { CoachRequest } from "@/components/coach-request";
-import { IntensityCard, LastSessionCard, ProgressionCard, RecentList, RecoveryRow, SuggestionCard, VolumeCard } from "@/components/dashboard/cards";
+import { IntensityCard, LastSessionCard, MissingInfo, MobileGlance, ProgressionCard, RecentList, RecoveryRow, SuggestionCard, VolumeCard } from "@/components/dashboard/cards";
 import { formatDate } from "@/lib/formatters";
 import { getDashboard } from "@/lib/server/analytics";
 import { listWeeklyReviews, readOutlookCoach, readSessionCoach } from "@/lib/server/coach-service";
@@ -21,7 +21,7 @@ function renderHome(member: Member) {
     return (
       <div className="card state rise" style={{ marginTop: 32 }}>
         <h2>Première synchronisation</h2>
-        <p>Les activités Garmin arrivent : l&apos;historique complet et les séries détaillées des courses prennent quelques minutes la première fois. La page se met à jour toute seule.</p>
+        <p>Les activités Garmin arrivent : l&apos;historique et les séries détaillées des courses prennent quelques minutes la première fois. La page se met à jour toute seule. Si rien n&apos;arrive, le bandeau en haut dit pourquoi.</p>
       </div>
     );
   }
@@ -32,13 +32,15 @@ function renderHome(member: Member) {
   const weekly = listWeeklyReviews(1).find((review) => review.weekStart >= addDays(dashboard.today, -14));
   return (
     <>
-      <div className="page-head">
+      <div className="page-head home-head">
         <div>
           <p className="eyebrow">{weekday}</p>
           <h1 className="page-title">Ta forme, <mark>ta prochaine séance</mark></h1>
         </div>
         {outlook.status !== "ready" ? <CoachRequest endpoint="/api/coach/outlook" label="Demander l'avis du coach" initialError={outlook.status === "error" ? outlook.message : null} /> : null}
       </div>
+
+      <MobileGlance dashboard={dashboard} />
 
       <div className="grid grid-2">
         <SuggestionCard dashboard={dashboard} coach={outlook} />
@@ -58,6 +60,8 @@ function renderHome(member: Member) {
           <WeeklyReviewCard review={weekly} />
         </section>
       ) : null}
+
+      <MissingInfo dashboard={dashboard} />
 
       <section className="section">
         <LastSessionCard dashboard={dashboard} coach={lastCoach} />

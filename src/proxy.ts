@@ -17,5 +17,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|icon\\.svg|icon-.*\\.png|apple-icon\\.png|manifest\\.webmanifest|favicon\\.ico).*)"],
+  // Fichiers publics sans donnée : styles et scripts du build, icônes et manifeste (demandés sans cookie par iOS).
+  matcher: ["/((?!_next/static|_next/image|icon\\.svg|icons/|apple-icon|manifest\\.webmanifest|favicon\\.ico).*)"],
 };

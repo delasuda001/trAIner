@@ -101,6 +101,55 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
   );
 }
 
+/* ---------- Ce qui manque pour des conseils précis (dit simplement, l'application reste utilisable) ---------- */
+export function MissingInfo({ dashboard }: { dashboard: Dashboard }) {
+  const missing: Array<{ text: string; href?: string; link?: string }> = [];
+  if (!dashboard.profile.zonesFromWatch) missing.push({ text: "Zones cardiaques : celles de ta montre ne sont pas encore lues, on utilise des zones estimées à partir de ta FC max. Elles se mettent à jour à la prochaine synchronisation si ta montre les connaît." });
+  if (dashboard.profile.lactateThresholdSpeedMps == null) missing.push({ text: "Seuil lactique : ta montre ne l'a pas encore estimé ; les allures cibles s'appuient alors sur tes séances récentes." });
+  if (!dashboard.goal) missing.push({ text: "Objectif : pas encore renseigné, le coach vise ta progression générale.", href: "/objectif", link: "Le renseigner" });
+  if (!missing.length) return null;
+  return (
+    <section className="section">
+      <div className="card missing-info">
+        <div className="card-eyebrow">Pour des conseils plus précis</div>
+        <ul className="bullets">
+          {missing.map((item) => <li key={item.text}>{item.text}{item.href ? <> <Link href={item.href}>{item.link}</Link></> : null}</li>)}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Téléphone : prochaine séance et progression d'un coup d'œil ---------- */
+export function MobileGlance({ dashboard }: { dashboard: Dashboard }) {
+  const { suggestion, progression } = dashboard;
+  const { primary } = suggestion;
+  const target = primary.target;
+  const paceCenter = target?.paceFastMps && target.paceSlowMps ? (target.paceFastMps + target.paceSlowMps) / 2 : null;
+  const gain = progression.paceGainSPerKm;
+  return (
+    <div className="glance" aria-label="En bref">
+      <a className="glance-tile next" href="#next-title">
+        <div className="card-eyebrow">Prochaine séance · {suggestion.when.label}</div>
+        <div className="glance-title">{primary.title}</div>
+        <p className="glance-line">
+          {[primary.durationMin ? formatDuration(primary.durationMin * 60) : null, target ? `${target.zone} · ${target.heartRateLow}–${target.heartRateHigh} bpm` : null, paceCenter ? `≈ ${formatPace(paceCenter)}` : null].filter(Boolean).join(" · ")}
+        </p>
+        <p className="glance-line">{suggestion.reason}</p>
+      </a>
+      <a className="glance-tile" href="#progress-title">
+        <div className="card-eyebrow"><Gauge size={13} /> Progression aérobie · {STATE_BADGE[progression.state]}</div>
+        {progression.state !== "insufficient" ? (
+          <>
+            <div className="glance-big" style={{ marginTop: 6 }}>{formatPace(progression.recent.speedAtReferenceHr).replace("/km", "")}<span className="unit">/km à {progression.referenceHeartRateBpm} bpm</span></div>
+            {gain != null ? <p className="glance-line">{Math.abs(gain) < 1 ? "Même allure" : `${formatNumber(Math.abs(gain))} s/km plus ${gain > 0 ? "rapide" : "lent"}`} que les {progression.windowWeeks} semaines précédentes</p> : null}
+          </>
+        ) : <p className="glance-line">Pas encore de tendance : il faut quelques sorties faciles de plus.</p>}
+      </a>
+    </div>
+  );
+}
+
 /* ---------- Progression ---------- */
 const STATE_BADGE: Record<string, string> = { progressing: "en progrès ↗", stable: "stable ≈", regressing: "en recul ↘", insufficient: "à suivre ?" };
 

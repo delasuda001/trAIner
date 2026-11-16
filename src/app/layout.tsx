@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, DM_Mono } from "next/font/google";
 import { Settings } from "lucide-react";
 import Link from "next/link";
@@ -21,6 +21,15 @@ const text = DM_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--
 export const metadata: Metadata = {
   title: BRAND.name,
   description: BRAND.tagline,
+  // iPhone : ouverte depuis l'écran d'accueil, l'application s'affiche en plein écran, sans barre Safari.
+  appleWebApp: { capable: true, title: BRAND.name, statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [{ media: "(prefers-color-scheme: light)", color: "#F1F2EC" }, { media: "(prefers-color-scheme: dark)", color: "#15151E" }],
 };
 
 export const dynamic = "force-dynamic";
@@ -49,8 +58,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                 <Link href="/parametres" className="btn btn-ghost icon-btn" aria-label="Paramètres et consommation" title="Paramètres et consommation"><Settings size={16} /></Link>
               </>
             ) : null}
-            <ThemeToggle />
-            {member ? <LogoutButton name={member.name} /> : null}
+            <span className="desktop-only"><ThemeToggle /></span>
+            {member ? <span className="desktop-only"><LogoutButton name={member.name} /></span> : null}
           </div>
         </header>
         <main className="shell">{children}</main>

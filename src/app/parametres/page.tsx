@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { asMember, guestsSuspended } from "@/lib/profiles/request";
 import type { Member } from "@/lib/profiles/types";
 import { AccessPanel } from "@/components/settings/access-panel";
+import { LogoutButton } from "@/components/profiles/logout-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { MyDevices } from "@/components/settings/my-devices";
 import { ProfilesAdmin, type ProfileView } from "@/components/settings/profiles-admin";
 import { getRegistry } from "@/lib/profiles/context";
@@ -45,7 +48,19 @@ function TotalsCard({ title, totals }: { title: string; totals: UsageTotals }) {
 }
 
 export default async function SettingsPage() {
-  return asMember(async (member) => (member.role === "admin" ? renderAdmin() : renderGuest(member)));
+  return asMember(async (member) => (member.role === "admin" ? renderAdmin(member) : renderGuest(member)));
+}
+
+/** Sur téléphone, le thème et la déconnexion quittent l'en-tête et vivent ici. */
+function AccountRow({ name }: { name: string }) {
+  return (
+    <section className="card mobile-only" style={{ marginBottom: 16 }}>
+      <div className="row-between">
+        <span>Connecté : <strong>{name}</strong></span>
+        <span className="row" style={{ gap: 8 }}><ThemeToggle /><LogoutButton name={name} label="Se déconnecter" /></span>
+      </div>
+    </section>
+  );
 }
 
 const LOGIN_OUTCOMES: Record<string, string> = { ok: "entrée", refused: "refusée", locked: "bloquée (trop d'essais)" };
@@ -131,6 +146,7 @@ function renderGuest(member: Member) {
           <p className="page-sub">Les analyses du coach sont limitées pendant le test : tes chiffres restent toujours affichés.</p>
         </div>
       </div>
+      <AccountRow name={member.name} />
       <div className="grid grid-2" style={{ alignItems: "start" }}>
         <section className="card">
           <h2 className="section-title">Analyses du coach</h2>
@@ -145,14 +161,14 @@ function renderGuest(member: Member) {
         <section className="card">
           <h2 className="section-title">Tes appareils connectés</h2>
           <MyDevices devices={devices} />
-          <p className="muted small" style={{ marginTop: 10 }}>Un appareil perdu ? Déconnecte-le ici, ou préviens Bastien.</p>
+          <p className="muted small" style={{ marginTop: 10 }}>Un appareil perdu ? Déconnecte-le ici, ou préviens Bastien. <Link href="/bienvenue">Revoir l&apos;accueil du test</Link></p>
         </section>
       </div>
     </>
   );
 }
 
-async function renderAdmin() {
+async function renderAdmin(member: Member) {
   const repository = createUsageRepository();
   const now = new Date();
   const records = repository.since(new Date(now.getTime() - 30 * 86_400_000).toISOString());
@@ -180,6 +196,7 @@ async function renderAdmin() {
           <p className="page-sub">Profils du test familial, accès, et ce que Claude consomme sur ton abonnement.</p>
         </div>
       </div>
+      <AccountRow name={member.name} />
       {admin}
 
       <div className="grid grid-main-side" style={{ alignItems: "start" }}>
