@@ -8,11 +8,12 @@ import type { ChatMessage } from "@/lib/db/repositories/chat-repository";
 const SUGGESTIONS = [
   "Est-ce que je suis bien le plan cette semaine ?",
   "Pourquoi cette séance plutôt qu'un fractionné ?",
-  "Comment interpréter mes répétitions plus lentes à FC égale ?",
-  "Que changer si je ne peux courir qu'une fois cette semaine ?",
-];
+  "Mes répétitions sont plus lentes à FC égale, qu'est-ce que ça veut dire ?",
+  "Je ne peux courir qu'une fois cette semaine, laquelle faire ?",
+  "Comment progresser vers mon objectif avec 2 sorties par semaine ?",
+]; 
 
-export function CoachChat({ initial }: { initial: ChatMessage[] }) {
+export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: string[] }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initial);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,14 +42,12 @@ export function CoachChat({ initial }: { initial: ChatMessage[] }) {
   }
 
   return (
+    <div className="chat-layout">
     <section className="card chat">
       <div className="chat-log" aria-live="polite">
         {messages.length === 0 ? (
           <div className="chat-empty">
-            <p className="muted">Pose une question sur ton entraînement, ou ajoute du contexte (fatigue, contrainte de la semaine…).</p>
-            <div className="chips" style={{ justifyContent: "center" }}>
-              {SUGGESTIONS.map((suggestion) => <button key={suggestion} type="button" className="chip" onClick={() => void ask(suggestion)}>{suggestion}</button>)}
-            </div>
+            <p className="muted">Pose une question sur ton entraînement, ou préviens-le d&apos;une contrainte (fatigue, semaine chargée, voyage…). Des idées sont à droite.</p>
           </div>
         ) : null}
         {messages.map((message) => (
@@ -70,5 +69,19 @@ export function CoachChat({ initial }: { initial: ChatMessage[] }) {
         {messages.length ? <button type="button" className="btn btn-ghost" onClick={() => void clear()}><Trash2 size={13} /> Effacer</button> : null}
       </div>
     </section>
+    <aside className="stack">
+      <section className="card">
+        <h2 className="section-title">Idées de questions</h2>
+        <div className="suggestion-list">
+          {SUGGESTIONS.map((suggestion) => <button key={suggestion} type="button" className="suggestion" disabled={busy} onClick={() => void ask(suggestion)}>{suggestion}</button>)}
+        </div>
+      </section>
+      <section className="card">
+        <h2 className="section-title">Ce que le coach a sous les yeux</h2>
+        <ul className="seen-list">{seen.map((item) => <li key={item}>{item}</li>)}</ul>
+        <p className="muted small" style={{ marginTop: 8 }}>Ajoute ton ressenti sur une séance pour qu&apos;il en tienne compte.</p>
+      </section>
+    </aside>
+    </div>
   );
 }

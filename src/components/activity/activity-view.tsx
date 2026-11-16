@@ -7,7 +7,8 @@ import { FeelingForm } from "./feeling-form";
 import { Badge } from "@/components/ui/badge";
 import { Fact } from "@/components/ui/fact";
 import type { SessionCoachOutput } from "@/lib/coach/session-coach";
-import { INTERVAL_INTENSITY_LABELS, sessionTitle } from "@/lib/engine/activity-metrics";
+import { INTERVAL_INTENSITY_LABELS, paceSeconds, sessionTitle } from "@/lib/engine/activity-metrics";
+import { readDynamics } from "@/lib/engine/dynamics-reading";
 import { familyOfKind, SessionGlyph } from "@/components/ui/session-type";
 import { SPORT_LABELS, VERDICT_TONES } from "@/lib/engine/labels";
 import { VERDICT_LABELS } from "@/lib/engine/verdict";
@@ -109,7 +110,10 @@ function DynamicsCard({ analysis }: { analysis: SessionAnalysis }) {
           <tbody>{rows.map((row) => <tr key={row.label}><td className="muted">{row.label}</td><td><strong>{row.value}</strong></td><td className="delta">{row.change}</td><td className="delta">{row.reference}</td></tr>)}</tbody>
         </table>
       </div>
-      <p className="muted small" style={{ marginTop: 8 }}>Comparé à tes propres valeurs uniquement. Un contact au sol qui s&apos;allonge ou une cadence qui baisse en fin d&apos;effort trahit souvent la fatigue.</p>
+      {readDynamics(analysis.metrics, analysis.deltas).length ? (
+        <ul className="bullets" style={{ marginTop: 10 }}>{readDynamics(analysis.metrics, analysis.deltas).map((line) => <li key={line}>{line}</li>)}</ul>
+      ) : null}
+      <p className="muted small" style={{ marginTop: 8 }}>Comparé à tes propres valeurs uniquement, jamais à une norme.</p>
     </section>
   );
 }
@@ -173,7 +177,7 @@ function ComparisonCard({ analysis }: { analysis: SessionAnalysis }) {
         {deltas.drift.current != null ? <Fact label="Dérive cardiaque" value={`${formatNumber(deltas.drift.current, 1)} %`} sub={deltas.drift.reference != null ? `comparables : ${formatNumber(deltas.drift.reference, 1)} %` : undefined} /> : null}
         {deltas.fade.current != null ? <Fact label="2e moitié vs 1re" value={signed(deltas.fadeSPerKm.current ?? 0, "s/km", "lente", "rapide")} sub={deltas.fadeSPerKm.reference != null ? `comparables : ${signed(deltas.fadeSPerKm.reference, "s/km", "lente", "rapide")}` : undefined} /> : null}
         {metrics.work?.paceSpreadSPerKm != null ? <Fact label="Écart entre reps" value={`${metrics.work.paceSpreadSPerKm} s/km`} sub={deltas.work?.reference?.paceSpreadSPerKm != null ? `comparables : ${deltas.work.reference.paceSpreadSPerKm} s/km` : "entre la plus rapide et la plus lente"} /> : null}
-        {deltas.work?.paceAtEqualHrGainSPerKm != null ? <Fact label="Reps à FC égale" value={signed(deltas.work.paceAtEqualHrGainSPerKm, "s/km", "rapide", "lent")} /> : null}
+        {deltas.work?.paceAtEqualHrGainSPerKm != null && metrics.work && deltas.work.reference?.speedMps ? <Fact label="Reps à FC égale" value={signed(deltas.work.paceAtEqualHrGainSPerKm, "s/km", "rapides", "lentes")} sub={`écart brut : ${signed(-(paceSeconds(metrics.work.averageSpeedMps) - paceSeconds(deltas.work.reference.speedMps)), "s/km", "rapides", "lentes")}`} /> : null}
       </div>
       <details className="more">
         <summary><ChevronRight size={14} className="chev" /> Les {deltas.count} séances retenues</summary>

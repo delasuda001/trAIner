@@ -40,9 +40,9 @@ describe("charge utile du débrief", () => {
     expect(size / 3.2).toBeLessThan(2000);
   });
 
-  it("détaille au plus 10 répétitions", () => {
+  it("détaille au plus 8 répétitions", () => {
     expect(payloadFor(20).structure).toMatchObject({ detail_repetitions: expect.any(Array) });
-    expect((payloadFor(20).structure as { detail_repetitions: string[] }).detail_repetitions).toHaveLength(10);
+    expect((payloadFor(20).structure as { detail_repetitions: string[] }).detail_repetitions).toHaveLength(8);
   });
 
   it("ne contient aucune série brute ni coordonnée", () => {

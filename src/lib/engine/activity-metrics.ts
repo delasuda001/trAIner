@@ -9,7 +9,7 @@ import { zoneOf, type ZoneIndex } from "./zones";
  * découlent : le LLM ne calcule rien.
  */
 
-export const METRICS_VERSION = 9;
+export const METRICS_VERSION = 10;
 
 export type SessionKind =
   | "recovery"
@@ -79,6 +79,11 @@ export function familyOf(kind: SessionKind): SessionFamily {
   if (kind === "long") return "long";
   if (kind === "tempo" || kind === "threshold") return "steady";
   return "intervals";
+}
+
+/** Allure en secondes/km arrondie comme à l'affichage : les écarts se retrouvent dans les tableaux. */
+export function paceSeconds(speedMps: number): number {
+  return Math.round(1000 / speedMps);
 }
 
 export type HalfSplit = { speedMps: number; heartRateBpm: number | null };
@@ -248,7 +253,7 @@ function computeHalves(streams: ActivityStreams): ActivityMetrics["halves"] {
   if (!first || !second || first.speedMps <= 0 || second.speedMps <= 0) return null;
   const fadePct = round((first.speedMps / second.speedMps - 1) * 100, 1);
   const driftPct = first.heartRateBpm && second.heartRateBpm ? round(((first.speedMps / first.heartRateBpm - second.speedMps / second.heartRateBpm) / (first.speedMps / first.heartRateBpm)) * 100, 1) : null;
-  return { first, second, fadePct, driftPct, fadeSPerKm: round(1000 / second.speedMps - 1000 / first.speedMps, 0) };
+  return { first, second, fadePct, driftPct, fadeSPerKm: paceSeconds(second.speedMps) - paceSeconds(first.speedMps) };
 }
 
 /**
@@ -306,8 +311,8 @@ export function detectWorkBlock(laps: Lap[]): WorkBlock | null {
     peakHeartRateBpm: peaks.length ? round(mean(peaks) as number, 1) : null,
     speedCvPct: reps.length >= 2 ? round(((standardDeviation(speeds) as number) / averageSpeed) * 100, 1) : null,
     fadePct: reps.length >= 3 ? round((firstSpeed / lastSpeed - 1) * 100, 1) : null,
-    paceSpreadSPerKm: reps.length >= 2 ? round(1000 / Math.min(...speeds) - 1000 / Math.max(...speeds), 0) : null,
-    fadeSPerKm: reps.length >= 3 ? round(1000 / lastSpeed - 1000 / firstSpeed, 0) : null,
+    paceSpreadSPerKm: reps.length >= 2 ? paceSeconds(Math.min(...speeds)) - paceSeconds(Math.max(...speeds)) : null,
+    fadeSPerKm: reps.length >= 3 ? paceSeconds(lastSpeed) - paceSeconds(firstSpeed) : null,
     averageRecoveryS: recoveries.length ? round(mean(recoveries.map((lap) => lap.durationS)) as number) : null,
     repsDetail: reps.map((lap) => {
       const position = ordered.findIndex((candidate) => candidate.index === lap.index);

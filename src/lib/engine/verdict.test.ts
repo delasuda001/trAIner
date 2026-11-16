@@ -20,8 +20,11 @@ describe("verdict", () => {
   it("place en dessous des repères des répétitions plus lentes à FC égale, même régulières (13/11)", () => {
     const verdict = classifyVerdict(metrics, deltas(-5));
     expect(verdict.level).toBe("below");
-    expect(verdict.headline).toContain("5 s/km plus lent à FC égale");
-    expect(verdict.toWork).toContain("à FC égale");
+    expect(verdict.headline).toContain("8 s/km plus lentes, soit 5 s/km plus lentes une fois corrigé de la FC");
+    expect(verdict.toWork).toContain("corrigé de la FC");
+    // Un seul signal de pacing, jugé par rapport aux comparables (8 s/km contre 7) : dans la norme.
+    expect(verdict.signals.filter((signal) => signal.key.startsWith("rep_") && !signal.primary)).toHaveLength(1);
+    expect(verdict.signals.find((signal) => signal.key === "rep_pacing")?.tone).toBe("neutral");
   });
 
   it("au-dessus quand le signal principal est bon", () => {
@@ -36,5 +39,16 @@ describe("verdict", () => {
     expect(sessionTitle(metrics)).toBe("Fractionné long 3 × 2 km");
     expect(sessionTitle({ kind: "intervals_short", work: { ...metrics.work!, averageDurationS: 45, reps: 10, repsDetail: Array.from({ length: 10 }, () => ({ ...rep(5), durationS: 45, distanceM: 220 })) } })).toBe("Fractionné court 10 × 45 s");
     expect(sessionTitle({ kind: "endurance", work: null })).toBe("Endurance");
+  });
+});
+
+describe("lecture de la dynamique de course", () => {
+  it("explique un pas plus court à cadence égale et repère une foulée stable", async () => {
+    const { readDynamics } = await import("./dynamics-reading");
+    const values = { cadenceSpm: 171, groundContactMs: 259, verticalOscillationMm: 86, verticalRatioPct: 6, stepLengthM: 1.39 };
+    const withDynamics = { ...metrics, dynamics: { ...values, basis: "reps" as const, early: { ...values, cadenceSpm: 172 }, late: { ...values, cadenceSpm: 170 } } };
+    const lines = readDynamics(withDynamics, { ...deltas(-4), dynamicsReference: { count: 2, values: { ...values, stepLengthM: 1.46, groundContactMs: 257 } } });
+    expect(lines[0]).toContain("pas 7 cm plus court");
+    expect(lines.at(-1)).toContain("Foulée stable");
   });
 });

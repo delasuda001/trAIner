@@ -1,12 +1,13 @@
 import { z } from "zod";
-import { INTERVAL_INTENSITY_LABELS, SESSION_KIND_LABELS, sessionTitle, type ActivityMetrics, type DynamicsValues } from "@/lib/engine/activity-metrics";
+import { INTERVAL_INTENSITY_LABELS, paceSeconds, SESSION_KIND_LABELS, sessionTitle, type ActivityMetrics, type DynamicsValues } from "@/lib/engine/activity-metrics";
 import type { ComparisonDeltas } from "@/lib/engine/comparable";
+import { readDynamics } from "@/lib/engine/dynamics-reading";
 import { VERDICT_LABELS, type SessionVerdict } from "@/lib/engine/verdict";
 import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 
-export const SESSION_PROMPT_VERSION = "session-v4";
+export const SESSION_PROMPT_VERSION = "session-v5";
 
 export const sessionCoachSchema = z.object({
   verdict: z.string().min(10).max(260),
@@ -43,6 +44,8 @@ Règles absolues :
 - Pas de conseil générique (« hydrate-toi », « écoute ton corps »). Aucune interprétation médicale, de blessure ou de fatigue globale ; la récupération se décrit par ses chiffres.
 - Pas de remarque sur la température.
 - Dynamique de course (cadence, temps de contact au sol, oscillation, longueur de pas) : compare-la uniquement à ses propres valeurs (début/fin de séance, séances comparables), jamais à une norme. N'en parle que si un écart ressort.
+- Un même indicateur reçoit UNE seule lecture : reprends la qualification de "verdict_calcule" (positif, à surveiller, neutre ou « dans ta norme »). Ne présente jamais un même fait comme point fort et comme point à travailler, ni avec deux qualificatifs différents.
+- Quand tu compares l'allure aux séances comparables, donne d'abord l'écart brut puis l'écart une fois corrigé de la FC, avec les deux chiffres de la charge utile.
 - Le ressenti de l'athlète ("ressenti"), s'il est fourni, est un fait à prendre en compte : relie-le aux chiffres.
 
 Format : "verdict" (une phrase), "bullets" (3 ou 4 constats courts et chiffrés), "wentWell", "toWork", "detail" (un paragraphe qui relie les constats, le contexte et l'objectif).`;
@@ -93,6 +96,7 @@ function describeDynamics(metrics: ActivityMetrics, deltas: ComparisonDeltas) {
     moyennes: dynamicsLine(dynamics),
     [dynamics.basis === "reps" ? "premiere_repetition" : "premiere_moitie"]: dynamicsLine(dynamics.early),
     [dynamics.basis === "reps" ? "derniere_repetition" : "deuxieme_moitie"]: dynamicsLine(dynamics.late),
+    lecture: readDynamics(metrics, deltas),
     comparables: deltas.dynamicsReference ? `${dynamicsLine(deltas.dynamicsReference.values)} (${deltas.dynamicsReference.count} séance${deltas.dynamicsReference.count > 1 ? "s" : ""})` : "—",
   };
 }
@@ -156,7 +160,7 @@ export function buildSessionPayload(input: {
           ecart_entre_rep_la_plus_rapide_et_la_plus_lente: work.paceSpreadSPerKm == null ? "—" : `${work.paceSpreadSPerKm} s/km`,
           evolution_premieres_vs_dernieres: work.fadeSPerKm == null ? "—" : work.fadeSPerKm === 0 ? "même allure" : `dernières ${Math.abs(work.fadeSPerKm)} s/km plus ${work.fadeSPerKm > 0 ? "lentes" : "rapides"}`,
           recuperation_moyenne: work.averageRecoveryS ? formatDuration(work.averageRecoveryS) : "—",
-          detail_repetitions: work.repsDetail.slice(0, 10).map((rep, index) => `#${index + 1} ${formatClock(rep.durationS)}${rep.distanceM ? ` ${formatDistance(rep.distanceM, 2)}` : ""} à ${formatPace(rep.speedMps)}, FC ${bpm(rep.heartRateBpm)}, max ${bpm(rep.maxHeartRateBpm)}${rep.recoveryAfterS ? `, récup ${formatClock(rep.recoveryAfterS)}` : ""}`),
+          detail_repetitions: work.repsDetail.slice(0, 8).map((rep, index) => `#${index + 1} ${formatClock(rep.durationS)}${rep.distanceM ? ` ${formatDistance(rep.distanceM, 2)}` : ""} à ${formatPace(rep.speedMps)}, FC ${bpm(rep.heartRateBpm)}, max ${bpm(rep.maxHeartRateBpm)}${rep.recoveryAfterS ? `, récup ${formatClock(rep.recoveryAfterS)}` : ""}`),
         }
       : metrics.halves
         ? {
@@ -184,6 +188,7 @@ export function buildSessionPayload(input: {
       ...(work
         ? {
             repetitions_comparables: deltas.work?.reference ? { allure: formatPace(deltas.work.reference.speedMps), fc: bpm(deltas.work.reference.heartRateBpm), ecart_entre_rep_la_plus_rapide_et_la_plus_lente: deltas.work.reference.paceSpreadSPerKm == null ? "—" : `${deltas.work.reference.paceSpreadSPerKm} s/km` } : null,
+            repetitions_ecart_brut: deltas.work?.reference?.speedMps && work ? (() => { const raw = paceSeconds(work.averageSpeedMps) - paceSeconds(deltas.work.reference.speedMps); return raw === 0 ? "même allure" : `${Math.abs(raw)} s/km plus ${raw > 0 ? "lentes" : "rapides"}`; })() : "—",
             repetitions_allure_a_fc_egale: workGain == null ? "—" : Math.abs(workGain) < 2 ? "identique" : `${formatNumber(Math.abs(workGain))} s/km plus ${workGain > 0 ? "rapide" : "lent"}`,
           }
         : {
