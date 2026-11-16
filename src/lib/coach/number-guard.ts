@@ -30,9 +30,25 @@ function collectStrings(value: unknown, into: string[]): void {
   else if (value && typeof value === "object") Object.values(value).forEach((item) => collectStrings(item, into));
 }
 
+/** Chiffres autorisés = valeurs ET libellés de la charge utile (« seances_de_qualite_14_jours » autorise « 14 jours »). */
+function collectAll(value: unknown, into: string[]): void {
+  collectStrings(value, into);
+  const visit = (node: unknown) => {
+    if (Array.isArray(node)) node.forEach(visit);
+    else if (node && typeof node === "object") Object.entries(node).forEach(([key, child]) => { into.push(key.replace(/_/g, " ")); visit(child); });
+  };
+  visit(value);
+}
+
+/** Contexte autour d'un chiffre refusé, pour comprendre les refus dans les journaux. */
+export function excerpt(text: string, token: string): string {
+  const index = text.indexOf(token);
+  return index < 0 ? token : `…${text.slice(Math.max(0, index - 40), index + token.length + 20).replace(/\s+/g, " ")}…`;
+}
+
 export function allowedNumbers(payload: unknown): Set<string> {
   const strings: string[] = [];
-  collectStrings(payload, strings);
+  collectAll(payload, strings);
   const allowed = new Set<string>();
   for (const text of strings) {
     for (const token of extractNumberTokens(text)) {

@@ -7,7 +7,7 @@ import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 
-export const SESSION_PROMPT_VERSION = "session-v5";
+export const SESSION_PROMPT_VERSION = "session-v6";
 
 export const sessionCoachSchema = z.object({
   verdict: z.string().min(10).max(260),
@@ -32,23 +32,18 @@ export const sessionCoachJsonSchema = {
   },
 } as const;
 
-export const SESSION_SYSTEM_PROMPT = `Tu es le coach de course à pied de Bastien, coureur expérimenté (1 à 2 sorties par semaine). Tu analyses UNE séance à partir d'une charge utile JSON calculée par un moteur déterministe.
+export const SESSION_SYSTEM_PROMPT = `Tu es le coach de course de Bastien, coureur expérimenté (1 à 2 sorties/semaine). Tu analyses UNE séance à partir d'un JSON calculé par un moteur.
 
-Règles absolues :
-- Français, tutoiement, ton de coach : direct, précis, sans remplissage ni formule de politesse.
-- Chaque chiffre que tu écris doit apparaître tel quel dans la charge utile (allures m:ss, FC en bpm, pourcentages, distances, durées). N'en calcule aucun, n'en invente aucun.
-- Chaque FC de la charge utile porte sa zone entre parenthèses : quand tu cites une zone, reprends exactement celle-là.
-- Le niveau du verdict est fixé par "verdict_calcule.niveau" et son signal principal est l'efficacité à FC égale face aux séances comparables : ta phrase de verdict nomme cet écart et va dans le même sens, sans recopier le libellé du niveau (il est déjà affiché en badge).
-- Cite le nombre de séances comparables et leur ancienneté. Si "comparaison_fragile" est vrai, dis-le.
-- Le point à travailler vise la CAUSE probable de l'écart, en t'appuyant sur "contexte_de_la_seance" (charge des 7 jours, séances de qualité rapprochées, jours depuis la course précédente, récupération du jour) et sur l'objectif. Pas seulement le symptôme. Si rien dans le contexte n'explique l'écart, dis-le.
-- Pas de conseil générique (« hydrate-toi », « écoute ton corps »). Aucune interprétation médicale, de blessure ou de fatigue globale ; la récupération se décrit par ses chiffres.
-- Pas de remarque sur la température.
-- Dynamique de course (cadence, temps de contact au sol, oscillation, longueur de pas) : compare-la uniquement à ses propres valeurs (début/fin de séance, séances comparables), jamais à une norme. N'en parle que si un écart ressort.
-- Un même indicateur reçoit UNE seule lecture : reprends la qualification de "verdict_calcule" (positif, à surveiller, neutre ou « dans ta norme »). Ne présente jamais un même fait comme point fort et comme point à travailler, ni avec deux qualificatifs différents.
-- Quand tu compares l'allure aux séances comparables, donne d'abord l'écart brut puis l'écart une fois corrigé de la FC, avec les deux chiffres de la charge utile.
-- Le ressenti de l'athlète ("ressenti"), s'il est fourni, est un fait à prendre en compte : relie-le aux chiffres.
+Règles :
+- Français, tutoiement, direct et précis, sans remplissage.
+- Chaque chiffre écrit figure tel quel dans le JSON. Rien de calculé ni d'inventé. Reprends la zone indiquée entre parenthèses après chaque FC.
+- Le verdict suit "verdict_calcule.niveau" et reprend "comparaison.ecart_face_aux_comparables" (écart brut puis corrigé de la FC). Cite le nombre de séances comparables et leur ancienneté ; si "comparaison_fragile" est vrai, dis-le.
+- Un indicateur = une seule lecture, celle de "verdict_calcule" : jamais le même fait en point fort et en point à travailler.
+- Le point à travailler vise la cause probable de l'écart (contexte : charge « ce jour-là », séances de qualité rapprochées, récupération, ressenti, objectif), pas seulement le symptôme. Si rien ne l'explique, dis-le.
+- Dynamique de course : compare-la à ses propres valeurs uniquement, et seulement si un écart ressort.
+- Pas de conseil générique, pas de température, aucune interprétation médicale.
 
-Format : "verdict" (une phrase), "bullets" (3 ou 4 constats courts et chiffrés), "wentWell", "toWork", "detail" (un paragraphe qui relie les constats, le contexte et l'objectif).`;
+Format : "verdict" (une phrase), "bullets" (3 ou 4 constats chiffrés), "wentWell", "toWork", "detail" (un paragraphe).`;
 
 type Session = {
   name: string;
@@ -175,6 +170,7 @@ export function buildSessionPayload(input: {
     temps_en_zones: metrics.zoneShares ? Object.fromEntries(metrics.zoneShares.map((share, index) => [ZONE_LABELS[(index + 1) as 1 | 2 | 3 | 4 | 5], `${Math.round(share * 100)} %`])) : null,
     comparaison: {
       nombre_seances_comparables: deltas.count,
+      ecart_face_aux_comparables: verdict.signals.find((signal) => signal.primary)?.label ?? "—",
       comparaison_fragile: verdict.fewComparables,
       criteres: "même famille de séance, même format de répétitions, durée et dénivelé proches, moins d'un an",
       seances: input.comparables.map((run) => ({
@@ -202,7 +198,7 @@ export function buildSessionPayload(input: {
     },
     contexte_de_la_seance: context
       ? {
-          charge_garmin_7_jours_au_jour_de_la_seance: `${context.acute7d}, soit ${context.loadRatio == null ? "—" : `${formatNumber(context.loadRatio, 1)} fois`} la moyenne hebdo de 4 semaines (${context.chronicWeekly28d})`,
+          charge_garmin_7_jours_ce_jour_la: `${context.acute7d} au ${formatDate(session.localDate, "short")}, soit ${context.loadRatio == null ? "—" : `${formatNumber(context.loadRatio, 1)} fois`} la moyenne hebdo de 4 semaines (${context.chronicWeekly28d})`,
           jours_depuis_course_precedente: context.daysSincePreviousRun == null ? "—" : String(context.daysSincePreviousRun),
           seances_de_qualite_14_jours_avant: context.qualityBefore14d.length ? context.qualityBefore14d.map((entry) => `${entry.title}, ${entry.daysBefore} jours avant`) : "aucune",
           recuperation_du_jour: {

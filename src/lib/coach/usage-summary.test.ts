@@ -18,7 +18,8 @@ describe("résumé de consommation Claude", () => {
   });
 
   it("donne la moyenne par analyse et par question, et la répartition par type", () => {
-    expect(summary.averagePerQuestion).toBe(2800);
+    expect(summary.averagePerQuestion).toEqual({ calls: 1, inputTokens: 2500, outputTokens: 300, cacheTokens: 0 });
+    expect(summary.rejectionRate).toBe(0);
     expect(summary.byKind[0].kind).toBe("session");
     expect(summary.byKind.find((entry) => entry.kind === "outlook")?.calls).toBe(1);
   });

@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import type { z } from "zod";
 import { getLlmClient } from "@/lib/coach";
 import { LLM_FAILURE_MESSAGES, LlmError, type LlmFailureKind } from "@/lib/coach/llm";
-import { allowedNumbers, collectText, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
+import { allowedNumbers, collectText, excerpt, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
 import { zoneOf } from "@/lib/engine/zones";
 import { goalForCoach } from "@/lib/goal/goal";
 import { buildOutlookPayload, buildOutlookPrompt, OUTLOOK_PROMPT_VERSION, OUTLOOK_SYSTEM_PROMPT, outlookCoachJsonSchema, outlookCoachSchema, type OutlookCoachOutput } from "@/lib/coach/outlook-coach";
@@ -78,7 +78,7 @@ async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
           const row = createCoachOutputRepository().save({ kind: job.kind, subject: job.subject, inputHash, model: response.model, promptVersion: job.promptVersion, output: response.data });
           return { status: "ready", output: response.data, model: response.model, createdAt: row.createdAt };
         }
-        console.warn(`[coach] ${job.kind} : chiffres ou zones non sourcés (essai ${attempt}) : ${unsupported.join(", ")}`);
+        console.warn(`[coach] ${job.kind} : chiffres ou zones non sourcés (essai ${attempt}) : ${unsupported.map((token) => excerpt(text, token.split(" ")[0])).join(" | ")}`);
         prompt = `${job.prompt}\n\nATTENTION : ta réponse précédente contenait des erreurs (${unsupported.join(" ; ")}). Réécris-la en n'utilisant que des chiffres et des zones présents tels quels dans la charge utile.`;
       }
       throw new LlmError("invalid_output", "Chiffres non sourcés");

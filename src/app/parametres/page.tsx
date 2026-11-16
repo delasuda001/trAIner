@@ -115,10 +115,17 @@ export default function SettingsPage() {
         </section>
         <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-green)" }}>
           <h2 className="section-title">En moyenne</h2>
-          <div className="facts" style={{ marginTop: 10 }}>
-            <Fact label="Par analyse de séance" value={summary.averagePerAnalysis != null ? tokens(summary.averagePerAnalysis) : "—"} unit="tokens" />
-            <Fact label="Par question" value={summary.averagePerQuestion != null ? tokens(summary.averagePerQuestion) : "—"} unit="tokens" />
+          <div className="table-wrap" style={{ marginTop: 10 }}>
+            <table className="data">
+              <thead><tr><th></th><th>Entrée</th><th>Sortie</th><th>Cache</th></tr></thead>
+              <tbody>
+                {([["Par analyse de séance", summary.averagePerAnalysis], ["Par question", summary.averagePerQuestion]] as const).map(([label, value]) => (
+                  <tr key={label}><td className="muted">{label}{value ? ` (${value.calls})` : ""}</td><td>{value ? tokens(value.inputTokens) : "—"}</td><td>{value ? tokens(value.outputTokens) : "—"}</td><td>{value ? tokens(value.cacheTokens) : "—"}</td></tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+          <p className="small" style={{ marginTop: 10 }}>Réponses refusées par le contrôle des chiffres : <strong className="num">{summary.rejectionRate != null ? `${Math.round(summary.rejectionRate * 100)} %` : "—"}</strong>{summary.rejectedCalls ? ` (${summary.rejectedCalls} sur 30 jours)` : ""}. <span className="muted">Une réponse refusée est redemandée une fois, en signalant à Claude le chiffre en cause ; tu ne vois que la réponse validée.</span></p>
           <h3 className="fact-label" style={{ marginTop: 18 }}>Répartition sur 30 jours</h3>
           <div className="list" style={{ marginTop: 6 }}>
             {summary.byKind.map((entry) => (
@@ -129,7 +136,7 @@ export default function SettingsPage() {
             ))}
             {!summary.byKind.length ? <p className="muted small">—</p> : null}
           </div>
-          <p className="muted small" style={{ marginTop: 12 }}>Les tokens « cache lu » sont des consignes et données déjà envoyées, relues à moindre coût. Le montant en dollars est l&apos;équivalent tarif API indiqué par Claude : avec l&apos;abonnement, rien n&apos;est facturé à l&apos;appel.</p>
+          <p className="muted small" style={{ marginTop: 12 }}>Entrée : consignes et données envoyées ; sortie : la réponse ; cache : consignes déjà envoyées, relues à moindre coût. Les tokens « cache lu » sont des consignes et données déjà envoyées, relues à moindre coût. Le montant en dollars est l&apos;équivalent tarif API indiqué par Claude : avec l&apos;abonnement, rien n&apos;est facturé à l&apos;appel.</p>
         </section>
       </div>
       <p className="muted small" style={{ marginTop: 18 }}>{records.length ? `Total depuis ${first ? formatDate(first.createdAt, "medium") : "le début"} : ${tokens(records.reduce((sum, record) => sum + totalTokens(record), 0))} tokens.` : ""}</p>

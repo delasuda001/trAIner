@@ -3,7 +3,7 @@ import "server-only";
 import { getLlmClient } from "@/lib/coach";
 import { buildChatPrompt, CHAT_HISTORY_MESSAGES, CHAT_SYSTEM_PROMPT, chatAnswerJsonSchema, chatAnswerSchema } from "@/lib/coach/chat-coach";
 import { LLM_FAILURE_MESSAGES, LlmError, type LlmFailureKind } from "@/lib/coach/llm";
-import { allowedNumbers, collectText, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
+import { allowedNumbers, collectText, excerpt, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
 import { createChatRepository, type ChatMessage } from "@/lib/db/repositories/chat-repository";
 import { PROGRESSION_LABELS } from "@/lib/engine/explain";
 import { VERDICT_LABELS } from "@/lib/engine/verdict";
@@ -17,7 +17,7 @@ import { recordFailure, recordUsage } from "./usage";
 export function buildChatContext() {
   const dashboard = getDashboard();
   const { suggestion, progression, load, recovery, profile, today } = dashboard;
-  const runs = recentRunSummaries(6);
+  const runs = recentRunSummaries(5);
   return {
     aujourd_hui: formatDate(today, "long"),
     objectif: goalForCoach(dashboard.goal, today),
@@ -40,7 +40,7 @@ export function buildChatContext() {
       courses_par_semaine_8_sem: formatNumber(load.runsPerWeek8w, 1),
       km_par_semaine_8_sem: formatNumber(load.runKmPerWeek8w, 1),
       intensite_4_sem: load.intensity28d ? `${Math.round(load.intensity28d.low * 100)} % facile, ${Math.round(load.intensity28d.moderate * 100)} % modéré, ${Math.round(load.intensity28d.high * 100)} % intense` : "—",
-      volume_8_semaines_km: load.weeks.slice(-8).map((week) => formatNumber(week.runKm, 1)).join(" / "),
+      volume_6_semaines_km: load.weeks.slice(-6).map((week) => formatNumber(week.runKm, 0)).join(" / "),
     },
     recuperation_du_jour: {
       vfc: recovery.hrv.latest != null ? `${Math.round(recovery.hrv.latest)} ms (plage ${recovery.hrv.baselineLow ?? "—"}–${recovery.hrv.baselineHigh ?? "—"})` : "—",
@@ -48,15 +48,16 @@ export function buildChatContext() {
       sommeil: recovery.sleep.latest != null ? formatDuration(recovery.sleep.latest) : "—",
     },
     zones_fc: Object.fromEntries(([1, 2, 3, 4, 5] as const).map((zone) => [ZONE_LABELS[zone], `${zoneRange(zone, profile.zones)[0]}–${zoneRange(zone, profile.zones)[1]} bpm`])),
-    dernieres_seances: runs.map((run) => ({
+    dernieres_seances: runs.map((run, index) => ({
       date: formatDate(run.localDate, "medium"),
       type: run.title,
       distance: formatDistance(run.distanceM, 1),
       duree: formatClock(run.movingTimeS),
       allure: formatPace(run.averageSpeedMps),
       fc: run.averageHeartRateBpm ? `${Math.round(run.averageHeartRateBpm)} bpm` : "—",
-      verdict: `${VERDICT_LABELS[run.verdict as keyof typeof VERDICT_LABELS] ?? run.verdict} : ${run.headline}`,
-      ressenti: run.feeling ? `${run.feeling.perceivedEffort != null ? `effort ${run.feeling.perceivedEffort}/10. ` : ""}${run.feeling.note}` : "—",
+      // Détail du verdict pour la dernière séance seulement : les plus anciennes n'ont que leur niveau (tokens).
+      verdict: `${VERDICT_LABELS[run.verdict as keyof typeof VERDICT_LABELS] ?? run.verdict}${index === 0 && run.headline ? ` : ${run.headline}` : ""}`,
+      ...(run.feeling ? { ressenti: `${run.feeling.perceivedEffort != null ? `effort ${run.feeling.perceivedEffort}/10. ` : ""}${run.feeling.note}` } : {}),
     })),
     zoneOf: (heartRate: number) => zoneOf(heartRate, profile.zones),
   };
@@ -93,7 +94,7 @@ export async function askCoach(question: string): Promise<AskResult> {
         repository.add("coach", { text: response.data.answer.replace(/\\n/g, "\n"), evidence: response.data.evidence }, response.model);
         return { messages: repository.list(), error: null };
       }
-      console.warn(`[coach] chat : chiffres ou zones non sourcés (essai ${attempt}) : ${issues.join(", ")}`);
+      console.warn(`[coach] chat : chiffres ou zones non sourcés (essai ${attempt}) : ${issues.map((token) => excerpt(text, token.split(" ")[0])).join(" | ")}`);
       prompt = `${basePrompt}\n\nATTENTION : ta réponse précédente contenait des erreurs (${issues.join(" ; ")}). Réponds en n'utilisant que des chiffres et des zones présents tels quels dans le contexte.`;
     }
     throw new LlmError("invalid_output", "Chiffres non sourcés");
