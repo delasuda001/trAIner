@@ -8,7 +8,7 @@ import { createFeelingRepository, type Feeling } from "@/lib/db/repositories/fee
 import type { ActivityRow, WellnessRow } from "@/lib/db/types";
 import { computeActivityMetrics, METRICS_VERSION, sessionTitle, type ActivityMetrics } from "@/lib/engine/activity-metrics";
 import { computeDeltas, selectComparables, type ComparisonDeltas, type RunForComparison } from "@/lib/engine/comparable";
-import { isRun, summarizeLoad, type LoadSummary } from "@/lib/engine/load";
+import { isRun, loadAlert, summarizeLoad, type LoadAlert, type LoadSummary } from "@/lib/engine/load";
 import { computeProgression, referenceHeartRate, type Progression } from "@/lib/engine/progression";
 import { assessRecovery, type RecoverySignals } from "@/lib/engine/recovery";
 import { median, present } from "@/lib/engine/stats";
@@ -126,6 +126,8 @@ export type SessionContext = {
   loadRatio: number | null;
   /** Même ratio sans la séance elle-même (ce que voyait la suggestion avant de courir). */
   loadRatioBefore: number | null;
+  /** Hausse de charge avant la séance, corroborée ou non. */
+  loadAlertBefore: LoadAlert;
   acute7dBefore: number;
   acute7d: number;
   chronicWeekly28d: number;
@@ -140,7 +142,12 @@ function sessionContext(current: AnalyzedRun, context: Context): SessionContext 
   const before = context.rows.filter((row) => row.startTimeUtc < current.startTimeUtc);
   const load = summarizeLoad(before.map((row) => ({ localDate: row.localDate, sport: row.sport, distanceM: row.distanceM, movingTimeS: row.movingTimeS, trainingLoad: row.trainingLoad, hrTimeInZonesS: parseZones(row) })).concat([{ localDate: date, sport: current.sport, distanceM: current.distanceM, movingTimeS: current.movingTimeS, trainingLoad: current.row.trainingLoad, hrTimeInZonesS: parseZones(current.row) }]), date, 4);
   // Charge AVANT la séance (sans elle) : c'est elle qui dit si la séance était bien placée.
-  const loadBefore = summarizeLoad(before.map((row) => ({ localDate: row.localDate, sport: row.sport, distanceM: row.distanceM, movingTimeS: row.movingTimeS, trainingLoad: row.trainingLoad, hrTimeInZonesS: parseZones(row) })), date, 4);
+  const loadBefore = summarizeLoad(before.map((row) => ({ localDate: row.localDate, sport: row.sport, distanceM: row.distanceM, movingTimeS: row.movingTimeS, trainingLoad: row.trainingLoad, hrTimeInZonesS: parseZones(row) })), date, 12);
+  const recovery = assessRecovery(context.wellness, date);
+  // Ressenti noté sur la séance ou sur la précédente : peut corroborer une hausse de charge.
+  const previousRun = context.runs.filter((run) => run.startTimeUtc < current.startTimeUtc).at(-1);
+  const efforts = present([createFeelingRepository().get(current.id)?.perceivedEffort, previousRun ? createFeelingRepository().get(previousRun.id)?.perceivedEffort : null]);
+  const alertBefore = loadAlert(loadBefore, { recoveryFlags: recovery.flags, perceivedEffort: efforts.length ? Math.max(...efforts) : null });
   const previousRuns = context.runs.filter((run) => run.startTimeUtc < current.startTimeUtc);
   const quality = previousRuns
     .filter((run) => (run.metrics.family === "intervals" || run.metrics.family === "steady") && daysBetween(run.localDate, date) <= 14)
@@ -149,12 +156,13 @@ function sessionContext(current: AnalyzedRun, context: Context): SessionContext 
   return {
     loadRatio: load.ratio,
     loadRatioBefore: loadBefore.ratio,
+    loadAlertBefore: alertBefore,
     acute7dBefore: loadBefore.acute7d,
     acute7d: load.acute7d,
     chronicWeekly28d: load.chronicWeekly28d,
     qualityBefore14d: quality,
     daysSincePreviousRun: previous ? daysBetween(previous.localDate, date) : null,
-    recovery: assessRecovery(context.wellness, date),
+    recovery,
   };
 }
 
@@ -187,7 +195,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     raceTargets: context.goal?.raceTargets ?? [],
     efforts: recentEfforts(history, current.localDate),
     reference: deltas.count ? { repSpeedMps: deltas.work?.reference?.speedMps ?? null, repHeartRateBpm: deltas.work?.reference?.heartRateBpm ?? null, repSpreadSPerKm: deltas.work?.reference?.paceSpreadSPerKm ?? null, halvesFadeSPerKm: deltas.fadeSPerKm.reference } : null,
-    context: { loadRatio: sessionCtx.loadRatioBefore, qualityBefore: sessionCtx.qualityBefore14d },
+    context: { loadAlert: sessionCtx.loadAlertBefore, qualityBefore: sessionCtx.qualityBefore14d },
   });
   return {
     activity: current.row,
@@ -261,6 +269,8 @@ export type Dashboard = {
   activityCount: number;
   sync: SyncState | null;
   goal: Goal | null;
+  /** Hausse de charge corroborée ou simple repère. */
+  loadAlert: LoadAlert;
   /** Objectifs chiffrés situés par rapport aux repères du moment. */
   goalMarkers: GoalMarker[];
   /** Dernière séance du même type que la prochaine proposée, et sa consigne « prochaine fois ». */
@@ -279,13 +289,16 @@ const SAME_TYPE_KINDS: Partial<Record<Suggestion["primary"]["type"], string[]>> 
   long: ["long"],
 };
 
-type Outlook = { load: LoadSummary; recovery: RecoverySignals; progression: Progression; suggestion: Suggestion };
+type Outlook = { load: LoadSummary; loadAlert: LoadAlert; recovery: RecoverySignals; progression: Progression; suggestion: Suggestion };
 
 /** Charge, récupération, progression et suggestion vues depuis `context.today` (les données doivent déjà s'arrêter là). */
 function computeOutlook(context: Context): Outlook {
   const { today, rows, runs, wellness, profile } = context;
   const load = summarizeLoad(rows.map((row) => ({ localDate: row.localDate, sport: row.sport, distanceM: row.distanceM, movingTimeS: row.movingTimeS, trainingLoad: row.trainingLoad, hrTimeInZonesS: parseZones(row) })), today);
   const recovery = assessRecovery(wellness, today);
+  const lastRun = runs.at(-1);
+  const lastFeeling = lastRun ? createFeelingRepository().get(lastRun.id) : null;
+  const alert = loadAlert(load, { recoveryFlags: recovery.flags, perceivedEffort: lastFeeling?.perceivedEffort ?? null });
   const referenceHr = referenceHeartRate(profile.zones.floors);
   const progression = computeProgression({
     runs: runs.map((run) => ({ id: run.id, localDate: run.localDate, distanceM: run.distanceM, metrics: run.metrics, sport: run.sport })),
@@ -307,12 +320,13 @@ function computeOutlook(context: Context): Outlook {
     lactateThresholdSpeedMps: profile.lactateThresholdSpeedMps,
     easyHeartRateBpm: progression.referenceHeartRateBpm,
     load,
+    loadAlert: alert,
     recovery,
     raceTargets: goal?.raceTargets ?? [],
     efforts: recentEfforts(runs, addDays(today, 1)),
     goal: goal ? { eventDate: goal.eventDate, distanceKm: goal.distanceKm, targetPaceMps: targetPaceMps(goal), runsPerWeek: goal.runsPerWeek, preferredDays: goal.preferredDays } : null,
   });
-  return { load, recovery, progression, suggestion };
+  return { load, loadAlert: alert, recovery, progression, suggestion };
 }
 
 /** La suggestion que le moteur affichait juste avant une séance (données arrêtées à son départ). */
@@ -333,7 +347,7 @@ export function suggestionBefore(activityId: string, context: Context = loadCont
 export function getDashboard(): Dashboard {
   const context = loadContext();
   const { today, rows, runs, profile } = context;
-  const { load, recovery, progression, suggestion } = computeOutlook(context);
+  const { load, loadAlert: currentLoadAlert, recovery, progression, suggestion } = computeOutlook(context);
   const goal = context.goal;
 
   const last = runs.at(-1);
@@ -349,6 +363,7 @@ export function getDashboard(): Dashboard {
     progression,
     suggestion,
     lastRun: last ? analyzeSession(last.id, context) : null,
+    loadAlert: currentLoadAlert,
     goalMarkers: (goal?.raceTargets ?? []).map((target) => goalMarker(goal?.raceTargets ?? [], target.distanceKm, { lactateThresholdSpeedMps: profile.lactateThresholdSpeedMps, efforts: recentEfforts(runs, addDays(today, 1)) })).filter((marker): marker is GoalMarker => marker != null),
     lastSameType: sameRun && sameAnalysis ? { id: sameRun.id, localDate: sameRun.localDate, title: sessionTitle(sameRun.metrics), prescription: sameAnalysis.prescription } : null,
     recent: [...rows].reverse().slice(0, 10).map((row) => ({ id: row.id, name: row.name, sport: row.sport, localDate: row.localDate, startTimeLocal: row.startTimeLocal, distanceM: row.distanceM, movingTimeS: row.movingTimeS, averageSpeedMps: row.averageSpeedMps, averageHeartRateBpm: row.averageHeartRateBpm, kind: runById.get(row.id)?.metrics.kind ?? null, title: runById.get(row.id) ? sessionTitle((runById.get(row.id) as AnalyzedRun).metrics) : null, zoneShares: runById.get(row.id)?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null) })),

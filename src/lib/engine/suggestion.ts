@@ -3,7 +3,7 @@ import { formatDate, formatNumber } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 import type { SessionFamily, SessionKind } from "./activity-metrics";
 import { SESSION_KIND_LABELS } from "./activity-metrics";
-import type { LoadSummary } from "./load";
+import { HIGH_LOAD_RATIO, type LoadAlert, type LoadSummary } from "./load";
 import type { RecoverySignals } from "./recovery";
 import { median, present, round } from "./stats";
 import { intervalTarget, type RaceTarget, type RecentEffort } from "./prescription";
@@ -88,6 +88,8 @@ export type SuggestionInput = {
   raceTargets?: RaceTarget[];
   /** Répétitions longues récentes : affinent l'allure 5 km du moment. */
   efforts?: RecentEffort[];
+  /** Hausse de charge corroborée ou non ; sans lui, le ratio seul décide (ancien comportement). */
+  loadAlert?: LoadAlert | null;
 };
 
 const HARD_FAMILIES: ReadonlySet<SessionFamily> = new Set(["intervals", "steady"]);
@@ -251,9 +253,10 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
   } else if (daysSinceLastRun == null || daysSinceLastRun >= 14) {
     primary = enduranceSession(input, 40, "Reprise en endurance");
     reason = daysSinceLastRun == null ? "Aucune course récente : on repart sur une base aérobie facile." : `Ta dernière course date de ${daysSinceLastRun} jours : on reprend en endurance avant de remettre de l'intensité.`;
-  } else if (load.ratio != null && load.ratio >= 1.5) {
+  } else if (load.ratio != null && load.ratio >= HIGH_LOAD_RATIO && (input.loadAlert == null || input.loadAlert.actionable)) {
     primary = enduranceSession(input, roundTo5(Math.min(50, typicalEasyMin)));
-    reason = `Ta charge des 7 derniers jours vaut ${formatNumber(load.ratio, 1)} fois ta moyenne : on absorbe avec une séance facile.`;
+    const why = input.loadAlert?.reasons.length ? `, avec ${input.loadAlert.reasons.join(", ")}` : "";
+    reason = `Ta charge des 7 derniers jours vaut ${formatNumber(load.ratio, 1)} fois ta moyenne${why} : on absorbe avec une séance facile.`;
   } else if (lastHard && lastRun === lastHard && daysBetween(lastHard.localDate, today) < 3) {
     primary = enduranceSession(input, easyDuration);
     reason = `Ta dernière course (${lowerFirst(lastHard.title ?? SESSION_KIND_LABELS[lastHard.kind])}) était exigeante : la suivante reste facile pour que le travail paie.`;
@@ -329,7 +332,7 @@ export function suggestNextSession(input: SuggestionInput): Suggestion {
     const shape = kindOf(primary.type);
     const simulatedRun: SuggestionRun = { localDate: core.when, kind: shape.kind, family: shape.family, movingTimeS: primary.durationMin * 60, aerobicTrainingEffect: shape.hard ? 4.2 : 2.8 };
     const neutralRecovery: RecoverySignals = { ...recovery, flags: [], state: "unknown" };
-    const next = decide({ ...input, today: core.when, runs: [...input.runs, simulatedRun], load: { ...input.load, ratio: null }, recovery: neutralRecovery }, input.today);
+    const next = decide({ ...input, today: core.when, runs: [...input.runs, simulatedRun], load: { ...input.load, ratio: null }, loadAlert: null, recovery: neutralRecovery }, input.today);
     // Rythme visé : pas plus de N séances par semaine.
     const spacing = Math.max(1, Math.round(7 / next.facts.plannedRunsPerWeek) - 1);
     let date = next.when > core.when ? next.when : addDays(core.when, 1);

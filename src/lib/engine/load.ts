@@ -1,5 +1,5 @@
 import { addDays, daysBetween, startOfIsoWeek } from "@/lib/dates";
-import { round } from "./stats";
+import { median, round } from "./stats";
 
 export type LoadActivity = {
   localDate: string;
@@ -94,4 +94,41 @@ export function summarizeLoad(activities: LoadActivity[], today: string, weeksCo
     runsPerWeek8w: round(runs56.length / 8, 1),
     runKmPerWeek8w: round(runs56.reduce((sum, activity) => sum + (activity.distanceM ?? 0), 0) / 1000 / 8, 1),
   };
+}
+
+/** Ratio charge 7 jours / moyenne 4 semaines à partir duquel la hausse est « marquée ». */
+export const HIGH_LOAD_RATIO = 1.5;
+/** Charge 7 jours « nettement » au-dessus de l'habitude : × 1,3 la semaine médiane des 12 dernières. */
+export const ABSOLUTE_LOAD_FACTOR = 1.3;
+/** Effort perçu (sur 10) jugé élevé. */
+export const HIGH_PERCEIVED_EFFORT = 8;
+
+export type LoadAlert = {
+  ratio: number | null;
+  /** Ratio au-dessus du seuil : simple information tant qu'il n'est pas corroboré. */
+  ratioHigh: boolean;
+  /** Ratio haut ET corroboré : justifie une consigne (report, séance facile). */
+  actionable: boolean;
+  /** Ce qui corrobore la hausse, en clair et chiffré. */
+  reasons: string[];
+  /** Semaine habituelle (médiane des semaines complètes avec activité, 12 semaines). */
+  typicalWeekLoad: number | null;
+};
+
+const FLAG_TEXT: Record<string, string> = { hrv_low: "VFC sous ta plage habituelle", resting_hr_high: "FC de repos au-dessus de ta base", sleep_short: "nuit nettement plus courte" };
+
+/**
+ * Avec 1 à 2 sorties par semaine, le ratio aigu/chronique seul est trop bruité
+ * pour remplacer une séance. Il ne déclenche une consigne que s'il est
+ * corroboré par un signal de récupération, un ressenti élevé, ou une charge
+ * absolue nettement au-dessus de l'habitude sur 12 semaines.
+ */
+export function loadAlert(load: LoadSummary, corroboration: { recoveryFlags: string[]; perceivedEffort?: number | null }): LoadAlert {
+  const ratioHigh = load.ratio != null && load.ratio >= HIGH_LOAD_RATIO;
+  const complete = load.weeks.slice(0, -1).map((week) => week.load).filter((value) => value > 0);
+  const typical = complete.length >= 4 ? Math.round(median(complete) as number) : null;
+  const reasons: string[] = corroboration.recoveryFlags.map((flag) => FLAG_TEXT[flag] ?? flag);
+  if (corroboration.perceivedEffort != null && corroboration.perceivedEffort >= HIGH_PERCEIVED_EFFORT) reasons.push(`effort perçu à ${corroboration.perceivedEffort}/10`);
+  if (typical != null && load.acute7d >= typical * ABSOLUTE_LOAD_FACTOR) reasons.push(`charge 7 jours à ${load.acute7d} contre ${typical} une semaine habituelle`);
+  return { ratio: load.ratio, ratioHigh, actionable: ratioHigh && reasons.length > 0, reasons, typicalWeekLoad: typical };
 }

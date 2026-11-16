@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { HeartRateZones } from "@/lib/source/types";
 import type { ActivityMetrics } from "./activity-metrics";
+import type { LoadAlert } from "./load";
 import { goalMarker, goalStatus, paceReferenceSentence, prescribe, raceEstimate, type PrescriptionInput, type RecentEffort } from "./prescription";
 
 const zones: HeartRateZones = { floors: [110, 128, 149, 159, 167], maxHeartRateBpm: 189, lactateThresholdHeartRateBpm: 169, method: "LACTATE_THRESHOLD" };
@@ -25,11 +26,16 @@ function withWork(changes: Partial<Work>): ActivityMetrics {
   return { ...base, work: { ...(base.work as Work), ...changes } };
 }
 
+/** Ratio 1,6 avant la séance, corroboré ou non. */
+function alert(reasons: string[]): LoadAlert {
+  return { ratio: 1.6, ratioHigh: true, actionable: reasons.length > 0, reasons, typicalWeekLoad: 280 };
+}
+
 function input(metrics: ActivityMetrics, overrides: Partial<PrescriptionInput> = {}): PrescriptionInput {
   return {
     metrics, zones, lactateThresholdSpeedMps: LT, restingHeartRateBpm: 46, recentSpeedPerBeat: 0.03, movingTimeS: 2858, raceTargets: targets, efforts,
     reference: { repSpeedMps: 1000 / 242, repHeartRateBpm: 171, repSpreadSPerKm: 8, halvesFadeSPerKm: null },
-    context: { loadRatio: 1.6, qualityBefore: [{ title: "Fractionné court 8 × 70 s", daysBefore: 3 }] },
+    context: { loadAlert: alert([]), qualityBefore: [{ title: "Fractionné court 8 × 70 s", daysBefore: 3 }] },
     ...overrides,
   };
 }
@@ -56,15 +62,21 @@ describe("allure du moment et objectif", () => {
 });
 
 describe("prescribe, fractionné", () => {
-  it("13/11 : la charge explique la séance, une seule consigne de placement, pas de reproche sur une dégradation dans sa norme", () => {
+  it("13/11 : ratio 1,6 sans signal qui le corrobore, dégradation dans sa norme : rien à reprocher, même format", () => {
     const result = prescribe(input(base));
     if (result.status !== "ok") throw new Error("attendu ok");
     expect(result.target).toMatchObject({ label: "allure 5 km du moment", paceFastS: 241, paceSlowS: 247 });
-    expect(result.shouldHave).toHaveLength(1);
-    expect(result.shouldHave[0]).toMatch(/^Placement : avec une charge 7 jours déjà à 1,6/);
+    expect(result.shouldHave).toEqual([]);
     // 4:10/km n'est pas « dans la cible » 4:01–4:07/km, même si l'écart est trop faible pour un reproche.
     expect(result.keep).toMatch(/^Régularité : 8 s\/km/);
-    expect(result.next.cue).toBe("Même format 3 × 2 km à 4:01–4:07/km, récupération 3:00, sur une semaine sans pic de charge et à 72 h au moins d'une autre séance de qualité.");
+    expect(result.next.cue).toBe("Même format 3 × 2 km à 4:01–4:07/km, récupération 3:00 ; 1re répétition à 4:07/km, pas plus vite.");
+  });
+
+  it("même séance avec une VFC sous sa plage : le placement devient la consigne principale, unique", () => {
+    const result = prescribe(input(base, { context: { loadAlert: alert(["VFC sous ta plage habituelle"]), qualityBefore: [] } }));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.shouldHave).toEqual(["Placement : charge 7 jours déjà à 1,6 fois ta moyenne avant la séance, avec VFC sous ta plage habituelle ; reporte de 1 à 2 jours ou remplace par une endurance facile."]);
+    expect(result.next.cue).toContain("sur une semaine sans pic de charge");
   });
 
   it("dégradation au-delà des comparables et récupération courte : la récupération devient la consigne", () => {

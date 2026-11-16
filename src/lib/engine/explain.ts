@@ -1,5 +1,5 @@
 import { formatDuration, formatNumber, formatPace, formatSigned } from "@/lib/formatters";
-import type { LoadSummary } from "./load";
+import type { LoadAlert, LoadSummary } from "./load";
 import type { Progression } from "./progression";
 import type { RecoverySignals } from "./recovery";
 
@@ -29,12 +29,15 @@ export function progressionSentence(progression: Progression): string {
   return `${formatNumber(Math.abs(gain))} s/km plus ${gain > 0 ? "rapide" : "lent"} à FC égale qu'il y a ${progression.windowWeeks} semaines (${pace}).`;
 }
 
-export function loadMeaning(load: LoadSummary): { text: string; tone: Tone } {
+export function loadMeaning(load: LoadSummary, alert?: LoadAlert | null): { text: string; tone: Tone } {
   if (load.ratio == null) return { text: "Pas encore assez d'historique pour situer ta charge.", tone: "neutral" };
   if (load.ratio < 0.8) return { text: "Semaine plus légère que ta moyenne.", tone: "neutral" };
   if (load.ratio <= 1.3) return { text: "Dans ta norme des 4 dernières semaines.", tone: "good" };
-  if (load.ratio <= 1.5) return { text: "Hausse marquée : garde la prochaine séance facile.", tone: "warning" };
-  return { text: "Pic de charge : absorbe avant de rajouter de l'intensité.", tone: "critical" };
+  // Hausse non corroborée (récupération, ressenti, charge absolue) : simple repère, pas de consigne.
+  if (alert && alert.reasons.length === 0) return { text: "Au-dessus de tes 4 dernières semaines, sans autre signal : simple repère.", tone: "neutral" };
+  const why = alert?.reasons.length ? ` (${alert.reasons.join(", ")})` : "";
+  if (load.ratio <= 1.5) return { text: `Hausse marquée${why} : garde la prochaine séance facile.`, tone: "warning" };
+  return { text: `Pic de charge${why} : absorbe avant de rajouter de l'intensité.`, tone: "critical" };
 }
 
 export function hrvMeaning(recovery: RecoverySignals): { text: string; tone: Tone } {

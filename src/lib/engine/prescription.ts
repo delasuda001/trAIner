@@ -2,6 +2,7 @@ import { formatClock, formatDate, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 import type { ActivityMetrics, SessionKind } from "./activity-metrics";
 import { paceSeconds } from "./activity-metrics";
+import type { LoadAlert } from "./load";
 import { zoneRange } from "./zones";
 
 /**
@@ -46,8 +47,6 @@ const STRETCH_GAP_S = 8;
 const FADE_LIMIT_S = 5;
 /** …et seulement si elle dépasse celle des comparables de cette marge. */
 const FADE_ABOVE_REFERENCE_S = 3;
-/** Charge 7 j / moyenne 4 semaines au-delà de laquelle le moteur de suggestion propose une séance facile. */
-const HIGH_LOAD_RATIO = 1.5;
 /** Au-delà de cet écart (s/km) avec la cible du format, la séance est sans doute d'un autre type : pas de consigne. */
 const MISMATCH_LIMIT_S = 25;
 /** Écart à la fourchette en deçà duquel on ne reproche rien (s/km). */
@@ -123,7 +122,8 @@ export type PrescriptionInput = {
   /** Répétitions longues des 12 semaines précédant la séance. */
   efforts: RecentEffort[];
   reference: ComparableReference | null;
-  context: { loadRatio: number | null; qualityBefore: Array<{ title: string; daysBefore: number }> } | null;
+  /** `loadAlert` : charge des 7 jours AVANT la séance, corroborée ou non (voir load.ts). */
+  context: { loadAlert: LoadAlert | null; qualityBefore: Array<{ title: string; daysBefore: number }> } | null;
 };
 
 type PaceInputs = Pick<PrescriptionInput, "zones" | "lactateThresholdSpeedMps" | "raceTargets" | "efforts">;
@@ -324,8 +324,10 @@ function repFormat(distanceM: number | null, durationS: number): string {
 function placementLine(input: PrescriptionInput): string | null {
   const context = input.context;
   if (!context) return null;
-  if (context.loadRatio != null && context.loadRatio >= HIGH_LOAD_RATIO) {
-    return `Placement : avec une charge 7 jours déjà à ${decimal(context.loadRatio)} fois ta moyenne avant la séance, reporte de 1 à 2 jours ou remplace par une endurance facile (au-delà de ${decimal(HIGH_LOAD_RATIO)}, la qualité ne paie plus).`;
+  // Le ratio seul ne suffit pas (1 à 2 sorties par semaine) : il faut un signal qui le corrobore.
+  const alert = context.loadAlert;
+  if (alert?.actionable && alert.ratio != null) {
+    return `Placement : charge 7 jours déjà à ${decimal(alert.ratio)} fois ta moyenne avant la séance, avec ${alert.reasons.join(", ")} ; reporte de 1 à 2 jours ou remplace par une endurance facile.`;
   }
   const close = context.qualityBefore.find((entry) => entry.daysBefore < 3);
   if (close) return `Placement : ${close.title} seulement ${close.daysBefore} jour${close.daysBefore > 1 ? "s" : ""} avant ; laisse 72 h entre deux séances de qualité.`;

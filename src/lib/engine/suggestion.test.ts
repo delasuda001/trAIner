@@ -95,3 +95,19 @@ describe("suggestNextSession", () => {
     expect(Object.keys(result.primary)).not.toContain("plan");
   });
 });
+
+describe("hausse de charge et suggestion", () => {
+  const highLoad = { ...load, acute7d: 330, ratio: 1.6 };
+  const runs = [run(12, "endurance", "easy"), run(4, "endurance", "easy")];
+  const alert = (actionable: boolean) => ({ ratio: 1.6, ratioHigh: true, actionable, reasons: actionable ? ["VFC sous ta plage habituelle"] : [], typicalWeekLoad: 300 });
+
+  it("ratio 1,6 non corroboré : la séance de qualité reste proposée", () => {
+    expect(suggestNextSession(input(runs, { load: highLoad, loadAlert: alert(false) })).primary.type).not.toBe("endurance");
+  });
+
+  it("ratio 1,6 corroboré : séance facile, avec la raison", () => {
+    const result = suggestNextSession(input(runs, { load: highLoad, loadAlert: alert(true) }));
+    expect(result.primary.type).toBe("endurance");
+    expect(result.reason).toContain("VFC sous ta plage habituelle");
+  });
+});

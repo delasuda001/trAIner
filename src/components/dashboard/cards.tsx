@@ -163,7 +163,7 @@ function Kpi({ icon, question, value, unit, compare, meaning, tone, chart, shado
 
 export function RecoveryRow({ dashboard }: { dashboard: Dashboard }) {
   const { load, recovery } = dashboard;
-  const loadInfo = loadMeaning(load);
+  const loadInfo = loadMeaning(load, dashboard.loadAlert);
   const hrvInfo = hrvMeaning(recovery);
   const sleepInfo = sleepMeaning(recovery);
   const rhrInfo = restingHrMeaning(recovery);
