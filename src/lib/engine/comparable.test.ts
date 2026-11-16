@@ -3,7 +3,7 @@ import type { ActivityMetrics } from "./activity-metrics";
 import { computeDeltas, selectComparables, type RunForComparison } from "./comparable";
 
 function metrics(overrides: Partial<ActivityMetrics> = {}): ActivityMetrics {
-  return { version: 5, restingHeartRateUsed: 46, kind: "endurance", family: "easy", structure: "continuous", mainSpeedMps: 2.6, mainHeartRateBpm: 132, halves: { first: { speedMps: 2.6, heartRateBpm: 130 }, second: { speedMps: 2.6, heartRateBpm: 134 }, fadePct: 0, driftPct: 3 }, work: null, aerobic: null, zoneShares: null, elevationGainPerKm: 5, averageCadenceSpm: 166, ...overrides };
+  return { version: 5, restingHeartRateUsed: 46, kind: "endurance", family: "easy", structure: "continuous", mainSpeedMps: 2.6, mainHeartRateBpm: 132, halves: { first: { speedMps: 2.6, heartRateBpm: 130 }, second: { speedMps: 2.6, heartRateBpm: 134 }, fadePct: 0, driftPct: 3 }, work: null, aerobic: null, zoneShares: null, elevationGainPerKm: 5, averageCadenceSpm: 166, blocks: null, ...overrides };
 }
 
 function run(id: string, date: string, overrides: Partial<RunForComparison> = {}, metricOverrides: Partial<ActivityMetrics> = {}): RunForComparison {

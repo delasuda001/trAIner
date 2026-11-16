@@ -103,6 +103,7 @@ export function buildSessionPayload(input: {
           ecart_allure_entre_repetitions: pct(work.speedCvPct),
           evolution_premieres_vs_dernieres: work.fadePct == null ? "—" : work.fadePct > 0 ? `dernières ${pct(work.fadePct)} plus lentes` : `dernières ${pct(-work.fadePct)} plus rapides`,
           recuperation_moyenne: work.averageRecoveryS ? formatDuration(work.averageRecoveryS) : "—",
+          detail_repetitions: work.repsDetail.slice(0, 12).map((rep, index) => `#${index + 1} ${formatClock(rep.durationS)}${rep.distanceM ? ` ${formatDistance(rep.distanceM, 2)}` : ""} à ${formatPace(rep.speedMps)}, FC ${bpm(rep.heartRateBpm)} (max ${bpm(rep.maxHeartRateBpm)})${rep.recoveryAfterS ? `, récup ${formatClock(rep.recoveryAfterS)}` : ""}`),
         }
       : metrics.halves
         ? {
@@ -110,6 +111,7 @@ export function buildSessionPayload(input: {
             deuxieme_moitie: `${formatPace(metrics.halves.second.speedMps)} à ${bpm(metrics.halves.second.heartRateBpm)}`,
             ralentissement_deuxieme_moitie: pct(metrics.halves.fadePct),
             derive_cardiaque: pct(metrics.halves.driftPct),
+            ...(metrics.blocks ? { blocs_5_km: metrics.blocks.map((block) => `${formatNumber(block.fromKm, 1)}–${formatNumber(block.toKm, 1)} km : ${formatPace(block.speedMps)}, ${bpm(block.heartRateBpm)}`) } : {}),
           }
         : { note: "Séance trop courte pour comparer deux moitiés." },
     temps_en_zones: metrics.zoneShares ? Object.fromEntries(metrics.zoneShares.map((share, index) => [ZONE_LABELS[(index + 1) as 1 | 2 | 3 | 4 | 5], `${Math.round(share * 100)} %`])) : null,

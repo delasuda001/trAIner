@@ -68,8 +68,9 @@ export function dissimilarity(current: RunForComparison, candidate: RunForCompar
     score += 0.4 * logRatio(current.metrics.work.reps, candidate.metrics.work.reps);
   }
 
+  // Récence : la forme d'il y a un an n'est plus un repère. Pénalité légère sur 6 mois, forte au-delà.
   const ageDays = (Date.parse(current.startTimeUtc) - Date.parse(candidate.startTimeUtc)) / 86_400_000;
-  score += Math.min(0.6, ageDays / 365) * 0.5;
+  score += ageDays <= 180 ? (ageDays / 180) * 0.3 : 0.3 + ((ageDays - 180) / 180) * 0.8;
   return round(score, 3);
 }
 

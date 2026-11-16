@@ -43,6 +43,8 @@ export type SyncDependencies = {
 
 export type SyncResult = {
   newActivityIds: string[];
+  /** Nouvelles courses, plus récentes d'abord. */
+  newRunIds: string[];
   updatedActivities: number;
   detailsFetched: number;
   detailsFailed: number;
@@ -113,8 +115,11 @@ export async function runSync(deps: SyncDependencies, options: { detailBudget: n
     });
 
     deps.state.set(SYNC_STATE_KEY, { lastSuccessAt: now.toISOString(), lastAttemptAt: now.toISOString(), lastError: null });
+    const insertedSet = new Set(inserted);
+    const newRunIds = summaries.filter((summary) => DETAILED_SPORTS.has(summary.sport)).map((summary) => `${source}:${summary.sourceId}`).filter((id) => insertedSet.has(id));
     return {
       newActivityIds: inserted,
+      newRunIds,
       updatedActivities: summaries.length - inserted.length,
       detailsFetched,
       detailsFailed,

@@ -9,7 +9,7 @@ import { zoneOf, type ZoneIndex } from "./zones";
  * découlent : le LLM ne calcule rien.
  */
 
-export const METRICS_VERSION = 5;
+export const METRICS_VERSION = 6;
 
 export type SessionKind =
   | "recovery"
@@ -58,6 +58,8 @@ export type WorkBlock = {
   /** > 0 : les dernières répétitions sont plus lentes que les premières (%). */
   fadePct: number | null;
   averageRecoveryS: number | null;
+  /** Une ligne par répétition (et la récupération qui suit). */
+  repsDetail: Array<{ durationS: number; distanceM: number | null; speedMps: number; heartRateBpm: number | null; maxHeartRateBpm: number | null; recoveryAfterS: number | null }>;
 };
 
 export type AerobicSample = {
@@ -85,6 +87,8 @@ export type ActivityMetrics = {
   zoneShares: [number, number, number, number, number] | null;
   elevationGainPerKm: number | null;
   averageCadenceSpm: number | null;
+  /** Blocs de 5 km (sorties de 12 km et plus) : allure et FC par bloc. */
+  blocks: Array<{ fromKm: number; toKm: number; speedMps: number; heartRateBpm: number | null }> | null;
 };
 
 export type MetricsInput = {
@@ -243,7 +247,40 @@ export function detectWorkBlock(laps: Lap[]): WorkBlock | null {
     speedCvPct: reps.length >= 2 ? round(((standardDeviation(speeds) as number) / averageSpeed) * 100, 1) : null,
     fadePct: reps.length >= 3 ? round((firstSpeed / lastSpeed - 1) * 100, 1) : null,
     averageRecoveryS: recoveries.length ? round(mean(recoveries.map((lap) => lap.durationS)) as number) : null,
+    repsDetail: reps.map((lap) => {
+      const position = ordered.findIndex((candidate) => candidate.index === lap.index);
+      const next = ordered[position + 1];
+      return {
+        durationS: lap.durationS,
+        distanceM: lap.distanceM,
+        speedMps: lap.averageSpeedMps as number,
+        heartRateBpm: lap.averageHeartRateBpm,
+        maxHeartRateBpm: lap.maxHeartRateBpm,
+        recoveryAfterS: next && !fastIndexes.has(next.index) && ordered[position + 2] && fastIndexes.has(ordered[position + 2].index) ? next.durationS : null,
+      };
+    }),
   };
+}
+
+const BLOCK_M = 5000;
+
+function computeBlocks(streams: ActivityStreams, distanceM: number | null): ActivityMetrics["blocks"] {
+  if (!distanceM || distanceM < 12_000) return null;
+  const blocks: NonNullable<ActivityMetrics["blocks"]> = [];
+  let startIndex = 0;
+  for (let index = 1; index < streams.timeS.length; index += 1) {
+    const startDistance = streams.distanceM[startIndex];
+    const distance = streams.distanceM[index];
+    if (startDistance == null || distance == null) continue;
+    const isLast = index === streams.timeS.length - 1;
+    if (distance - startDistance >= BLOCK_M || (isLast && distance - startDistance >= 1000)) {
+      const elapsed = streams.timeS[index] - streams.timeS[startIndex];
+      const heartRates = present(streams.heartRateBpm.slice(startIndex, index + 1));
+      if (elapsed > 0) blocks.push({ fromKm: round(startDistance / 1000, 1), toKm: round(distance / 1000, 1), speedMps: round((distance - startDistance) / elapsed, 3), heartRateBpm: heartRates.length ? round(mean(heartRates) as number, 0) : null });
+      startIndex = index;
+    }
+  }
+  return blocks.length >= 2 ? blocks : null;
 }
 
 function computeZoneShares(input: MetricsInput): ActivityMetrics["zoneShares"] {
@@ -311,6 +348,7 @@ export function computeActivityMetrics(input: MetricsInput): ActivityMetrics {
     zoneShares,
     elevationGainPerKm: input.elevationGainM != null && input.distanceM ? round(input.elevationGainM / (input.distanceM / 1000), 1) : null,
     averageCadenceSpm: input.averageCadenceSpm,
+    blocks: input.streams && !work ? computeBlocks(input.streams, input.distanceM) : null,
   };
 }
 
