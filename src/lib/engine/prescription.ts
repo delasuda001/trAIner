@@ -3,6 +3,7 @@ import type { HeartRateZones } from "@/lib/source/types";
 import type { ActivityMetrics, SessionKind } from "./activity-metrics";
 import { paceSeconds } from "./activity-metrics";
 import type { LoadAlert, LoadFigure } from "./load";
+import { DEFAULT_QUALITY_SPACING_DAYS, spacingHours } from "./rhythm";
 import { zoneRange } from "./zones";
 
 /**
@@ -132,6 +133,8 @@ export type PrescriptionInput = {
     recoveryFlags?: string[];
     /** Niveau du verdict : une séance réussie avec une récupération normale ne reçoit pas de reproche de placement. */
     verdictLevel?: string;
+    /** Écart habituel minimal entre deux séances de qualité (jours), cf. engine/rhythm ; 3 par défaut. */
+    qualitySpacingDays?: number;
   } | null;
 };
 
@@ -342,8 +345,10 @@ function placementLine(input: PrescriptionInput): string | null {
     const load = figure?.ratio != null ? `charge 7 jours déjà à ${figure.value}, soit ${decimal(figure.ratio)} fois ta moyenne des 4 semaines précédentes (${figure.reference})` : `charge 7 jours déjà à ${decimal(alert.ratio)} fois ta moyenne`;
     return `Placement : ${load}, avec ${alert.reasons.join(", ")} ; reporte de 1 à 2 jours ou remplace par une endurance facile.`;
   }
-  const close = context.qualityBefore.find((entry) => entry.daysBefore < 3);
-  if (close) return `Placement : ${close.title} seulement ${close.daysBefore} jour${close.daysBefore > 1 ? "s" : ""} avant ; laisse 72 h entre deux séances de qualité.`;
+  // Écart minimal adapté à l'habitude du coureur (72 h par défaut, 48 h s'il enchaîne ainsi d'ordinaire).
+  const spacing = context.qualitySpacingDays ?? DEFAULT_QUALITY_SPACING_DAYS;
+  const close = context.qualityBefore.find((entry) => entry.daysBefore < spacing);
+  if (close) return `Placement : ${close.title} seulement ${close.daysBefore} jour${close.daysBefore > 1 ? "s" : ""} avant ; laisse ${spacingHours(spacing)} entre deux séances de qualité.`;
   return null;
 }
 
@@ -416,7 +421,7 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
   let nextTarget = target;
   let cue: string;
   if (placement) {
-    cue = `Même format ${format} à ${band(target)}, récupération ${recoveryText}, sur une semaine sans pic de charge et à 72 h au moins d'une autre séance de qualité.`;
+    cue = `Même format ${format} à ${band(target)}, récupération ${recoveryText}, sur une semaine sans pic de charge et à ${spacingHours(input.context?.qualitySpacingDays ?? DEFAULT_QUALITY_SPACING_DAYS)} au moins d'une autre séance de qualité.`;
   } else if (hrCost) {
     cue = `Même format ${format} à ${band(target)}, en visant ${refHr} bpm sur les répétitions plutôt que la vitesse.`;
   } else if (!strictlyOnTarget) {

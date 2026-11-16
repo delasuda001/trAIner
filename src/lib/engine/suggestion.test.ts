@@ -111,3 +111,21 @@ describe("hausse de charge et suggestion", () => {
     expect(result.reason).toContain("VFC sous ta plage habituelle");
   });
 });
+
+describe("suggestion adaptée au rythme du coureur", () => {
+  it("après une qualité il y a 2 jours : facile par défaut, qualité possible pour un coureur habitué à 48 h", () => {
+    const runs = [run(9, "endurance", "easy"), run(8, "intervals_threshold", "intervals"), run(5, "endurance", "easy"), run(4, "endurance", "easy"), run(2, "intervals_vo2", "intervals", 48)];
+    expect(suggestNextSession(input(runs)).primary.type).toBe("endurance");
+    const habitual = suggestNextSession(input(runs, { rhythm: { qualitySpacingDays: 2, highLoadRatio: 1.3 } }));
+    expect(habitual.when.label).toBe("Aujourd'hui");
+  });
+
+  it("ratio 1,4 corroboré : sans effet au seuil 1,5, séance facile au seuil 1,3 d'un gros volume", () => {
+    const runs = [run(12, "endurance", "easy"), run(4, "endurance", "easy")];
+    const load14 = { ...load, acute7d: 280, ratio: 1.4 };
+    const alert = { ratio: 1.4, ratioHigh: true, actionable: true, reasons: ["VFC sous ta plage habituelle"], typicalWeekLoad: 200 };
+    expect(suggestNextSession(input(runs, { load: load14, loadAlert: alert })).primary.type).not.toBe("endurance");
+    expect(suggestNextSession(input(runs, { load: load14, loadAlert: alert, rhythm: { qualitySpacingDays: 3, highLoadRatio: 1.3 } })).primary.type).toBe("endurance");
+  });
+});
+

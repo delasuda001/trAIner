@@ -14,6 +14,7 @@ import { buildOutlookPayload, buildOutlookPrompt, OUTLOOK_PROMPT_VERSION, OUTLOO
 import { buildSessionPayload, buildSessionPrompt, normalizeSessionOutput, SESSION_PROMPT_VERSION, SESSION_SYSTEM_PROMPT, sessionCoachJsonSchema, sessionCoachSchema, type SessionCoachOutput } from "@/lib/coach/session-coach";
 import { createCoachOutputRepository } from "@/lib/db/repositories/coach-output-repository";
 import { requireActiveMember } from "@/lib/profiles/context";
+import { systemPromptFor } from "@/lib/coach/athlete";
 import { checkQuota } from "./quota";
 import { recordFailure, recordUsage } from "./usage";
 import type { Dashboard, SessionAnalysis } from "./analytics";
@@ -123,12 +124,12 @@ function sessionJob(analysis: SessionAnalysis): Job<SessionCoachOutput> {
     feeling: analysis.feeling,
     prescription: analysis.prescription,
   });
-  return { normalize: normalizeSessionOutput, zoneOf: (hr: number) => zoneOf(hr, analysis.profile.zones), kind: "session", subject: analysis.activity.id, promptVersion: SESSION_PROMPT_VERSION, payload, system: SESSION_SYSTEM_PROMPT, prompt: buildSessionPrompt(payload), schema: sessionCoachSchema, jsonSchema: sessionCoachJsonSchema as unknown as Record<string, unknown> };
+  return { normalize: normalizeSessionOutput, zoneOf: (hr: number) => zoneOf(hr, analysis.profile.zones), kind: "session", subject: analysis.activity.id, promptVersion: SESSION_PROMPT_VERSION, payload, system: systemPromptFor(SESSION_SYSTEM_PROMPT, { isAdmin: requireActiveMember().role === "admin", runsPerWeek12w: analysis.context.rhythm.runsPerWeek12w }), prompt: buildSessionPrompt(payload), schema: sessionCoachSchema, jsonSchema: sessionCoachJsonSchema as unknown as Record<string, unknown> };
 }
 
 function outlookJob(dashboard: Dashboard): Job<OutlookCoachOutput> {
   const payload = buildOutlookPayload({ suggestion: dashboard.suggestion, progression: dashboard.progression, recovery: dashboard.recovery, load: dashboard.load, goal: goalForCoach(dashboard.goal, dashboard.today), lastSameType: dashboard.lastSameType });
-  return { zoneOf: (hr: number) => zoneOf(hr, dashboard.profile.zones), kind: "outlook", subject: "current", promptVersion: OUTLOOK_PROMPT_VERSION, payload, system: OUTLOOK_SYSTEM_PROMPT, prompt: buildOutlookPrompt(payload), schema: outlookCoachSchema, jsonSchema: outlookCoachJsonSchema as unknown as Record<string, unknown> };
+  return { zoneOf: (hr: number) => zoneOf(hr, dashboard.profile.zones), kind: "outlook", subject: "current", promptVersion: OUTLOOK_PROMPT_VERSION, payload, system: systemPromptFor(OUTLOOK_SYSTEM_PROMPT, { isAdmin: requireActiveMember().role === "admin", runsPerWeek12w: dashboard.rhythm.runsPerWeek12w }), prompt: buildOutlookPrompt(payload), schema: outlookCoachSchema, jsonSchema: outlookCoachJsonSchema as unknown as Record<string, unknown> };
 }
 
 /** Lecture seule : jamais d'appel à Claude au chargement d'une page. */

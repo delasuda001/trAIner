@@ -4,6 +4,7 @@ import type { HeartRateZones } from "@/lib/source/types";
 import type { SessionFamily, SessionKind } from "./activity-metrics";
 import { SESSION_KIND_LABELS } from "./activity-metrics";
 import { HIGH_LOAD_RATIO, type LoadAlert, type LoadSummary } from "./load";
+import { DEFAULT_QUALITY_SPACING_DAYS, type Rhythm } from "./rhythm";
 import type { RecoverySignals } from "./recovery";
 import { median, present, round } from "./stats";
 import { intervalTarget, type RaceTarget, type RecentEffort } from "./prescription";
@@ -90,6 +91,8 @@ export type SuggestionInput = {
   efforts?: RecentEffort[];
   /** Hausse de charge corroborée ou non ; sans lui, le ratio seul décide (ancien comportement). */
   loadAlert?: LoadAlert | null;
+  /** Rythme habituel (cf. engine/rhythm) : écart entre séances de qualité et seuil de charge ; défauts 3 jours et 1,5. */
+  rhythm?: Pick<Rhythm, "qualitySpacingDays" | "highLoadRatio"> | null;
 };
 
 const HARD_FAMILIES: ReadonlySet<SessionFamily> = new Set(["intervals", "steady"]);
@@ -211,6 +214,8 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
   const goal = input.goal ?? null;
   const lastRun = runs.at(-1) ?? null;
   const lastHard = [...runs].reverse().find(isHard) ?? null;
+  const qualitySpacing = input.rhythm?.qualitySpacingDays ?? DEFAULT_QUALITY_SPACING_DAYS;
+  const highLoadRatio = input.rhythm?.highLoadRatio ?? HIGH_LOAD_RATIO;
   const lastQuality = [...runs].reverse().find((run) => run.family === "intervals" || run.family === "steady") ?? null;
   const lastLong = [...runs].reverse().find((run) => run.family === "long") ?? null;
   const since = (run: SuggestionRun | null) => (run ? daysBetween(run.localDate, today) : null);
@@ -253,11 +258,11 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
   } else if (daysSinceLastRun == null || daysSinceLastRun >= 14) {
     primary = enduranceSession(input, 40, "Reprise en endurance");
     reason = daysSinceLastRun == null ? "Aucune course récente : on repart sur une base aérobie facile." : `Ta dernière course date de ${daysSinceLastRun} jours : on reprend en endurance avant de remettre de l'intensité.`;
-  } else if (load.ratio != null && load.ratio >= HIGH_LOAD_RATIO && (input.loadAlert == null || input.loadAlert.actionable)) {
+  } else if (load.ratio != null && load.ratio >= highLoadRatio && (input.loadAlert == null || input.loadAlert.actionable)) {
     primary = enduranceSession(input, roundTo5(Math.min(50, typicalEasyMin)));
     const why = input.loadAlert?.reasons.length ? `, avec ${input.loadAlert.reasons.join(", ")}` : "";
     reason = `Ta charge des 7 derniers jours vaut ${formatNumber(load.ratio, 1)} fois ta moyenne${why} : on absorbe avec une séance facile.`;
-  } else if (lastHard && lastRun === lastHard && daysBetween(lastHard.localDate, today) < 3) {
+  } else if (lastHard && lastRun === lastHard && daysBetween(lastHard.localDate, today) < qualitySpacing) {
     primary = enduranceSession(input, easyDuration);
     reason = `Ta dernière course (${lowerFirst(lastHard.title ?? SESSION_KIND_LABELS[lastHard.kind])}) était exigeante : la suivante reste facile pour que le travail paie.`;
   } else if (highShare != null && highShare >= 0.4 && lastRun && lastRun.family !== "easy") {
@@ -278,7 +283,7 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
     reason = "Qualité et sortie longue récentes déjà faites : une endurance facile entretient sans fatiguer.";
   }
 
-  // Quand : 48 h après une séance dure ou longue, 24 h après une facile, 72 h entre deux séances de qualité.
+  // Quand : 48 h après une séance dure ou longue, 24 h après une facile, 72 h (ou l'écart habituel du coureur, 48 h au moins) entre deux séances de qualité.
   let earliest = today;
   if (lastRun) {
     const gap = isHard(lastRun) || lastRun.family === "long" ? 2 : 1;
@@ -286,7 +291,7 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
     if (candidate > earliest) earliest = candidate;
   }
   if (kindOf(primary.type).hard && lastHard) {
-    const candidate = addDays(lastHard.localDate, 3);
+    const candidate = addDays(lastHard.localDate, qualitySpacing);
     if (candidate > earliest) earliest = candidate;
   }
   if (primary.type !== "race") earliest = snapToPreferredDay(earliest, goal?.preferredDays ?? []);

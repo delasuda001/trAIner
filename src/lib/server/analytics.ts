@@ -11,6 +11,7 @@ import { computeDeltas, selectComparables, type ComparisonDeltas, type RunForCom
 import { isRun, loadAlert, loadFigure, summarizeLoad, type LoadAlert, type LoadFigure, type LoadSummary } from "@/lib/engine/load";
 import { computeProgression, referenceHeartRate, type Progression } from "@/lib/engine/progression";
 import { assessRecovery, type RecoverySignals } from "@/lib/engine/recovery";
+import { runningRhythm, type Rhythm } from "@/lib/engine/rhythm";
 import { median, present } from "@/lib/engine/stats";
 import { goalMarker, prescribe, type GoalMarker, type Prescription, type RecentEffort } from "@/lib/engine/prescription";
 import { suggestNextSession, type Suggestion } from "@/lib/engine/suggestion";
@@ -137,6 +138,8 @@ export type SessionContext = {
   qualityBefore14d: Array<{ localDate: string; title: string; daysBefore: number }>;
   daysSincePreviousRun: number | null;
   recovery: RecoverySignals;
+  /** Rythme habituel du coureur avant la séance (12 semaines) : règles de placement et de charge. */
+  rhythm: Rhythm;
 };
 
 function sessionContext(current: AnalyzedRun, context: Context): SessionContext {
@@ -149,8 +152,9 @@ function sessionContext(current: AnalyzedRun, context: Context): SessionContext 
   // Ressenti noté sur la séance ou sur la précédente : peut corroborer une hausse de charge.
   const previousRun = context.runs.filter((run) => run.startTimeUtc < current.startTimeUtc).at(-1);
   const efforts = present([createFeelingRepository().get(current.id)?.perceivedEffort, previousRun ? createFeelingRepository().get(previousRun.id)?.perceivedEffort : null]);
-  const alertBefore = loadAlert(loadBefore, { recoveryFlags: recovery.flags, perceivedEffort: efforts.length ? Math.max(...efforts) : null });
   const previousRuns = context.runs.filter((run) => run.startTimeUtc < current.startTimeUtc);
+  const rhythm = runningRhythm(previousRuns.map((run) => ({ localDate: run.localDate, family: run.metrics.family })), addDays(date, -1));
+  const alertBefore = loadAlert(loadBefore, { recoveryFlags: recovery.flags, perceivedEffort: efforts.length ? Math.max(...efforts) : null }, rhythm.highLoadRatio);
   const quality = previousRuns
     .filter((run) => (run.metrics.family === "intervals" || run.metrics.family === "steady") && daysBetween(run.localDate, date) <= 14)
     .map((run) => ({ localDate: run.localDate, title: sessionTitle(run.metrics), daysBefore: daysBetween(run.localDate, date) }));
@@ -166,6 +170,7 @@ function sessionContext(current: AnalyzedRun, context: Context): SessionContext 
     qualityBefore14d: quality,
     daysSincePreviousRun: previous ? daysBetween(previous.localDate, date) : null,
     recovery,
+    rhythm,
   };
 }
 
@@ -198,7 +203,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     raceTargets: context.goal?.raceTargets ?? [],
     efforts: recentEfforts(history, current.localDate),
     reference: deltas.count ? { repSpeedMps: deltas.work?.reference?.speedMps ?? null, repHeartRateBpm: deltas.work?.reference?.heartRateBpm ?? null, repSpreadSPerKm: deltas.work?.reference?.paceSpreadSPerKm ?? null, halvesFadeSPerKm: deltas.fadeSPerKm.reference } : null,
-    context: { loadAlert: sessionCtx.loadAlertBefore, loadFigure: sessionCtx.loadBefore, qualityBefore: sessionCtx.qualityBefore14d, recoveryFlags: sessionCtx.recovery.flags, verdictLevel: classifyVerdict(current.metrics, deltas).level },
+    context: { loadAlert: sessionCtx.loadAlertBefore, loadFigure: sessionCtx.loadBefore, qualityBefore: sessionCtx.qualityBefore14d, recoveryFlags: sessionCtx.recovery.flags, verdictLevel: classifyVerdict(current.metrics, deltas).level, qualitySpacingDays: sessionCtx.rhythm.qualitySpacingDays },
   });
   return {
     activity: current.row,
@@ -261,6 +266,8 @@ export function getActivityView(activityId: string): ActivityView | null {
 }
 
 export type Dashboard = {
+  /** Rythme habituel (12 semaines) : règles adaptées et présentation du coureur au coach. */
+  rhythm: Rhythm;
   today: string;
   profile: Profile;
   load: LoadSummary;
@@ -292,7 +299,7 @@ const SAME_TYPE_KINDS: Partial<Record<Suggestion["primary"]["type"], string[]>> 
   long: ["long"],
 };
 
-type Outlook = { load: LoadSummary; loadAlert: LoadAlert; recovery: RecoverySignals; progression: Progression; suggestion: Suggestion };
+type Outlook = { load: LoadSummary; loadAlert: LoadAlert; recovery: RecoverySignals; progression: Progression; suggestion: Suggestion; rhythm: Rhythm };
 
 /** Charge, récupération, progression et suggestion vues depuis `context.today` (les données doivent déjà s'arrêter là). */
 function computeOutlook(context: Context): Outlook {
@@ -301,7 +308,8 @@ function computeOutlook(context: Context): Outlook {
   const recovery = assessRecovery(wellness, today);
   const lastRun = runs.at(-1);
   const lastFeeling = lastRun ? createFeelingRepository().get(lastRun.id) : null;
-  const alert = loadAlert(load, { recoveryFlags: recovery.flags, perceivedEffort: lastFeeling?.perceivedEffort ?? null });
+  const rhythm = runningRhythm(runs.map((run) => ({ localDate: run.localDate, family: run.metrics.family })), today);
+  const alert = loadAlert(load, { recoveryFlags: recovery.flags, perceivedEffort: lastFeeling?.perceivedEffort ?? null }, rhythm.highLoadRatio);
   const referenceHr = referenceHeartRate(profile.zones.floors);
   const progression = computeProgression({
     runs: runs.map((run) => ({ id: run.id, localDate: run.localDate, distanceM: run.distanceM, metrics: run.metrics, sport: run.sport })),
@@ -324,12 +332,13 @@ function computeOutlook(context: Context): Outlook {
     easyHeartRateBpm: progression.referenceHeartRateBpm,
     load,
     loadAlert: alert,
+    rhythm,
     recovery,
     raceTargets: goal?.raceTargets ?? [],
     efforts: recentEfforts(runs, addDays(today, 1)),
     goal: goal ? { eventDate: goal.eventDate, distanceKm: goal.distanceKm, targetPaceMps: targetPaceMps(goal), runsPerWeek: goal.runsPerWeek, preferredDays: goal.preferredDays } : null,
   });
-  return { load, loadAlert: alert, recovery, progression, suggestion };
+  return { load, loadAlert: alert, recovery, progression, suggestion, rhythm };
 }
 
 /** La suggestion que le moteur affichait juste avant une séance (données arrêtées à son départ). */
@@ -350,7 +359,7 @@ export function suggestionBefore(activityId: string, context: Context = loadCont
 export function getDashboard(): Dashboard {
   const context = loadContext();
   const { today, rows, runs, profile } = context;
-  const { load, loadAlert: currentLoadAlert, recovery, progression, suggestion } = computeOutlook(context);
+  const { load, loadAlert: currentLoadAlert, recovery, progression, suggestion, rhythm } = computeOutlook(context);
   const goal = context.goal;
 
   const last = runs.at(-1);
@@ -359,6 +368,7 @@ export function getDashboard(): Dashboard {
   const sameAnalysis = sameRun ? analyzeSession(sameRun.id, context) : null;
   const runById = new Map(runs.map((run) => [run.id, run]));
   return {
+    rhythm,
     today,
     profile,
     load,

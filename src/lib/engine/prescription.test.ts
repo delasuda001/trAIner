@@ -157,3 +157,24 @@ describe("prescribe, séance réussie (10/11)", () => {
     expect(result.shouldHave[0]).toMatch(/^Placement/);
   });
 });
+
+describe("placement adapté au rythme du coureur", () => {
+  const lines = (result: ReturnType<typeof prescribe>) => (result.status === "ok" ? result.shouldHave : []);
+  const twoDays = { loadAlert: { ...alert([]), ratio: 1, ratioHigh: false }, qualityBefore: [{ title: "Seuil 3 × 10 min", daysBefore: 2 }] };
+
+  it("qualité 2 jours avant : reproche de placement à 72 h par défaut (coureur à 1–2 sorties)", () => {
+    const result = prescribe(input(base, { context: twoDays }));
+    expect(lines(result)[0]).toBe("Placement : Seuil 3 × 10 min seulement 2 jours avant ; laisse 72 h entre deux séances de qualité.");
+  });
+
+  it("qualité 2 jours avant chez un coureur qui enchaîne d'habitude à 48 h : pas de reproche", () => {
+    const result = prescribe(input(base, { context: { ...twoDays, qualitySpacingDays: 2 } }));
+    expect(lines(result).join(" ")).not.toContain("Placement");
+  });
+
+  it("qualité la veille chez ce même coureur : reproche avec son propre écart (48 h)", () => {
+    const result = prescribe(input(base, { context: { ...twoDays, qualityBefore: [{ title: "Seuil 3 × 10 min", daysBefore: 1 }], qualitySpacingDays: 2 } }));
+    expect(lines(result)[0]).toBe("Placement : Seuil 3 × 10 min seulement 1 jour avant ; laisse 48 h entre deux séances de qualité.");
+  });
+});
+

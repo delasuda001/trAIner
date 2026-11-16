@@ -133,9 +133,10 @@ const FLAG_TEXT: Record<string, string> = { hrv_low: "VFC sous ta plage habituel
  * corroboré par un signal de récupération, un ressenti élevé, ou une charge
  * absolue nettement au-dessus de l'habitude sur 12 semaines.
  */
-export function loadAlert(load: LoadSummary, corroboration: { recoveryFlags: string[]; perceivedEffort?: number | null }): LoadAlert {
+export function loadAlert(load: LoadSummary, corroboration: { recoveryFlags: string[]; perceivedEffort?: number | null }, highLoadRatio = HIGH_LOAD_RATIO): LoadAlert {
   const ratio = loadFigure(load).ratio;
-  const ratioHigh = ratio != null && ratio >= HIGH_LOAD_RATIO;
+  // Seuil adapté à la fréquence habituelle du coureur (cf. engine/rhythm) ; 1,5 par défaut.
+  const ratioHigh = ratio != null && ratio >= highLoadRatio;
   const complete = load.weeks.slice(0, -1).map((week) => week.load).filter((value) => value > 0);
   const typical = complete.length >= 4 ? Math.round(median(complete) as number) : null;
   const reasons: string[] = corroboration.recoveryFlags.map((flag) => FLAG_TEXT[flag] ?? flag);

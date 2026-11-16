@@ -157,6 +157,19 @@ abonnement Claude le temps du test, et récolter leurs retours.
   (vérifiable, jamais affichée), plafonds, appareils, désactivation, coupure de l'accès des invités,
   adresse publique, journal des connexions. Il voit la consommation de chacun, jamais leurs séances
   ni leurs échanges avec le coach. Invité : sa consommation et ses appareils seulement.
+- Gros volume (`engine/rhythm.ts`) : rythme habituel sur 12 semaines. Écart minimal entre deux
+  qualités = son habitude (médiane des écarts, bornée 48–72 h ; 72 h faute de 4 écarts), utilisé par la
+  consigne de placement, la suggestion et le « à 72 h au moins » ; seuil de hausse de charge 1,5 jusqu'à
+  3 sorties/semaine, 1,3 dès 5, linéaire entre (`loadAlert(…, highLoadRatio)`). Bastien inchangé, vérifié
+  par `scripts/engine-snapshot.ts` (consignes et empreintes de charge utile de ses 225 courses identiques
+  avant/après). Consignes du coach : phrase de présentation remplacée pour un invité (rythme réel, pas le
+  nom de Bastien ; `coach/athlete.ts`), texte de Bastien identique à l'octet. Temps mesurés sur une base
+  synthétique de 939 courses (3 ans à 6/semaine, `scripts/volume-timing.ts`) : premier calcul des
+  métriques 0,6 s, tableau de bord 35 ms, séance 10 ms.
+- Retours : bouton « Un retour ? » (toutes les pages), pouce + note sous chaque analyse / conseil /
+  réponse ; table `feedback` du registre ; vue /retours (Bastien) : thèmes (catégorie × écran), pouces
+  par version de prompt, export Markdown (`lib/feedback/digest.ts`), synthèse Claude sur bouton
+  (`feedback-v1`, Sonnet, cache par empreinte, usage `feedback`).
 - Accès retenu : Tailscale Funnel sur le Mac seul (adresse HTTPS stable en .ts.net), app sur
   127.0.0.1 (`npm start` = `next start -H 127.0.0.1`). NON INSTALLÉ : accord écrit de Bastien requis.
 - Essais sans toucher à l'app de Bastien : `source data/test/env.sh` (base copiée, registre et

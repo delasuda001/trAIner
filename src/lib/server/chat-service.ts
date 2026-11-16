@@ -12,12 +12,12 @@ import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, 
 import { goalForCoach } from "@/lib/goal/goal";
 import { getDashboard, recentRunSummaries } from "./analytics";
 import { requireActiveMember } from "@/lib/profiles/context";
+import { askerLabel, systemPromptFor } from "@/lib/coach/athlete";
 import { checkQuota } from "./quota";
 import { recordFailure, recordUsage } from "./usage";
 
 /** Contexte synthétique déjà calculé : jamais de séries brutes, jamais d'historique complet. */
-export function buildChatContext() {
-  const dashboard = getDashboard();
+export function buildChatContext(dashboard = getDashboard()) {
   const { suggestion, progression, load, recovery, profile, today } = dashboard;
   const runs = recentRunSummaries(5);
   return {
@@ -80,14 +80,17 @@ export async function askCoach(question: string): Promise<AskResult> {
   try {
     const history = repository.list(CHAT_HISTORY_MESSAGES).filter((message) => !message.content.error).map((message) => ({ role: message.role, text: message.content.text }));
     repository.add("user", { text: question });
-    const { zoneOf: zoneOfHr, ...context } = buildChatContext();
+    const dashboard = getDashboard();
+    const athlete = { isAdmin: requireActiveMember().role === "admin", runsPerWeek12w: dashboard.rhythm.runsPerWeek12w };
+    const system = systemPromptFor(CHAT_SYSTEM_PROMPT, athlete);
+    const { zoneOf: zoneOfHr, ...context } = buildChatContext(dashboard);
     const allowed = allowedNumbers({ context, question, history });
-    const basePrompt = buildChatPrompt(context, history, question);
+    const basePrompt = buildChatPrompt(context, history, question, askerLabel(athlete));
     let prompt = basePrompt;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       let response;
       try {
-        response = await getLlmClient().generateStructured({ system: CHAT_SYSTEM_PROMPT, prompt, schema: chatAnswerSchema, jsonSchema: chatAnswerJsonSchema as unknown as Record<string, unknown> });
+        response = await getLlmClient().generateStructured({ system, prompt, schema: chatAnswerSchema, jsonSchema: chatAnswerJsonSchema as unknown as Record<string, unknown> });
       } catch (error) {
         recordFailure("chat", null, getLlmClient().name, error);
         throw error;

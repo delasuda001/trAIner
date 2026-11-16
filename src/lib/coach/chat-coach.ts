@@ -34,7 +34,7 @@ Comment répondre :
 
 export type ChatTurn = { role: "user" | "coach"; text: string };
 
-export function buildChatPrompt(context: unknown, history: ChatTurn[], question: string): string {
-  const past = history.length ? `Échanges récents :\n${history.map((turn) => `${turn.role === "user" ? "Bastien" : "Coach"} : ${turn.text}`).join("\n")}\n\n` : "";
-  return `Contexte :\n${JSON.stringify(context)}\n\n${past}Question de Bastien : ${question}`;
+export function buildChatPrompt(context: unknown, history: ChatTurn[], question: string, asker = "Bastien"): string {
+  const past = history.length ? `Échanges récents :\n${history.map((turn) => `${turn.role === "user" ? asker : "Coach"} : ${turn.text}`).join("\n")}\n\n` : "";
+  return `Contexte :\n${JSON.stringify(context)}\n\n${past}Question de ${asker} : ${question}`;
 }
