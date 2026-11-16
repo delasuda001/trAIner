@@ -52,17 +52,29 @@ async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
     try {
       // Deux essais au plus : le second signale à Claude les chiffres non sourcés du premier.
       for (let attempt = 1; attempt <= 2; attempt += 1) {
-        const response = await getLlmClient().generateStructured({ system: job.system, prompt, schema: job.schema, jsonSchema: job.jsonSchema });
+        let response;
+        try {
+          response = await getLlmClient().generateStructured({ system: job.system, prompt, schema: job.schema, jsonSchema: job.jsonSchema });
+        } catch (error) {
+          if (attempt === 1 && error instanceof LlmError && error.kind === "invalid_output") {
+            console.warn(`[coach] ${job.kind} : format refusé (essai 1), nouvel essai`);
+            prompt = `${job.prompt}\n\nATTENTION : ta réponse précédente ne respectait pas le format (longueurs maximales). Fais plus court.`;
+            continue;
+          }
+          throw error;
+        }
         const unsupported = findUnsupportedNumbers(collectText(response.data), allowed);
         if (unsupported.length === 0) {
           const row = createCoachOutputRepository().save({ kind: job.kind, subject: job.subject, inputHash, model: response.model, promptVersion: job.promptVersion, output: response.data });
           return { status: "ready", output: response.data, model: response.model, createdAt: row.createdAt };
         }
+        console.warn(`[coach] ${job.kind} : chiffres non sourcés (essai ${attempt}) : ${unsupported.join(", ")}`);
         prompt = `${job.prompt}\n\nATTENTION : ta réponse précédente contenait des chiffres absents des données (${unsupported.join(", ")}). Réécris-la en n'utilisant que des chiffres présents tels quels dans la charge utile.`;
       }
       throw new LlmError("invalid_output", "Chiffres non sourcés");
     } catch (error) {
       const kind: LlmFailureKind = error instanceof LlmError ? error.kind : "unavailable";
+      console.warn(`[coach] ${job.kind} en échec (${kind}) : ${error instanceof Error ? error.message.slice(0, 300) : String(error)}`);
       return { status: "error", kind, message: LLM_FAILURE_MESSAGES[kind] };
     } finally {
       inFlight.delete(key);

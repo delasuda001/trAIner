@@ -9,11 +9,11 @@ import type { HeartRateZones } from "@/lib/source/types";
 export const SESSION_PROMPT_VERSION = "session-v1";
 
 export const sessionCoachSchema = z.object({
-  verdict: z.string().min(10).max(180),
-  bullets: z.array(z.string().min(10).max(260)).min(3).max(4),
-  wentWell: z.string().min(10).max(260),
-  toWork: z.string().min(10).max(260),
-  detail: z.string().min(40).max(1200),
+  verdict: z.string().min(10).max(260),
+  bullets: z.array(z.string().min(10).max(320)).min(3).max(4),
+  wentWell: z.string().min(10).max(360),
+  toWork: z.string().min(10).max(360),
+  detail: z.string().min(40).max(1800),
 });
 
 export type SessionCoachOutput = z.infer<typeof sessionCoachSchema>;
@@ -24,9 +24,9 @@ export const sessionCoachJsonSchema = {
   required: ["verdict", "bullets", "wentWell", "toWork", "detail"],
   properties: {
     verdict: { type: "string", description: "Une phrase de verdict, 180 caractères max." },
-    bullets: { type: "array", minItems: 3, maxItems: 4, items: { type: "string" }, description: "3 ou 4 constats chiffrés, un par ligne." },
-    wentWell: { type: "string", description: "Une chose bien faite, chiffrée." },
-    toWork: { type: "string", description: "Une chose à travailler, concrète et chiffrée." },
+    bullets: { type: "array", minItems: 3, maxItems: 4, items: { type: "string" }, description: "3 ou 4 constats chiffrés, 200 caractères au plus chacun." },
+    wentWell: { type: "string", description: "Une chose bien faite, chiffrée, 250 caractères au plus." },
+    toWork: { type: "string", description: "Une chose à travailler, concrète et chiffrée, 250 caractères au plus." },
     detail: { type: "string", description: "Un paragraphe d'analyse plus détaillée, 1200 caractères max." },
   },
 } as const;

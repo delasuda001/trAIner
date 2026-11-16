@@ -8,9 +8,9 @@ import { formatDate, formatDuration, formatNumber, formatPace, formatSigned } fr
 export const OUTLOOK_PROMPT_VERSION = "outlook-v1";
 
 export const outlookCoachSchema = z.object({
-  suggestionWhy: z.string().min(10).max(260),
-  executionTip: z.string().min(10).max(220),
-  progressionSentence: z.string().min(10).max(260),
+  suggestionWhy: z.string().min(10).max(400),
+  executionTip: z.string().min(10).max(350),
+  progressionSentence: z.string().min(10).max(400),
 });
 
 export type OutlookCoachOutput = z.infer<typeof outlookCoachSchema>;
@@ -20,9 +20,9 @@ export const outlookCoachJsonSchema = {
   additionalProperties: false,
   required: ["suggestionWhy", "executionTip", "progressionSentence"],
   properties: {
-    suggestionWhy: { type: "string", description: "Pourquoi cette séance maintenant, en une phrase." },
-    executionTip: { type: "string", description: "Un conseil d'exécution concret pour cette séance, en une phrase." },
-    progressionSentence: { type: "string", description: "Ce que dit l'indicateur de progression, en une phrase." },
+    suggestionWhy: { type: "string", description: "Pourquoi cette séance maintenant, en une phrase de 250 caractères au plus." },
+    executionTip: { type: "string", description: "Un conseil d'exécution concret pour cette séance, une phrase de 220 caractères au plus." },
+    progressionSentence: { type: "string", description: "Ce que dit l'indicateur de progression, une phrase de 250 caractères au plus." },
   },
 } as const;
 

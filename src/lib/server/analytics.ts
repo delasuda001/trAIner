@@ -100,7 +100,7 @@ function loadContext(): Context {
 export type SessionAnalysis = {
   activity: ActivityRow;
   metrics: ActivityMetrics;
-  comparables: Array<{ id: string; localDate: string; name: string; movingTimeS: number | null; distanceM: number | null; mainSpeedMps: number | null; mainHeartRateBpm: number | null; kind: string; score: number }>;
+  comparables: Array<{ id: string; localDate: string; name: string; movingTimeS: number | null; distanceM: number | null; mainSpeedMps: number | null; mainHeartRateBpm: number | null; workSpeedMps: number | null; workHeartRateBpm: number | null; kind: string; score: number }>;
   deltas: ComparisonDeltas;
   verdict: SessionVerdict;
   profile: Profile;
@@ -115,7 +115,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
   return {
     activity: current.row,
     metrics: current.metrics,
-    comparables: comparables.map((run) => ({ id: run.id, localDate: run.localDate, name: run.name, movingTimeS: run.movingTimeS, distanceM: run.distanceM, mainSpeedMps: run.metrics.mainSpeedMps, mainHeartRateBpm: run.metrics.mainHeartRateBpm, kind: run.metrics.kind, score: run.score })),
+    comparables: comparables.map((run) => ({ id: run.id, localDate: run.localDate, name: run.name, movingTimeS: run.movingTimeS, distanceM: run.distanceM, mainSpeedMps: run.metrics.mainSpeedMps, mainHeartRateBpm: run.metrics.mainHeartRateBpm, workSpeedMps: run.metrics.work?.averageSpeedMps ?? null, workHeartRateBpm: run.metrics.work?.averageHeartRateBpm ?? null, kind: run.metrics.kind, score: run.score })),
     deltas,
     verdict: classifyVerdict(current.metrics, deltas),
     profile: context.profile,

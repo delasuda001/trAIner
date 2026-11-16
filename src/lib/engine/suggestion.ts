@@ -70,6 +70,10 @@ function isHard(run: SuggestionRun): boolean {
   return HARD_FAMILIES.has(run.family) || (run.aerobicTrainingEffect ?? 0) >= 4;
 }
 
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
 function roundTo5(value: number): number {
   return Math.max(5, Math.round(value / 5) * 5);
 }
@@ -159,7 +163,7 @@ export function suggestNextSession(input: SuggestionInput): Suggestion {
     reason = `Ta charge des 7 derniers jours vaut ${formatNumber(load.ratio, 1)} fois ta moyenne des 4 semaines : on absorbe avec une séance facile.`;
   } else if (lastHard && daysBetween(lastHard.localDate, today) < 3 && lastRun === lastHard) {
     primary = enduranceSession(input, roundTo5(Math.min(50, Math.max(35, typicalEasyMin))));
-    reason = `Ta dernière course (${SESSION_KIND_LABELS[lastHard.kind].toLowerCase()}) était exigeante : la suivante doit rester facile pour que le travail paie.`;
+    reason = `Ta dernière course (${lowerFirst(SESSION_KIND_LABELS[lastHard.kind])}) était exigeante : la suivante doit rester facile pour que le travail paie.`;
   } else if (highShare != null && highShare >= 0.4 && lastRun && lastRun.family !== "easy") {
     primary = enduranceSession(input, roundTo5(Math.min(60, Math.max(40, typicalEasyMin))));
     reason = `${formatNumber(highShare * 100)} % de ton temps des 4 dernières semaines était en Z4–Z5 : une vraie séance en Z2 rééquilibre et construit la base.`;
