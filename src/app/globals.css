@@ -232,6 +232,10 @@ ul.bullets li::marker { color: var(--sl-pink); }
 .point-good { border-left-color: var(--sl-green); }
 .point-work { border-left-color: var(--sl-orange); }
 .point-next { border-left-color: var(--sl-blue); }
+.weekly-lines { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; font-size: 14px; }
+.weekly-lines li { display: flex; gap: 8px; align-items: flex-start; }
+.weekly-lines svg { flex: none; margin-top: 3px; }
+.score { font-family: var(--font-data); font-weight: 600; }
 .goal-status { display: grid; gap: 10px; margin-top: 14px; }
 .goal-status-row { border: 1.5px solid var(--sl-border); border-left-width: 6px; border-left-color: var(--sl-blue); border-radius: var(--sl-radius-sm); padding: 10px 12px; font-size: 13.5px; background: var(--sl-surface); }
 .goal-status-row.goal-reachable { border-left-color: var(--sl-green); }

@@ -71,11 +71,31 @@ lancement à 22 h.
    - UI : `components/activity/session-points.tsx` (cible chiffrée du moteur en tête de case),
      `components/goal/goal-status.tsx`.
    - Garde-fou : une plage de zones (« Z3–Z4 ») est acceptée.
-2. Bilan hebdomadaire (Opus) — à faire.
+2. Bilan hebdomadaire (Opus) — fait.
+   - Dossier compact de la semaine : `src/lib/server/weekly-dossier.ts` (≈ 1 700 tokens). Pour chaque
+     séance : la suggestion que le moteur affichait juste avant (recalculée « à date » par
+     `suggestionBefore` dans analytics.ts) et son respect (`engine/adherence.ts`), la consigne
+     « prochaine fois » de la séance précédente du même type et son respect, les consignes du moteur,
+     la dernière analyse Claude, le ressenti. Plus les conseils du jour et questions de la semaine, les
+     refus du garde-fou, les données manquantes.
+   - Prompt et schéma : `src/lib/coach/weekly-review.ts` (`weekly-v1`, modèle `opus`). Sortie : carte
+     (juste / pas juste / ce que le coach change), notes par conseil (pertinence et actionnable sur 5),
+     contradictions, faiblesses, règles candidates (où : moteur ou prompt), données manquantes.
+   - Génération : `generateWeeklyReview` dans `coach-service.ts` (même garde-fou, cache `coach_outputs`
+     kind `weekly`, usage `coach_usage` kind `weekly`). Déclenchement : bouton sur /bilan (POST
+     /api/weekly-review) ou tâche de nuit du dimanche. Semaine par défaut : la dernière complète, ou la
+     semaine en cours le dimanche (`defaultReviewWeek`).
+   - Affichage : carte courte sur le tableau de bord (2 semaines), page /bilan (historique, notes,
+     règles proposées). Les règles candidates alimentent le banc ; rien n'est appliqué d'office.
+   - Premier bilan (semaine du 9 nov., 1 appel Opus ≈ 9,4 k entrée, 5 k sortie) : a trouvé deux
+     vrais défauts, corrigés aussitôt : le respect d'allure disait « dans la cible » avec la tolérance,
+     et la charge citée comme cause incluait la séance elle-même (on utilise maintenant la charge
+     avant la séance : `loadRatioBefore`). Règle candidate non appliquée, à arbitrer : désactiver
+     l'alerte de charge 1,5 pour un coureur à 1–2 sorties par semaine.
 3. Banc de tests nocturne à 22 h (LaunchAgent utilisateur) — à faire.
 
 ## État
 
 - Branche `claude/project-thread-1m6x8x`, tout commité, rien poussé (push GitHub bloqué).
-- Appels Claude réels faits dans ce fil : 6 (Sonnet, analyses du 13 et du 4 novembre, ~9 k tokens d'entrée cache compris et ~1,3 k de sortie chacun).
+- Appels Claude réels faits dans ce fil : 6 Sonnet (analyses du 13 et du 4 novembre, ~9 k tokens d'entrée cache compris et ~1,3 k de sortie chacun) et 1 Opus (bilan).
 - Scripts ponctuels hors Next : `npx tsx --conditions=react-server <script>` (la condition contourne `server-only`).

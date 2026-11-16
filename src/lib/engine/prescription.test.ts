@@ -61,7 +61,7 @@ describe("prescribe, fractionné", () => {
     if (result.status !== "ok") throw new Error("attendu ok");
     expect(result.target).toMatchObject({ label: "allure 5 km du moment", paceFastS: 241, paceSlowS: 247 });
     expect(result.shouldHave).toHaveLength(1);
-    expect(result.shouldHave[0]).toMatch(/^Placement : avec une charge 7 jours à 1,6/);
+    expect(result.shouldHave[0]).toMatch(/^Placement : avec une charge 7 jours déjà à 1,6/);
     // 4:10/km n'est pas « dans la cible » 4:01–4:07/km, même si l'écart est trop faible pour un reproche.
     expect(result.keep).toMatch(/^Régularité : 8 s\/km/);
     expect(result.next.cue).toBe("Même format 3 × 2 km à 4:01–4:07/km, récupération 3:00, sur une semaine sans pic de charge et à 72 h au moins d'une autre séance de qualité.");

@@ -2,7 +2,9 @@ import { CoachRequest } from "@/components/coach-request";
 import { IntensityCard, LastSessionCard, ProgressionCard, RecentList, RecoveryRow, SuggestionCard, VolumeCard } from "@/components/dashboard/cards";
 import { formatDate } from "@/lib/formatters";
 import { getDashboard } from "@/lib/server/analytics";
-import { readOutlookCoach, readSessionCoach } from "@/lib/server/coach-service";
+import { listWeeklyReviews, readOutlookCoach, readSessionCoach } from "@/lib/server/coach-service";
+import { WeeklyReviewCard } from "@/components/weekly/weekly-card";
+import { addDays } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,8 @@ export default function Home() {
   const outlook = readOutlookCoach(dashboard);
   const lastCoach = dashboard.lastRun ? readSessionCoach(dashboard.lastRun) : null;
   const weekday = formatDate(dashboard.today, "long");
+  // Le bilan de la semaine passée reste affiché une semaine (lu en base, jamais généré ici).
+  const weekly = listWeeklyReviews(1).find((review) => review.weekStart >= addDays(dashboard.today, -14));
   return (
     <>
       <div className="page-head">
@@ -41,6 +45,12 @@ export default function Home() {
         </div>
         <RecoveryRow dashboard={dashboard} />
       </section>
+
+      {weekly ? (
+        <section className="section">
+          <WeeklyReviewCard review={weekly} />
+        </section>
+      ) : null}
 
       <section className="section">
         <LastSessionCard dashboard={dashboard} coach={lastCoach} />

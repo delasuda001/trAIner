@@ -3,7 +3,10 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { z } from "zod";
 import { getLlmClient } from "@/lib/coach";
-import { LLM_FAILURE_MESSAGES, LlmError, type LlmFailureKind } from "@/lib/coach/llm";
+import { createClaudeAgentClient } from "@/lib/coach/claude-agent-client";
+import { LLM_FAILURE_MESSAGES, LlmError, type LlmClient, type LlmFailureKind } from "@/lib/coach/llm";
+import { buildWeeklyPrompt, WEEKLY_MODEL, WEEKLY_PROMPT_VERSION, WEEKLY_SYSTEM_PROMPT, weeklyReviewJsonSchema, weeklyReviewSchema, type WeeklyReview } from "@/lib/coach/weekly-review";
+import { buildWeeklyDossier } from "./weekly-dossier";
 import { allowedNumbers, collectText, excerpt, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
 import { zoneOf } from "@/lib/engine/zones";
 import { goalForCoach } from "@/lib/goal/goal";
@@ -19,7 +22,9 @@ export type CoachResult<T> =
   | { status: "error"; kind: LlmFailureKind; message: string };
 
 type Job<T> = {
-  kind: "session" | "outlook";
+  kind: "session" | "outlook" | "weekly";
+  /** Client LLM imposé (ex. Opus pour le bilan hebdomadaire) ; sinon le modèle choisi dans les paramètres. */
+  client?: LlmClient;
   subject: string;
   promptVersion: string;
   payload: unknown;
@@ -66,9 +71,9 @@ async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         let response;
         try {
-          response = await getLlmClient().generateStructured({ system: job.system, prompt, schema: job.schema, jsonSchema: job.jsonSchema });
+          response = await (job.client ?? getLlmClient()).generateStructured({ system: job.system, prompt, schema: job.schema, jsonSchema: job.jsonSchema });
         } catch (error) {
-          recordFailure(job.kind, job.subject, getLlmClient().name, error);
+          recordFailure(job.kind, job.subject, (job.client ?? getLlmClient()).name, error);
           if (attempt === 1 && error instanceof LlmError && error.kind === "invalid_output") {
             console.warn(`[coach] ${job.kind} : format refusé (essai 1), nouvel essai`);
             prompt = `${job.prompt}\n\nATTENTION : ta réponse précédente ne respectait pas le format (longueurs maximales). Fais plus court.`;
@@ -136,4 +141,43 @@ export function readOutlookCoach(dashboard: Dashboard): CoachResult<OutlookCoach
 
 export function generateOutlookCoach(dashboard: Dashboard): Promise<CoachResult<OutlookCoachOutput>> {
   return generate(outlookJob(dashboard));
+}
+
+function weeklyJob(weekStart: string, zones: Parameters<typeof zoneOf>[1]): Job<WeeklyReview> {
+  const payload = buildWeeklyDossier(weekStart);
+  return {
+    kind: "weekly",
+    subject: weekStart,
+    client: createClaudeAgentClient(WEEKLY_MODEL),
+    promptVersion: WEEKLY_PROMPT_VERSION,
+    payload,
+    system: WEEKLY_SYSTEM_PROMPT,
+    prompt: buildWeeklyPrompt(payload),
+    schema: weeklyReviewSchema,
+    jsonSchema: weeklyReviewJsonSchema as unknown as Record<string, unknown>,
+    normalize: (value) => { const parsed = weeklyReviewSchema.safeParse(value); return parsed.success ? parsed.data : null; },
+    zoneOf: (hr: number) => zoneOf(hr, zones),
+  };
+}
+
+/** Bilan hebdomadaire (Opus) : sur bouton ou par la tâche de nuit, jamais au chargement d'une page. */
+export function generateWeeklyReview(weekStart: string, zones: Parameters<typeof zoneOf>[1]): Promise<CoachResult<WeeklyReview>> {
+  return generate(weeklyJob(weekStart, zones));
+}
+
+export type StoredWeeklyReview = { weekStart: string; output: WeeklyReview; model: string; createdAt: string; promptVersion: string };
+
+/** Bilans déjà produits (lecture seule), plus récents d'abord. */
+export function listWeeklyReviews(limit = 12): StoredWeeklyReview[] {
+  const rows = createCoachOutputRepository().recent("weekly", limit * 3);
+  const seen = new Set<string>();
+  const reviews: StoredWeeklyReview[] = [];
+  for (const row of rows) {
+    if (seen.has(row.subject)) continue;
+    const parsed = weeklyReviewSchema.safeParse(JSON.parse(row.outputJson));
+    if (!parsed.success) continue;
+    seen.add(row.subject);
+    reviews.push({ weekStart: row.subject, output: parsed.data, model: row.model, createdAt: row.createdAt, promptVersion: row.promptVersion });
+  }
+  return reviews.sort((a, b) => b.weekStart.localeCompare(a.weekStart)).slice(0, limit);
 }

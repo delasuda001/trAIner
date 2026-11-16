@@ -9,6 +9,7 @@ export function Nav() {
     { href: "/", label: "Tableau de bord" },
     { href: "/coach", label: "Demander au coach" },
     { href: "/objectif", label: "Objectif" },
+    { href: "/bilan", label: "Bilan" },
   ];
   return (
     <nav className="nav" aria-label="Navigation principale">

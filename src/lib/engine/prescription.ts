@@ -325,7 +325,7 @@ function placementLine(input: PrescriptionInput): string | null {
   const context = input.context;
   if (!context) return null;
   if (context.loadRatio != null && context.loadRatio >= HIGH_LOAD_RATIO) {
-    return `Placement : avec une charge 7 jours à ${decimal(context.loadRatio)} fois ta moyenne, reporte de 1 à 2 jours ou remplace par une endurance facile (au-delà de ${decimal(HIGH_LOAD_RATIO)}, la qualité ne paie plus).`;
+    return `Placement : avec une charge 7 jours déjà à ${decimal(context.loadRatio)} fois ta moyenne avant la séance, reporte de 1 à 2 jours ou remplace par une endurance facile (au-delà de ${decimal(HIGH_LOAD_RATIO)}, la qualité ne paie plus).`;
   }
   const close = context.qualityBefore.find((entry) => entry.daysBefore < 3);
   if (close) return `Placement : ${close.title} seulement ${close.daysBefore} jour${close.daysBefore > 1 ? "s" : ""} avant ; laisse 72 h entre deux séances de qualité.`;
@@ -396,7 +396,7 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
     cue = `Même format ${format} à ${band(target)}, récupération ${recoveryText}, sur une semaine sans pic de charge et à 72 h au moins d'une autre séance de qualité.`;
   } else if (hrCost) {
     cue = `Même format ${format} à ${band(target)}, en visant ${refHr} bpm sur les répétitions plutôt que la vitesse.`;
-  } else if (!onTarget) {
+  } else if (!strictlyOnTarget) {
     cue = `Même format ${format} à ${band(target)}, récupération ${recoveryText} ; 1re répétition à ${hasPace ? pace(slow) : `${target.heartRateLow} bpm`}, pas plus vite.`;
   } else if (plan.goal && plan.goal.status !== "out_of_reach" && fast > plan.goal.goalPaceS) {
     nextTarget = { ...target, paceFastS: fast - 3, paceSlowS: slow - 3 };

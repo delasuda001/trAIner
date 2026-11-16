@@ -53,7 +53,7 @@ Règles :
 - Chaque chiffre écrit figure tel quel dans le JSON. Rien de calculé ni d'inventé. Reprends la zone indiquée entre parenthèses après chaque FC.
 - Le verdict suit "verdict_calcule.niveau" et reprend "comparaison.ecart_face_aux_comparables" (écart brut puis corrigé de la FC). Cite le nombre de séances comparables et leur ancienneté ; si "comparaison_fragile" est vrai, dis-le.
 - Un indicateur = une seule lecture, celle de "verdict_calcule" : jamais le même fait dans "keep" et dans "shouldHave".
-- Les constats et la cause probable de l'écart (charge « ce jour-là », séances de qualité rapprochées, récupération, ressenti) vont dans "bullets", jamais dans "shouldHave" ni "nextTime".
+- Les constats et la cause probable de l'écart (charge « avant la séance », jamais celle qui inclut la séance elle-même, séances de qualité rapprochées, récupération, ressenti) vont dans "bullets", jamais dans "shouldHave" ni "nextTime".
 - "shouldHave" et "nextTime" sont des consignes, pas des constats : verbe d'action, cible chiffrée en tête (allure, FC, récupération, placement), reprises de "consignes_moteur". N'invente aucune autre cible. Si "consignes_moteur" n'en donne pas, dis simplement qu'il n'y a pas de consigne chiffrée pour ce format.
 - "shouldHave" : une consigne principale (la première de "consignes_moteur.aurait_du"), au plus une secondaire très courte. Si "aurait_du" dit qu'il n'y a rien à corriger, écris-le en une phrase, sans inventer de reproche.
 - Ne juge pas l'objectif (c'est fait ailleurs) : cite au plus "consignes_moteur.repere_du_moment".
@@ -78,6 +78,9 @@ type Comparable = { localDate: string; title: string; ageDays: number; movingTim
 
 export type SessionContextInput = {
   loadRatio: number | null;
+  /** Charge des 7 jours AVANT la séance (sans elle) : ce qui peut expliquer la séance. */
+  loadRatioBefore?: number | null;
+  acute7dBefore?: number;
   acute7d: number;
   chronicWeekly28d: number;
   qualityBefore14d: Array<{ localDate: string; title: string; daysBefore: number }>;
@@ -216,7 +219,8 @@ export function buildSessionPayload(input: {
     },
     contexte_de_la_seance: context
       ? {
-          charge_garmin_7_jours_ce_jour_la: `${context.acute7d} au ${formatDate(session.localDate, "short")}, soit ${context.loadRatio == null ? "—" : `${formatNumber(context.loadRatio, 1)} fois`} la moyenne hebdo de 4 semaines (${context.chronicWeekly28d})`,
+          charge_garmin_7_jours_avant_la_seance: context.acute7dBefore != null ? `${context.acute7dBefore}, soit ${context.loadRatioBefore == null ? "—" : `${formatNumber(context.loadRatioBefore, 1)} fois`} la moyenne hebdo de 4 semaines (${context.chronicWeekly28d})` : "—",
+          charge_garmin_7_jours_seance_comprise: `${context.acute7d}, soit ${context.loadRatio == null ? "—" : `${formatNumber(context.loadRatio, 1)} fois`} la moyenne`,
           jours_depuis_course_precedente: context.daysSincePreviousRun == null ? "—" : String(context.daysSincePreviousRun),
           seances_de_qualite_14_jours_avant: context.qualityBefore14d.length ? context.qualityBefore14d.map((entry) => `${entry.title}, ${entry.daysBefore} jours avant`) : "aucune",
           recuperation_du_jour: {

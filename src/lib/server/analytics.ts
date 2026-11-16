@@ -81,7 +81,7 @@ function metricsFor(row: ActivityRow, profile: Profile, repo: ReturnType<typeof 
 
 export type AnalyzedRun = RunForComparison & { row: ActivityRow };
 
-type Context = {
+export type Context = {
   goal: Goal | null;
   today: string;
   rows: ActivityRow[];
@@ -90,7 +90,7 @@ type Context = {
   profile: Profile;
 };
 
-function loadContext(): Context {
+export function loadContext(): Context {
   const today = localDate();
   const repo = createActivityRepository();
   const rows = repo.findAll();
@@ -124,6 +124,9 @@ export type SessionAnalysis = {
 
 export type SessionContext = {
   loadRatio: number | null;
+  /** Même ratio sans la séance elle-même (ce que voyait la suggestion avant de courir). */
+  loadRatioBefore: number | null;
+  acute7dBefore: number;
   acute7d: number;
   chronicWeekly28d: number;
   /** Séances de qualité (fractionné, tempo, seuil) des 14 jours précédents. */
@@ -136,6 +139,8 @@ function sessionContext(current: AnalyzedRun, context: Context): SessionContext 
   const date = current.localDate;
   const before = context.rows.filter((row) => row.startTimeUtc < current.startTimeUtc);
   const load = summarizeLoad(before.map((row) => ({ localDate: row.localDate, sport: row.sport, distanceM: row.distanceM, movingTimeS: row.movingTimeS, trainingLoad: row.trainingLoad, hrTimeInZonesS: parseZones(row) })).concat([{ localDate: date, sport: current.sport, distanceM: current.distanceM, movingTimeS: current.movingTimeS, trainingLoad: current.row.trainingLoad, hrTimeInZonesS: parseZones(current.row) }]), date, 4);
+  // Charge AVANT la séance (sans elle) : c'est elle qui dit si la séance était bien placée.
+  const loadBefore = summarizeLoad(before.map((row) => ({ localDate: row.localDate, sport: row.sport, distanceM: row.distanceM, movingTimeS: row.movingTimeS, trainingLoad: row.trainingLoad, hrTimeInZonesS: parseZones(row) })), date, 4);
   const previousRuns = context.runs.filter((run) => run.startTimeUtc < current.startTimeUtc);
   const quality = previousRuns
     .filter((run) => (run.metrics.family === "intervals" || run.metrics.family === "steady") && daysBetween(run.localDate, date) <= 14)
@@ -143,6 +148,8 @@ function sessionContext(current: AnalyzedRun, context: Context): SessionContext 
   const previous = previousRuns.at(-1);
   return {
     loadRatio: load.ratio,
+    loadRatioBefore: loadBefore.ratio,
+    acute7dBefore: loadBefore.acute7d,
     acute7d: load.acute7d,
     chronicWeekly28d: load.chronicWeekly28d,
     qualityBefore14d: quality,
@@ -180,7 +187,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     raceTargets: context.goal?.raceTargets ?? [],
     efforts: recentEfforts(history, current.localDate),
     reference: deltas.count ? { repSpeedMps: deltas.work?.reference?.speedMps ?? null, repHeartRateBpm: deltas.work?.reference?.heartRateBpm ?? null, repSpreadSPerKm: deltas.work?.reference?.paceSpreadSPerKm ?? null, halvesFadeSPerKm: deltas.fadeSPerKm.reference } : null,
-    context: { loadRatio: sessionCtx.loadRatio, qualityBefore: sessionCtx.qualityBefore14d },
+    context: { loadRatio: sessionCtx.loadRatioBefore, qualityBefore: sessionCtx.qualityBefore14d },
   });
   return {
     activity: current.row,
@@ -272,8 +279,10 @@ const SAME_TYPE_KINDS: Partial<Record<Suggestion["primary"]["type"], string[]>> 
   long: ["long"],
 };
 
-export function getDashboard(): Dashboard {
-  const context = loadContext();
+type Outlook = { load: LoadSummary; recovery: RecoverySignals; progression: Progression; suggestion: Suggestion };
+
+/** Charge, récupération, progression et suggestion vues depuis `context.today` (les données doivent déjà s'arrêter là). */
+function computeOutlook(context: Context): Outlook {
   const { today, rows, runs, wellness, profile } = context;
   const load = summarizeLoad(rows.map((row) => ({ localDate: row.localDate, sport: row.sport, distanceM: row.distanceM, movingTimeS: row.movingTimeS, trainingLoad: row.trainingLoad, hrTimeInZonesS: parseZones(row) })), today);
   const recovery = assessRecovery(wellness, today);
@@ -303,6 +312,29 @@ export function getDashboard(): Dashboard {
     efforts: recentEfforts(runs, addDays(today, 1)),
     goal: goal ? { eventDate: goal.eventDate, distanceKm: goal.distanceKm, targetPaceMps: targetPaceMps(goal), runsPerWeek: goal.runsPerWeek, preferredDays: goal.preferredDays } : null,
   });
+  return { load, recovery, progression, suggestion };
+}
+
+/** La suggestion que le moteur affichait juste avant une séance (données arrêtées à son départ). */
+export function suggestionBefore(activityId: string, context: Context = loadContext()): { suggestion: Suggestion; run: AnalyzedRun } | null {
+  const run = context.runs.find((entry) => entry.id === activityId);
+  if (!run) return null;
+  const cutoff = run.startTimeUtc;
+  const past: Context = {
+    ...context,
+    today: run.localDate,
+    rows: context.rows.filter((row) => row.startTimeUtc < cutoff),
+    runs: context.runs.filter((entry) => entry.startTimeUtc < cutoff),
+    wellness: context.wellness.filter((day) => day.date <= run.localDate),
+  };
+  return { suggestion: computeOutlook(past).suggestion, run };
+}
+
+export function getDashboard(): Dashboard {
+  const context = loadContext();
+  const { today, rows, runs, profile } = context;
+  const { load, recovery, progression, suggestion } = computeOutlook(context);
+  const goal = context.goal;
 
   const last = runs.at(-1);
   const sameKinds = SAME_TYPE_KINDS[suggestion.primary.type] ?? [];

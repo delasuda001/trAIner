@@ -4,7 +4,8 @@ import type { LlmUsage } from "@/lib/coach/llm";
 import { getDb, type AppDatabase } from "../client";
 import { coachUsage } from "../schema";
 
-export type UsageKind = "session" | "outlook" | "chat";
+/** `weekly` et `bench` : bilan hebdomadaire et banc de tests, séparés de l'usage de Bastien. */
+export type UsageKind = "session" | "outlook" | "chat" | "weekly" | "bench";
 export type UsageOutcome = "ok" | "rejected" | "error";
 export type UsageRow = typeof coachUsage.$inferSelect;
 
