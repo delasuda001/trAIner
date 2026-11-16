@@ -1,0 +1,6 @@
+{
+  "name": "sans-liste-comparables",
+  "description": "Retire la liste détaillée des séances comparables (les moyennes et écarts restent) : la comparaison reste-t-elle utile ?",
+  "dropKeys": ["comparaison.seances"],
+  "source": "manuel"
+}

@@ -92,7 +92,40 @@ lancement à 22 h.
      et la charge citée comme cause incluait la séance elle-même (on utilise maintenant la charge
      avant la séance : `loadRatioBefore`). Règle candidate non appliquée, à arbitrer : désactiver
      l'alerte de charge 1,5 pour un coureur à 1–2 sorties par semaine.
-3. Banc de tests nocturne à 22 h (LaunchAgent utilisateur) — à faire.
+   - Règle de charge (arbitrage du coordinateur) : le ratio 7 j / 4 semaines ≥ 1,5 ne déclenche une
+     consigne (report, séance facile, libellé « Hausse marquée ») que s'il est corroboré : VFC basse,
+     FC de repos haute, nuit courte, effort perçu ≥ 8/10, ou charge 7 j ≥ 1,3 × la semaine médiane des
+     12 dernières (`loadAlert` dans `engine/load.ts`). Sinon simple repère. Envoyé à Claude dans
+     `hausse_de_charge` (prompt `session-v9`).
+3. Banc de tests nocturne — fait.
+   - Code : `src/lib/bench/` (`types`, `variant` (retrait de clés), `grade` (notation déterministe
+     gratuite), `budget` (plafonds), `judge` (Opus, A/B tirés au hasard), `report`, `store` (fichiers),
+     `freeze` (jeu figé), `runner` (file de tâches)). Scripts : `scripts/bench-freeze.ts`,
+     `scripts/nightly.ts` (`--dry-run`, `--force`).
+   - Jeu figé : `data/bench/fixtures.json` (6 séances : fractionné long, court, seuil (mal reconnu),
+     endurance, sortie longue, séance ratée), ignoré par git. Re-figer après un changement du moteur.
+   - Variantes : `bench/variants/*.json` (versionné) : `systemPrompt` de remplacement et/ou `dropKeys`.
+     Deux au départ : `sans-dynamique`, `sans-liste-comparables`. Les règles candidates du bilan
+     hebdomadaire se transforment en variantes à la main.
+   - File : sorties de la version en place, puis de chaque variante, puis un jugement Opus par
+     variante ; sorties mises en cache par empreinte (prompt + charge utile + modèle), reprises nuit
+     après nuit. Rapport : `data/bench/reports/<date>-<variante>.md` + index, affichés dans Paramètres.
+     Recommandation adopter / rejeter / à creuser (`recommend`), jamais appliquée automatiquement.
+   - Plafonds : 40 k tokens par nuit, 100 k par semaine (bilan + banc), comptés en entrée + sortie +
+     écriture du cache ; arrêt si la fenêtre 5 h ≥ 60 % ou la semaine ≥ 70 % (fenêtres relevées par
+     `claude-agent-client.ts`, persistées dans `app_state` clé `claude_rate_limits`). Variables :
+     `BENCH_NIGHT_BUDGET_TOKENS`, `BENCH_WEEK_BUDGET_TOKENS`, `BENCH_MAX_FIVE_HOUR_UTILIZATION`,
+     `BENCH_MAX_SEVEN_DAY_UTILIZATION`. Usage tracé dans `coach_usage` kinds `bench` et `weekly`,
+     affiché à part dans Paramètres. Ordre de grandeur : ~9,5 k par génération, ~15 k par jugement :
+     une variante complète ≈ 6 générations + 1 jugement ≈ 70 k, soit environ deux nuits.
+   - Lancement à 22 h : LaunchAgent utilisateur `com.sillage.nightly`
+     (`~/Library/LaunchAgents/com.sillage.nightly.plist`), installé par
+     `scripts/launchd/install.sh`, retiré par `scripts/launchd/uninstall.sh` (aucun sudo). Tous les
+     jours à 22 h ; le dimanche il produit d'abord le bilan. Mac endormi : launchd lance au réveil,
+     et le script saute la nuit hors 22 h – 5 h ; il saute aussi si Bastien a utilisé le coach dans
+     les 2 dernières heures. Option non installée : réveil automatique du Mac
+     (`sudo pmset repeat wakeorpoweron MTWRFSU 21:58:00`, à taper par Bastien).
+   - Journaux : `data/bench/nightly.log` (événements), `data/bench/launchd.log` (sortie brute).
 
 ## État
 

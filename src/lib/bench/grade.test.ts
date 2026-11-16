@@ -33,4 +33,10 @@ describe("notation déterministe", () => {
     expect(grade.checks.find((check) => check.key === "chiffres_sources")?.detail).toContain("4:01");
     expect(grade.checks.find((check) => check.key === "consigne_moteur")?.pass).toBe(false);
   });
+
+  it("accepte « rien à corriger » quand le moteur n'a rien relevé", () => {
+    const quiet: Prescription = { ...prescription, shouldHave: [] } as Prescription;
+    const grade = gradeSessionOutput({ output: { ...good, shouldHave: "Rien à corriger sur l'exécution." }, payload, zoneOf, prescription: quiet });
+    expect(grade.checks.find((check) => check.key === "consigne_chiffree")?.pass).toBe(true);
+  });
 });

@@ -1,0 +1,6 @@
+{
+  "name": "sans-dynamique",
+  "description": "Retire le bloc « dynamique de course » de la charge utile : la qualité tient-elle avec moins de tokens d'entrée ?",
+  "dropKeys": ["dynamique_de_course"],
+  "source": "manuel"
+}

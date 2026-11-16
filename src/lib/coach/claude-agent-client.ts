@@ -49,6 +49,12 @@ function usageOf(result: SDKResultMessage): LlmUsage {
 }
 
 let lastRateLimit: LlmRateLimit | null = null;
+/** Dernier état connu de chaque fenêtre de quota (5 h, semaine…) : sert aux plafonds du travail automatique. */
+const rateLimitsByWindow = new Map<string, LlmRateLimit>();
+
+export function observedRateLimits(): LlmRateLimit[] {
+  return [...rateLimitsByWindow.values()];
+}
 
 export function createClaudeAgentClient(model: string): LlmClient {
   return {
@@ -80,6 +86,7 @@ export function createClaudeAgentClient(model: string): LlmClient {
           if (message.type === "rate_limit_event") {
             const info = message.rate_limit_info;
             lastRateLimit = { status: info.status, window: info.rateLimitType ?? null, utilization: info.utilization ?? null, resetsAt: info.resetsAt ? new Date(info.resetsAt * (info.resetsAt < 1e12 ? 1000 : 1)).toISOString() : null };
+            rateLimitsByWindow.set(lastRateLimit.window ?? "inconnue", lastRateLimit);
           }
           if (message.type === "result") {
             const usage = usageOf(message);

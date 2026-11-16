@@ -35,6 +35,7 @@ export function gradeSessionOutput(input: { output: SessionCoachOutput; payload:
   const unsupported = findUnsupportedNumbers(text, allowedNumbers(payload));
   const zones = findZoneContradictions(text, input.zoneOf);
   const hasPrescription = prescription?.status === "ok";
+  const expectsCorrection = prescription?.status === "ok" && prescription.shouldHave.length > 0;
   const band = paceBand(prescription);
   const directives = `${output.shouldHave}\n${output.nextTime}`;
 
@@ -55,8 +56,9 @@ export function gradeSessionOutput(input: { output: SessionCoachOutput; payload:
     {
       key: "consigne_chiffree",
       label: "Consignes chiffrées (aurait dû, prochaine fois)",
-      pass: hasPrescription ? TARGET_PATTERN.test(output.shouldHave) && TARGET_PATTERN.test(output.nextTime) : true,
-      detail: hasPrescription ? `aurait dû ${TARGET_PATTERN.test(output.shouldHave) ? "chiffré" : "sans cible"}, prochaine fois ${TARGET_PATTERN.test(output.nextTime) ? "chiffré" : "sans cible"}` : "pas de consigne attendue",
+      // « Rien à corriger » est la bonne réponse quand le moteur n'a rien relevé : seule « prochaine fois » doit alors être chiffrée.
+      pass: hasPrescription ? (!expectsCorrection || TARGET_PATTERN.test(output.shouldHave)) && TARGET_PATTERN.test(output.nextTime) : true,
+      detail: hasPrescription ? `aurait dû ${expectsCorrection ? (TARGET_PATTERN.test(output.shouldHave) ? "chiffré" : "sans cible") : "rien attendu"}, prochaine fois ${TARGET_PATTERN.test(output.nextTime) ? "chiffré" : "sans cible"}` : "pas de consigne attendue",
       weight: 3,
     },
     { key: "consigne_moteur", label: "Cible du moteur reprise", pass: band ? directives.includes(band) : true, detail: band ? (directives.includes(band) ? `${band} repris` : `${band} absent`) : "pas de fourchette d'allure", weight: 2 },

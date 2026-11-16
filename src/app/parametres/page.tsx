@@ -7,11 +7,16 @@ import { summarizeUsage, totalTokens, type UsageTotals } from "@/lib/coach/usage
 import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
 import { createUsageRepository } from "@/lib/db/repositories/usage-repository";
 import { formatDate, formatNumber } from "@/lib/formatters";
-import { RATE_LIMIT_KEY } from "@/lib/server/usage";
+import { RATE_LIMIT_KEY, readRateLimits } from "@/lib/server/usage";
+import { budgetFromEnv, budgetTokens } from "@/lib/bench/budget";
+import { pendingTasks } from "@/lib/bench/runner";
+import { readReportIndex, readReportMarkdown } from "@/lib/bench/store";
 
 export const dynamic = "force-dynamic";
 
-const KIND_LABELS: Record<string, string> = { session: "Analyse de séance", outlook: "Conseil du jour", chat: "Question au coach" };
+const KIND_LABELS: Record<string, string> = { session: "Analyse de séance", outlook: "Conseil du jour", chat: "Question au coach", weekly: "Bilan hebdomadaire", bench: "Banc de tests" };
+/** Travail automatique (bilan, banc), compté à part de l'usage de Bastien. */
+const AUTOMATIC_KINDS = new Set(["weekly", "bench"]);
 const OUTCOME_LABELS: Record<string, string> = { ok: "ok", rejected: "refusée", error: "échec" };
 const WINDOW_LABELS: Record<string, string> = { five_hour: "fenêtre de 5 h", seven_day: "semaine", seven_day_opus: "semaine (Opus)", seven_day_sonnet: "semaine (Sonnet)" };
 
@@ -37,7 +42,15 @@ export default function SettingsPage() {
   const now = new Date();
   const records = repository.since(new Date(now.getTime() - 30 * 86_400_000).toISOString());
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const summary = summarizeUsage(records, now, startOfToday);
+  const personal = records.filter((record) => !AUTOMATIC_KINDS.has(record.kind));
+  const automatic = records.filter((record) => AUTOMATIC_KINDS.has(record.kind));
+  const summary = summarizeUsage(personal, now, startOfToday);
+  const automaticSummary = summarizeUsage(automatic, now, startOfToday);
+  const budget = budgetFromEnv(process.env);
+  const weekBudgetUsed = automatic.filter((record) => record.createdAt >= new Date(now.getTime() - 7 * 86_400_000).toISOString()).reduce((sum, record) => sum + budgetTokens(record), 0);
+  const windows = Object.values(readRateLimits());
+  const reports = readReportIndex().slice(0, 8);
+  const pending = pendingTasks();
   const first = repository.first();
   const rateLimit = createAppStateRepository().get(RATE_LIMIT_KEY, rateLimitSchema);
   const model = currentCoachModel();
@@ -75,13 +88,44 @@ export default function SettingsPage() {
 
       <section className="section">
         <div className="section-head">
-          <h2 className="section-title">Consommation de l&apos;application</h2>
+          <h2 className="section-title">Ta consommation (analyses, conseils, questions)</h2>
           <span className="section-note">{first ? `suivi depuis le ${formatDate(first.createdAt, "long")}` : "suivi démarré : aucun appel enregistré pour l'instant"}</span>
         </div>
         <div className="grid grid-3">
           <TotalsCard title="Aujourd'hui" totals={summary.today} />
           <TotalsCard title="7 derniers jours" totals={summary.last7Days} />
           <TotalsCard title="30 derniers jours" totals={summary.last30Days} />
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <h2 className="section-title">Travail automatique de nuit (bilan et banc de tests)</h2>
+          <span className="section-note">compté à part de ton usage · plafonds : {tokens(budget.nightTokens)} par nuit, {tokens(budget.weekTokens)} par semaine</span>
+        </div>
+        <div className="grid grid-3">
+          <TotalsCard title="7 derniers jours" totals={automaticSummary.last7Days} />
+          <TotalsCard title="30 derniers jours" totals={automaticSummary.last30Days} />
+          <div className="card" style={{ ["--shadow-color" as string]: "var(--sl-orange)" }}>
+            <div className="card-eyebrow">Plafond de la semaine</div>
+            <div className="kpi-value">{Math.round((weekBudgetUsed / budget.weekTokens) * 100)}<span className="unit">%</span></div>
+            <div className="kpi-compare">{tokens(weekBudgetUsed)} sur {tokens(budget.weekTokens)} (entrée + sortie + écriture du cache)</div>
+            <div className="kpi-meaning">Part de l&apos;automatique sur 30 jours : {summary.last30Days.totalTokens + automaticSummary.last30Days.totalTokens ? Math.round((automaticSummary.last30Days.totalTokens / (summary.last30Days.totalTokens + automaticSummary.last30Days.totalTokens)) * 100) : 0} % de tous les tokens de l&apos;application.</div>
+          </div>
+        </div>
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3 className="section-title" style={{ fontSize: 18 }}>Banc de tests</h3>
+          <p className="small" style={{ marginTop: 4 }}>{pending.length ? `${pending.length} tâche(s) en attente (reprises chaque nuit dans la limite des plafonds).` : "Rien en attente : toutes les variantes ont été évaluées."} Le banc arrête aussi si la fenêtre de 5 h dépasse {Math.round(budget.maxUtilization.fiveHour * 100)} % ou la semaine {Math.round(budget.maxUtilization.sevenDay * 100)} %{windows.length ? ` (dernier relevé : ${windows.map((window) => `${WINDOW_LABELS[window.window ?? ""] ?? window.window} ${window.utilization != null ? `${Math.round(window.utilization * (window.utilization <= 1 ? 100 : 1))} %` : "—"}`).join(", ")})` : ""}. Il propose, rien n&apos;est appliqué sans validation.</p>
+          {reports.length ? (
+            <div className="list" style={{ marginTop: 8 }}>
+              {reports.map((report) => (
+                <details key={report.file} className="more">
+                  <summary><strong>{report.variant}</strong> · {formatDate(report.date, "medium")} · {report.recommendation} <span className="muted small">— {report.why}</span></summary>
+                  <pre className="more-body" style={{ whiteSpace: "pre-wrap", fontSize: 12.5 }}>{readReportMarkdown(report.file) ?? "Rapport introuvable."}</pre>
+                </details>
+              ))}
+            </div>
+          ) : <p className="muted small" style={{ marginTop: 6 }}>Pas encore de rapport.</p>}
         </div>
       </section>
 
