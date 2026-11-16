@@ -127,6 +127,41 @@ lancement à 22 h.
      d'usage de Bastien dans les 2 h, bilan le dimanche). L'installer exige l'accord écrit de Bastien.
    - Journaux : `data/bench/nightly.log` (événements), `data/bench/launchd.log` (sortie brute).
 
+## Test familial (fil « test familial », à partir du 16 nov. au soir)
+
+But : faire tester Sillage par le père et le frère de Bastien (iPhone, rien à installer), via son
+abonnement Claude le temps du test, et récolter leurs retours.
+
+- Profils : registre central `data/sillage.db` (`src/lib/profiles/registry.ts` : profils, sessions,
+  invitations, journal des connexions, réglages, retours). UNE BASE PAR PROFIL : Bastien garde
+  `data/run-insights.db` (jamais migrée ; sauvegarde `data/backups/run-insights-2026-11-16-pre-profiles.db`),
+  chaque invité `data/profiles/<id>.db`. `getDb()` exige un profil actif (AsyncLocalStorage,
+  `profiles/context.ts` : `runAs`) ; jamais de repli sur la base de Bastien.
+- Entrées : chaque page passe par `asMember`/`asAdmin`, chaque route par `apiAsMember`/`apiAsAdmin`
+  (`profiles/request.ts`) ; `src/proxy.ts` renvoie vers /connexion sans cookie. Tout accès en base doit
+  avoir lieu dans le rendu de la page (les composants ne lisent pas la base). Scripts (banc, gel) :
+  `runAs(adminMember(), …)`.
+- Connexion : lien d'invitation personnel à usage unique (7 jours, `/api/session/invitation?t=…`) ou
+  code de secours long généré (20 caractères). Page /connexion sans aucun nom de profil. Sessions par
+  appareil (cookie `sillage_session` 180 j, httpOnly, Secure en HTTPS ; seule l'empreinte SHA-256 est
+  stockée), révocables. Freinage : 5 échecs/adresse → 15 min, 20 échecs/h → tout bloqué 30 min.
+  Première entrée de Bastien : `npm run profiles -- invitation` (lien local).
+- Invités : Sonnet imposé (`currentCoachModel`), banc / bilan Opus / choix du modèle refusés côté
+  serveur ; plafonds par invité (défaut 40 k/jour, 150 k/7 j) et commun (250 k/7 j), arrêt si la
+  fenêtre 5 h ≥ 60 % ou 7 j ≥ 70 % (`profiles/quota.ts`, `server/quota.ts`, contrôlé après le cache,
+  avant l'appel). État de quota de l'abonnement désormais dans le registre.
+- Garmin : une clé par profil, `GARMIN_API_KEY` (Bastien), `GARMIN_API_KEY_<ID>` (invité) dans
+  `.env.local`, relu à chaud (`reloadEnv`). Invités : 12 mois de résumés, 120 j de bien-être, séries des
+  12 dernières semaines, les plus anciennes chargées à l'ouverture de la séance (`fetchDetailNow`).
+- Paramètres (Bastien) : créer un invité, lien/code affichés une seule fois, état de la clé Garmin
+  (vérifiable, jamais affichée), plafonds, appareils, désactivation, coupure de l'accès des invités,
+  adresse publique, journal des connexions. Il voit la consommation de chacun, jamais leurs séances
+  ni leurs échanges avec le coach. Invité : sa consommation et ses appareils seulement.
+- Accès retenu : Tailscale Funnel sur le Mac seul (adresse HTTPS stable en .ts.net), app sur
+  127.0.0.1 (`npm start` = `next start -H 127.0.0.1`). NON INSTALLÉ : accord écrit de Bastien requis.
+- Essais sans toucher à l'app de Bastien : `source data/test/env.sh` (base copiée, registre et
+  build `.next-test` séparés, port 3100).
+
 ## État
 
 - Branche `claude/project-thread-1m6x8x`, tout commité, rien poussé (push GitHub bloqué).
