@@ -1,5 +1,5 @@
 import type { ActivityMetrics, SessionFamily } from "./activity-metrics";
-import { mean, present, round } from "./stats";
+import { mean, median, present, round } from "./stats";
 
 /**
  * Sélection des séances comparables et calcul des écarts. Avec ~1,5 course
@@ -127,17 +127,28 @@ export function computeDeltas(current: RunForComparison, comparables: RunForComp
   const currentHr = current.metrics.mainHeartRateBpm;
   const refSpeed = mean(present(comparables.map((run) => run.metrics.mainSpeedMps)));
   const refHr = mean(present(comparables.map((run) => run.metrics.mainHeartRateBpm)));
-  const refRatio = mean(present(comparables.map((run) => speedPerBeat(run.metrics.mainSpeedMps, run.metrics.mainHeartRateBpm, rest))));
-  const currentRatio = speedPerBeat(currentSpeed, currentHr, rest);
+  // Efficacité mesurée de préférence sur les portions stables et plates (fenêtres aérobies) :
+  // une accélération ou une côte au milieu d'une sortie ne fausse alors pas la comparaison.
+  const useAerobic = current.metrics.aerobic != null && comparables.filter((run) => run.metrics.aerobic).length >= Math.min(2, comparables.length);
+  const pick = (run: RunForComparison) => (useAerobic ? (run.metrics.aerobic ? { speed: run.metrics.aerobic.speedMps, hr: run.metrics.aerobic.heartRateBpm } : null) : { speed: run.metrics.mainSpeedMps, hr: run.metrics.mainHeartRateBpm });
+  // Médiane : une sortie atypique parmi les comparables ne fait pas basculer l'écart.
+  const refRatio = median(present(comparables.map((run) => {
+    const sample = pick(run);
+    return sample ? speedPerBeat(sample.speed, sample.hr, rest) : null;
+  })));
+  const currentSample = pick(current);
+  const basisSpeed = currentSample?.speed ?? null;
+  const basisHr = currentSample?.hr ?? null;
+  const currentRatio = speedPerBeat(basisSpeed, basisHr, rest);
 
   let paceGain: number | null = null;
   let hrDelta: number | null = null;
   // Sur un fractionné, l'allure moyenne mélange travail et récupérations : l'écart « à FC égale » n'a pas de sens.
-  if (current.metrics.structure === "continuous" && refRatio && currentRatio && currentHr && currentSpeed) {
-    const expectedSpeedAtCurrentHr = refRatio * (currentHr - rest);
-    paceGain = round(secondsPerKm(expectedSpeedAtCurrentHr) - secondsPerKm(currentSpeed), 0);
-    const expectedHrAtCurrentSpeed = rest + currentSpeed / refRatio;
-    hrDelta = round(currentHr - expectedHrAtCurrentSpeed, 0);
+  if (current.metrics.structure === "continuous" && refRatio && currentRatio && basisHr && basisSpeed) {
+    const expectedSpeedAtCurrentHr = refRatio * (basisHr - rest);
+    paceGain = round(secondsPerKm(expectedSpeedAtCurrentHr) - secondsPerKm(basisSpeed), 0);
+    const expectedHrAtCurrentSpeed = rest + basisSpeed / refRatio;
+    hrDelta = round(basisHr - expectedHrAtCurrentSpeed, 0);
   }
 
   const work = current.metrics.work

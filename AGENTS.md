@@ -3,8 +3,9 @@
 
 ## Contexte
 
-Run Insights est une application web personnelle d'analyse de course à pied.
-Les activités proviennent de l'API Intervals.icu, elle-même connectée à Garmin.
+trAIner est une application web personnelle et locale de coaching de course à pied.
+Les données proviennent directement de la Garmin Connect Personal API (ADR-008).
+Le coach est Claude, utilisé via l'abonnement claude.ai local (ADR-009).
 
 L'application sert à :
 - consulter une activité ;
@@ -19,12 +20,11 @@ L'application sert à :
 - Next.js avec App Router
 - TypeScript strict
 - Tailwind CSS
-- shadcn/ui
-- Drizzle ORM
+- - Drizzle ORM
 - SQLite en développement local
 - Zod pour toute validation externe
 - Vitest pour les tests unitaires
-- Google GenAI SDK pour Gemini
+- Claude Agent SDK (abonnement local, sans clé API) derrière `src/lib/coach/llm.ts`
 - Recharts pour les graphiques
 
 ## Règles de code
@@ -38,7 +38,9 @@ L'application sert à :
 - Écrire ou mettre à jour les tests lors de toute modification d'un calcul.
 - Ne jamais exposer une clé API dans le frontend.
 - Ne jamais stocker de secret dans Git.
-- Ne jamais appeler Intervals.icu directement depuis le navigateur.
+- Ne jamais appeler Garmin ni Claude depuis le navigateur.
+- Ne jamais envoyer de séries brutes au LLM : uniquement la charge utile compacte du moteur.
+- Ne jamais appeler le LLM au chargement d'une page (cache par empreinte des entrées).
 - Ne jamais envoyer la trace GPS complète ou des coordonnées GPS au LLM.
 - Ne jamais produire de diagnostic médical, de détection de blessure ou de conseil médical.
 
@@ -63,9 +65,8 @@ L'application sert à :
   sont autorisées et doivent être chiffrées et sourcées.
 - La frontière médicale (ADR-004) reste strictement non négociable :
   aucune interprétation de douleur, blessure, charge ou fatigue globale.
-- Toute estimation de seuil provient exclusivement de
-  docs/22-dynamic-thresholds-and-zones.md : jamais de champ propriétaire
-  Intervals.icu/Garmin, jamais de table statique importée.
+- Zones FC et seuil : ceux mesurés par la montre (Garmin), qui sont les
+  zones propres de l'athlète. À défaut, zones par défaut en % de FC max.
 
 
 

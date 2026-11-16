@@ -1,70 +1,65 @@
-# Run Insights
+# trAIner
 
-Application web personnelle d'analyse d'activités de course à pied.
+Coach de course à pied personnel, local, branché sur la montre Garmin.
 
+- **Source** : Garmin Connect Personal API (clé personnelle, accès en lecture seule).
+  Activités, fichiers FIT (séries seconde par seconde et laps), VFC, sommeil, FC de repos,
+  VO2max, zones FC et seuil mesurés par la montre.
+- **Stockage** : SQLite local (`data/run-insights.db`). Le tableau de bord se charge
+  instantanément et fonctionne hors ligne ; la synchro est incrémentale.
+- **Analyse** : un moteur déterministe calcule tous les chiffres (type de séance, séances
+  comparables, écarts à FC égale, dérive, ralentissement, charge, récupération, progression,
+  prochaine séance).
+- **Coach** : Claude, via l'abonnement claude.ai déjà connecté au CLI `claude` (SDK Agent),
+  sans clé API. Claude ne reçoit qu'un résumé chiffré compact (~1 300 tokens par séance),
+  jamais les séries brutes ni le GPS, et chaque chiffre de sa réponse est vérifié contre ce
+  résumé. Les analyses sont mises en cache ; Claude n'est jamais appelé au chargement d'une page.
 
-Elle utilise Intervals.icu comme source de données sportives. Ce premier vertical
-slice affiche les activités récentes et le détail de leurs laps.
+## Démarrage
 
-## Objectif
-
-Consulter une séance de course et ses données brutes avant les futures fonctions
-d'analyse.
-
-## Principes
-
-- Les calculs sont déterministes et testables.
-- Les données GPS précises ne sont jamais envoyées au LLM.
-- L'application ne produit aucun diagnostic médical.
-- Les clés API restent uniquement dans .env.local.
-
-## Démarrage local
+Prérequis : Node 24 (`.nvmrc`), et le CLI Claude Code installé et connecté une fois
+(`claude` dans un terminal, puis se connecter avec son compte claude.ai).
 
 ```bash
 npm install
-cp .env.example .env.local
-npm run dev
+cp .env.example .env.local   # puis renseigner GARMIN_API_KEY
+npm run build
+npm start
 ```
 
-Ouvrir ensuite http://localhost:3000. Les variables attendues dans `.env.local`
-sont `INTERVALS_API_KEY` et `INTERVALS_ATHLETE_ID`. Les contrôles disponibles sont
-`npm run lint`, `npm run typecheck`, `npm run test` et `npm run build`.
+Ouvrir http://localhost:3000. Au premier lancement, la synchro importe tout l'historique
+Garmin (quelques minutes pour les séries détaillées des courses, par lots de 40) ; la page
+se met à jour au fur et à mesure. Ensuite, la synchro tourne au chargement si la précédente
+date de plus de 15 minutes, et à la demande via le bouton « Synchroniser ».
 
-## Base locale
+Pour développer : `npm run dev`. Contrôles : `npm run check` (lint + types + tests).
 
-La base SQLite est configurée par `DATABASE_URL=file:./data/run-insights.db`.
-Les commandes Drizzle sont `npm run db:generate`, `npm run db:migrate` et
-`npm run db:studio`. La base n'est jamais supprimée automatiquement.
+## Variables (`.env.local`)
 
-La liste principale lit le cache local. Utilisez le bouton « Synchroniser » pour
-importer manuellement les courses des 12 dernières semaines. `POST
-/api/sync/activities` accepte éventuellement `{ "weeks": 1 }` à `{ "weeks": 52 }`.
-Une seconde synchronisation ne crée pas de doublon. Les séances manuelles restent
-dans `manual_sessions` et ne sont pas incluses dans les activités analysables.
+| Variable | Rôle |
+|---|---|
+| `GARMIN_API_KEY` | Clé Garmin Connect Personal API, créée sur https://connect.garmin.com/app/settings/personalApiToken (expire selon la durée choisie à la création). |
+| `CLAUDE_COACH_MODEL` | `sonnet` (défaut, économe sur le quota), `opus` ou `haiku`. |
+| `DATABASE_URL` | `file:./data/run-insights.db` par défaut. |
 
-L'accueil permet aussi d'ajouter des séances manuelles pour un futur calendrier.
-Les types autorisés sont musculation, natation, mobilité et autre ; la durée est
-limitée à 720 minutes. Ces séances ne participent à aucune analyse de course.
+Les migrations SQLite s'appliquent automatiquement au démarrage.
 
-Le dashboard affiche le calendrier semaine/mois et le volume de course des
-12 dernières semaines. Le volume et la synthèse sont explicitement « Course
-uniquement » ; les séances manuelles n'apparaissent que dans le calendrier.
+## Quand Claude est-il appelé ?
 
-La page détail charge les streams uniquement dans l'onglet « Courbes ». Aucun
-stream brut ni donnée GPS n'est stocké ou retourné.
+- Après une synchro qui ramène une nouvelle course : analyse de cette course et avis sur la
+  prochaine séance (2 appels).
+- Sur demande : boutons « Demander l'analyse du coach » / « Demander l'avis du coach ».
+- Jamais au chargement. Une analyse déjà faite sur les mêmes données est relue depuis le cache.
+- Si Claude est indisponible ou que le quota Pro est atteint, l'analyse chiffrée du moteur
+  reste affichée.
 
+## Arborescence utile
 
-La page détail permet de générer un débrief Gemini argumenté (constats,
-zones d'entraînement, comparaison historique, recommandations techniques
-et allure cible pour la séance suivante), fondé sur une estimation
-dynamique du seuil (voir docs/22-dynamic-thresholds-and-zones.md).
-
-
-La page [Mon contexte](/context) permet de déclarer un contexte sportif
-versionné, une semaine type et des objectifs. Cette étape ne produit aucune
-recommandation et n'intègre pas Gemini ou un autre LLM.
-
-## Documentation
-
-Voir le dossier docs, notamment docs/00-product-context.md (positionnement révisé)
-et docs/22-dynamic-thresholds-and-zones.md (estimation dynamique des seuils).
+```
+src/lib/source/        interface DataSource + adaptateur Garmin (seul module à changer pour une autre source)
+src/lib/sync/          synchro incrémentale vers SQLite
+src/lib/engine/        moteur déterministe (métriques, comparables, verdict, charge, récupération, progression, suggestion)
+src/lib/coach/         client LLM (interface étroite), prompts, charges utiles, garde-fou des chiffres
+src/lib/server/        services serveur (analyses, cache des sorties du coach)
+src/app/               pages (tableau de bord, séance) et routes API
+```

@@ -150,7 +150,7 @@ export function SessionStreamCharts({ points, zoneFloors }: { points: StreamPoin
           <LineChart data={data} {...common}>
             <CartesianGrid stroke={GRID} vertical={false} />
             {xAxis}
-            <YAxis reversed domain={paceDomain} ticks={paceTicks} tick={AXIS_TICK} tickLine={false} axisLine={false} width={48} tickFormatter={paceLabel} allowDataOverflow />
+            <YAxis reversed domain={paceDomain} ticks={paceTicks} interval={0} tick={AXIS_TICK} tickLine={false} axisLine={false} width={48} tickFormatter={paceLabel} allowDataOverflow />
             <Tooltip cursor={{ stroke: "var(--text-3)" }} content={({ active, payload }) => (active && payload?.[0] ? <TooltipBox title={minutesLabel(Number(payload[0].payload.t))} lines={[payload[0].payload.pace != null ? `${paceLabel(Number(payload[0].payload.pace))}/km` : "—", payload[0].payload.hr != null ? `${payload[0].payload.hr} bpm` : ""].filter(Boolean)} /> : null)} />
             <Line type="monotone" dataKey="pace" stroke="var(--series-pace)" strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
           </LineChart>
@@ -162,7 +162,7 @@ export function SessionStreamCharts({ points, zoneFloors }: { points: StreamPoin
           <LineChart data={data} {...common}>
             <CartesianGrid stroke={GRID} vertical={false} />
             {xAxis}
-            <YAxis domain={hrDomain} ticks={hrTicks} tick={AXIS_TICK} tickLine={false} axisLine={false} width={48} tickFormatter={(value: number) => String(Math.round(value))} />
+            <YAxis domain={hrDomain} ticks={hrTicks} interval={0} tick={AXIS_TICK} tickLine={false} axisLine={false} width={48} tickFormatter={(value: number) => String(Math.round(value))} />
             {zoneFloors.slice(1).map((floor) => <ReferenceLine key={floor} y={floor} stroke="var(--border-strong)" strokeDasharray="3 3" ifOverflow="hidden" />)}
             <Tooltip cursor={{ stroke: "var(--text-3)" }} content={({ active, payload }) => (active && payload?.[0] ? <TooltipBox title={minutesLabel(Number(payload[0].payload.t))} lines={[payload[0].payload.hr != null ? `${payload[0].payload.hr} bpm` : "—", payload[0].payload.pace != null ? `${paceLabel(Number(payload[0].payload.pace))}/km` : ""].filter(Boolean)} /> : null)} />
             <Line type="monotone" dataKey="hr" stroke="var(--series-hr)" strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />

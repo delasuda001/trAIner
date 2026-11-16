@@ -45,7 +45,7 @@ export default function Home() {
         <LastSessionCard dashboard={dashboard} coach={lastCoach} />
       </section>
 
-      <section className="section grid grid-main-side">
+      <section className="section grid grid-main-side" style={{ alignItems: "start" }}>
         <VolumeCard dashboard={dashboard} />
         <RecentList dashboard={dashboard} />
       </section>

@@ -91,7 +91,7 @@ function ComparisonCard({ analysis }: { analysis: SessionAnalysis }) {
         {deltas.paceAtEqualHrGainSPerKm != null ? <Fact label="Allure à FC égale" value={signed(deltas.paceAtEqualHrGainSPerKm, "s/km", "rapide", "lent")} /> : null}
         {deltas.hrAtEqualPaceDeltaBpm != null ? <Fact label="FC à allure égale" value={signed(deltas.hrAtEqualPaceDeltaBpm, "bpm", "haute", "basse")} /> : null}
         {deltas.drift.current != null ? <Fact label="Dérive cardiaque" value={`${formatNumber(deltas.drift.current, 1)} %`} sub={deltas.drift.reference != null ? `comparables : ${formatNumber(deltas.drift.reference, 1)} %` : undefined} /> : null}
-        {deltas.fade.current != null ? <Fact label="Ralentissement 2e moitié" value={`${formatNumber(deltas.fade.current, 1)} %`} sub={deltas.fade.reference != null ? `comparables : ${formatNumber(deltas.fade.reference, 1)} %` : undefined} /> : null}
+        {deltas.fade.current != null ? <Fact label="2e moitié vs 1re" value={`${formatNumber(Math.abs(deltas.fade.current), 1)} % plus ${deltas.fade.current > 0 ? "lente" : "rapide"}`} sub={deltas.fade.reference != null ? `comparables : ${formatNumber(Math.abs(deltas.fade.reference), 1)} % plus ${deltas.fade.reference > 0 ? "lente" : "rapide"}` : undefined} /> : null}
         {deltas.work?.current?.speedCvPct != null ? <Fact label="Écart entre reps" value={`${formatNumber(deltas.work.current.speedCvPct, 1)} %`} sub={deltas.work.reference?.speedCvPct != null ? `comparables : ${formatNumber(deltas.work.reference.speedCvPct, 1)} %` : undefined} /> : null}
       </div>
       <details className="more">
