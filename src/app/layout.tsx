@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, DM_Mono } from "next/font/google";
+import { Settings } from "lucide-react";
 import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { SyncControl } from "@/components/sync-control";
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <Nav />
             <span className="topbar-spacer" />
             <SyncControl lastSuccessAt={sync?.lastSuccessAt ?? null} lastError={sync?.lastError ?? null} lastAttemptAt={sync?.lastAttemptAt ?? null} />
+            <Link href="/parametres" className="btn btn-ghost icon-btn" aria-label="Paramètres et consommation" title="Paramètres et consommation"><Settings size={16} /></Link>
             <ThemeToggle />
           </div>
         </header>

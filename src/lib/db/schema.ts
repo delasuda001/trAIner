@@ -110,6 +110,24 @@ export const coachChatMessages = sqliteTable("coach_chat_messages", {
   createdAt: text("created_at").notNull(),
 }, (table) => ({ createdIndex: index("coach_chat_messages_created_idx").on(table.createdAt) }));
 
+/** Consommation de Claude, un enregistrement par appel (chiffres renvoyés par le SDK). */
+export const coachUsage = sqliteTable("coach_usage", {
+  id: text("id").primaryKey(),
+  createdAt: text("created_at").notNull(),
+  /** session | outlook | chat */
+  kind: text("kind").notNull(),
+  subject: text("subject"),
+  model: text("model").notNull(),
+  /** ok | rejected (réponse refusée par nos contrôles) | error */
+  outcome: text("outcome").notNull(),
+  inputTokens: integer("input_tokens").notNull(),
+  outputTokens: integer("output_tokens").notNull(),
+  cacheReadTokens: integer("cache_read_tokens").notNull(),
+  cacheCreationTokens: integer("cache_creation_tokens").notNull(),
+  costUsd: real("cost_usd"),
+  durationMs: integer("duration_ms"),
+}, (table) => ({ createdIndex: index("coach_usage_created_idx").on(table.createdAt) }));
+
 export const athleteContextVersions = sqliteTable("athlete_context_versions", {
   id: text("id").primaryKey(),
   status: text("status").notNull(),
@@ -140,4 +158,4 @@ export const goals = sqliteTable("goals", {
   targetDateIndex: index("goals_target_date_idx").on(table.targetDate),
 }));
 
-export const schema = { activities, activityDetails, wellnessDays, appState, coachOutputs, activityFeelings, coachChatMessages, athleteContextVersions, goals };
+export const schema = { activities, activityDetails, wellnessDays, appState, coachOutputs, activityFeelings, coachChatMessages, coachUsage, athleteContextVersions, goals };

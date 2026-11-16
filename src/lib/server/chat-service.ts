@@ -11,6 +11,7 @@ import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import { goalForCoach } from "@/lib/goal/goal";
 import { getDashboard, recentRunSummaries } from "./analytics";
+import { recordFailure, recordUsage } from "./usage";
 
 /** Contexte synthétique déjà calculé : jamais de séries brutes, jamais d'historique complet. */
 export function buildChatContext() {
@@ -77,9 +78,16 @@ export async function askCoach(question: string): Promise<AskResult> {
     const basePrompt = buildChatPrompt(context, history, question);
     let prompt = basePrompt;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
-      const response = await getLlmClient().generateStructured({ system: CHAT_SYSTEM_PROMPT, prompt, schema: chatAnswerSchema, jsonSchema: chatAnswerJsonSchema as unknown as Record<string, unknown> });
+      let response;
+      try {
+        response = await getLlmClient().generateStructured({ system: CHAT_SYSTEM_PROMPT, prompt, schema: chatAnswerSchema, jsonSchema: chatAnswerJsonSchema as unknown as Record<string, unknown> });
+      } catch (error) {
+        recordFailure("chat", null, getLlmClient().name, error);
+        throw error;
+      }
       const text = collectText(response.data);
       const issues = [...findUnsupportedNumbers(text, allowed), ...findZoneContradictions(text, zoneOfHr)];
+      recordUsage("chat", null, response.model, issues.length ? "rejected" : "ok", response.usage);
       if (!issues.length) {
         // Certains modèles écrivent « \n » en toutes lettres dans le JSON : on rétablit les sauts de ligne.
         repository.add("coach", { text: response.data.answer.replace(/\\n/g, "\n"), evidence: response.data.evidence }, response.model);

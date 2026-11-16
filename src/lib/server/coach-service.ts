@@ -10,6 +10,7 @@ import { goalForCoach } from "@/lib/goal/goal";
 import { buildOutlookPayload, buildOutlookPrompt, OUTLOOK_PROMPT_VERSION, OUTLOOK_SYSTEM_PROMPT, outlookCoachJsonSchema, outlookCoachSchema, type OutlookCoachOutput } from "@/lib/coach/outlook-coach";
 import { buildSessionPayload, buildSessionPrompt, SESSION_PROMPT_VERSION, SESSION_SYSTEM_PROMPT, sessionCoachJsonSchema, sessionCoachSchema, type SessionCoachOutput } from "@/lib/coach/session-coach";
 import { createCoachOutputRepository } from "@/lib/db/repositories/coach-output-repository";
+import { recordFailure, recordUsage } from "./usage";
 import type { Dashboard, SessionAnalysis } from "./analytics";
 
 export type CoachResult<T> =
@@ -62,6 +63,7 @@ async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
         try {
           response = await getLlmClient().generateStructured({ system: job.system, prompt, schema: job.schema, jsonSchema: job.jsonSchema });
         } catch (error) {
+          recordFailure(job.kind, job.subject, getLlmClient().name, error);
           if (attempt === 1 && error instanceof LlmError && error.kind === "invalid_output") {
             console.warn(`[coach] ${job.kind} : format refusé (essai 1), nouvel essai`);
             prompt = `${job.prompt}\n\nATTENTION : ta réponse précédente ne respectait pas le format (longueurs maximales). Fais plus court.`;
@@ -71,6 +73,7 @@ async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
         }
         const text = collectText(response.data);
         const unsupported = [...findUnsupportedNumbers(text, allowed), ...findZoneContradictions(text, job.zoneOf)];
+        recordUsage(job.kind, job.subject, response.model, unsupported.length ? "rejected" : "ok", response.usage);
         if (unsupported.length === 0) {
           const row = createCoachOutputRepository().save({ kind: job.kind, subject: job.subject, inputHash, model: response.model, promptVersion: job.promptVersion, output: response.data });
           return { status: "ready", output: response.data, model: response.model, createdAt: row.createdAt };
