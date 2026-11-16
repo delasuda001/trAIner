@@ -1,86 +1,95 @@
-import { integer, index, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+
+/**
+ * Schéma local (SQLite). Les tables de l'ancienne intégration intervals.icu
+ * et de l'assistant Gemini (synced_activities, analyses, conversation_*…)
+ * restent physiquement dans le fichier de base mais ne sont plus utilisées.
+ */
 
 const timestamps = {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 };
 
-export const syncedActivities = sqliteTable("synced_activities", {
+export const activities = sqliteTable("activities", {
+  /** `${source}:${sourceId}` */
   id: text("id").primaryKey(),
-  intervalsActivityId: text("intervals_activity_id").notNull(),
-  startDate: text("start_date").notNull(),
-  timezone: text("timezone"),
-  name: text("name"),
-  sportType: text("sport_type").notNull(),
+  source: text("source").notNull(),
+  sourceId: text("source_id").notNull(),
+  name: text("name").notNull(),
+  sport: text("sport").notNull(),
+  sourceType: text("source_type").notNull(),
+  startTimeUtc: text("start_time_utc").notNull(),
+  startTimeLocal: text("start_time_local").notNull(),
+  localDate: text("local_date").notNull(),
   distanceM: real("distance_m"),
-  movingTimeS: integer("moving_time_s"),
-  elapsedTimeS: integer("elapsed_time_s"),
+  movingTimeS: real("moving_time_s"),
+  elapsedTimeS: real("elapsed_time_s"),
   elevationGainM: real("elevation_gain_m"),
   averageSpeedMps: real("average_speed_mps"),
   averageHeartRateBpm: real("average_heart_rate_bpm"),
   maxHeartRateBpm: real("max_heart_rate_bpm"),
   averageCadenceSpm: real("average_cadence_spm"),
-  averagePowerW: real("average_power_w"),
   trainingLoad: real("training_load"),
-  sourceUpdatedAt: text("source_updated_at"),
-  syncedAt: text("synced_at").notNull(),
+  aerobicTrainingEffect: real("aerobic_training_effect"),
+  anaerobicTrainingEffect: real("anaerobic_training_effect"),
+  trainingEffectLabel: text("training_effect_label"),
+  hrTimeInZonesJson: text("hr_time_in_zones_json"),
+  averageTemperatureC: real("average_temperature_c"),
+  lapCount: integer("lap_count"),
+  /** pending | ready | failed | skipped */
+  detailStatus: text("detail_status").notNull(),
+  /** Métriques dérivées des séries (cf. lib/engine/activity-metrics), recalculées si la version change. */
+  metricsJson: text("metrics_json"),
+  metricsVersion: integer("metrics_version"),
   ...timestamps,
 }, (table) => ({
-  intervalsActivityIdUnique: uniqueIndex("synced_activities_intervals_activity_id_unique").on(table.intervalsActivityId),
-  startDateIndex: index("synced_activities_start_date_idx").on(table.startDate),
-  sportTypeIndex: index("synced_activities_sport_type_idx").on(table.sportType),
+  sourceUnique: uniqueIndex("activities_source_unique").on(table.source, table.sourceId),
+  startIndex: index("activities_start_idx").on(table.startTimeUtc),
+  sportIndex: index("activities_sport_idx").on(table.sport),
 }));
 
-export const activityDetailsCache = sqliteTable("activity_details_cache", {
-  id: text("id").primaryKey(),
-  intervalsActivityId: text("intervals_activity_id").notNull(),
-  detailJson: text("detail_json").notNull(),
-  intervalsJson: text("intervals_json"),
-  sourceUpdatedAt: text("source_updated_at"),
+export const activityDetails = sqliteTable("activity_details", {
+  activityId: text("activity_id").primaryKey(),
+  streamsJson: text("streams_json"),
+  lapsJson: text("laps_json").notNull(),
   fetchedAt: text("fetched_at").notNull(),
-  ...timestamps,
-}, (table) => ({ activityUnique: uniqueIndex("activity_details_cache_activity_unique").on(table.intervalsActivityId) }));
+});
 
-export const activityStreamSummaries = sqliteTable("activity_stream_summaries", {
-  id: text("id").primaryKey(),
-  intervalsActivityId: text("intervals_activity_id").notNull(),
-  streamVersion: text("stream_version").notNull(),
-  summaryJson: text("summary_json").notNull(),
-  ...timestamps,
-}, (table) => ({
-  activityVersionUnique: uniqueIndex("activity_stream_summaries_activity_version_unique").on(table.intervalsActivityId, table.streamVersion),
-  activityIndex: index("activity_stream_summaries_activity_idx").on(table.intervalsActivityId),
-}));
-
-export const manualSessions = sqliteTable("manual_sessions", {
-  id: text("id").primaryKey(),
-  sessionDate: text("session_date").notNull(),
-  discipline: text("discipline").notNull(),
-  durationMinutes: integer("duration_minutes").notNull(),
-  label: text("label"),
-  note: text("note"),
-  ...timestamps,
-}, (table) => ({
-  sessionDateIndex: index("manual_sessions_session_date_idx").on(table.sessionDate),
-  disciplineIndex: index("manual_sessions_discipline_idx").on(table.discipline),
-}));
-
-export const userConfirmations = sqliteTable("user_confirmations", {
-  id: text("id").primaryKey(),
-  confirmationType: text("confirmation_type").notNull(),
-  status: text("status").notNull(),
-  sourceActivityId: text("source_activity_id"),
-  sourceSegmentId: text("source_segment_id"),
-  detectionConfidence: text("detection_confidence").notNull(),
-  proposedPayloadJson: text("proposed_payload_json").notNull(),
-  resolvedPayloadJson: text("resolved_payload_json"),
-  createdAt: text("created_at").notNull(),
-  resolvedAt: text("resolved_at"),
+export const wellnessDays = sqliteTable("wellness_days", {
+  date: text("date").primaryKey(),
+  hrvLastNightMs: real("hrv_last_night_ms"),
+  hrvWeeklyAvgMs: real("hrv_weekly_avg_ms"),
+  hrvBaselineLowMs: real("hrv_baseline_low_ms"),
+  hrvBaselineHighMs: real("hrv_baseline_high_ms"),
+  hrvStatus: text("hrv_status"),
+  sleepDurationS: real("sleep_duration_s"),
+  sleepScore: real("sleep_score"),
+  restingHeartRateBpm: real("resting_heart_rate_bpm"),
+  vo2max: real("vo2max"),
   updatedAt: text("updated_at").notNull(),
+});
+
+/** Petit magasin clé/valeur : profil athlète, curseurs de synchronisation. */
+export const appState = sqliteTable("app_state", {
+  key: text("key").primaryKey(),
+  valueJson: text("value_json").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+/** Sorties de Claude, mises en cache par sujet et empreinte des données d'entrée. */
+export const coachOutputs = sqliteTable("coach_outputs", {
+  id: text("id").primaryKey(),
+  /** session | outlook */
+  kind: text("kind").notNull(),
+  subject: text("subject").notNull(),
+  inputHash: text("input_hash").notNull(),
+  model: text("model").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  outputJson: text("output_json").notNull(),
+  createdAt: text("created_at").notNull(),
 }, (table) => ({
-  statusIndex: index("user_confirmations_status_idx").on(table.status),
-  sourceActivityIndex: index("user_confirmations_source_activity_idx").on(table.sourceActivityId),
-  typeStatusIndex: index("user_confirmations_type_status_idx").on(table.confirmationType, table.status),
+  subjectIndex: index("coach_outputs_subject_idx").on(table.kind, table.subject, table.createdAt),
 }));
 
 export const athleteContextVersions = sqliteTable("athlete_context_versions", {
@@ -113,59 +122,4 @@ export const goals = sqliteTable("goals", {
   targetDateIndex: index("goals_target_date_idx").on(table.targetDate),
 }));
 
-export const activityContexts = sqliteTable("activity_contexts", {
-  id: text("id").primaryKey(),
-  intervalsActivityId: text("intervals_activity_id").notNull(),
-  sessionGoal: text("session_goal"),
-  perceivedExertion: text("perceived_exertion"),
-  unusualFatigue: integer("unusual_fatigue").default(0),
-  painFlag: integer("pain_flag").default(0),
-  note: text("note"),
-  ...timestamps,
-}, (table) => ({
-  activityIndex: index("activity_contexts_activity_idx").on(table.intervalsActivityId),
-}));
-
-export const analyses = sqliteTable("analyses", {
-  id: text("id").primaryKey(),
-  intervalsActivityId: text("intervals_activity_id").notNull(),
-  deterministicMetricsJson: text("deterministic_metrics_json").notNull(),
-  historicalComparisonJson: text("historical_comparison_json"),
-  llmResponseJson: text("llm_response_json").notNull(),
-  llmModel: text("llm_model").notNull(),
-  promptVersion: text("prompt_version").notNull(),
-  ...timestamps,
-}, (table) => ({
-  activityIndex: index("analyses_activity_idx").on(table.intervalsActivityId),
-}));
-
-export const actionItems = sqliteTable("action_items", {
-  id: text("id").primaryKey(),
-  analysisId: text("analysis_id").notNull(),
-  category: text("category").notNull(),
-  content: text("content").notNull(),
-  status: text("status").notNull().default("open"),
-  ...timestamps,
-  completedAt: text("completed_at"),
-}, (table) => ({
-  analysisIndex: index("action_items_analysis_idx").on(table.analysisId),
-}));
-
-export const conversationThreads = sqliteTable("conversation_threads", {
-  id: text("id").primaryKey(),
-  title: text("title").notNull(),
-  goalId: text("goal_id"),
-  ...timestamps,
-}, (table) => ({ goalIndex: index("conversation_threads_goal_idx").on(table.goalId) }));
-
-export const conversationMessages = sqliteTable("conversation_messages", {
-  id: text("id").primaryKey(),
-  threadId: text("thread_id").notNull(),
-  role: text("role").notNull(),
-  contentJson: text("content_json").notNull(),
-  model: text("model"),
-  promptVersion: text("prompt_version"),
-  createdAt: text("created_at").notNull(),
-}, (table) => ({ threadIndex: index("conversation_messages_thread_idx").on(table.threadId, table.createdAt) }));
-
-export const schema = { syncedActivities, activityDetailsCache, activityStreamSummaries, manualSessions, userConfirmations, athleteContextVersions, goals, activityContexts, analyses, actionItems, conversationThreads, conversationMessages };
+export const schema = { activities, activityDetails, wellnessDays, appState, coachOutputs, athleteContextVersions, goals };

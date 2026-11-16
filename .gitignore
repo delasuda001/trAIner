@@ -22,3 +22,8 @@ node_modules/
 # Logs
 *.log
 .DS_Store
+
+# Fichiers parasites
+trainer_copilot_save.json
+copilot_summary.md
+clean_copilot.py
