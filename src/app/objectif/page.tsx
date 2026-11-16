@@ -1,3 +1,5 @@
+import { asMember } from "@/lib/profiles/request";
+import type { Member } from "@/lib/profiles/types";
 import { GoalForm } from "@/components/goal/goal-form";
 import { GoalStatusList } from "@/components/goal/goal-status";
 import { getDashboard } from "@/lib/server/analytics";
@@ -6,7 +8,12 @@ import { EMPTY_GOAL, GOAL_KEY, goalSchema } from "@/lib/goal/goal";
 
 export const dynamic = "force-dynamic";
 
-export default function GoalPage() {
+export default async function GoalPage() {
+  return asMember((member) => renderGoalPage(member));
+}
+
+function renderGoalPage(member: Member) {
+  void member;
   const goal = createAppStateRepository().get(GOAL_KEY, goalSchema) ?? EMPTY_GOAL;
   const dashboard = getDashboard();
   return (

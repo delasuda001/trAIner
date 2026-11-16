@@ -1,3 +1,5 @@
+import { asMember } from "@/lib/profiles/request";
+import type { Member } from "@/lib/profiles/types";
 import { CoachRequest } from "@/components/coach-request";
 import { IntensityCard, LastSessionCard, ProgressionCard, RecentList, RecoveryRow, SuggestionCard, VolumeCard } from "@/components/dashboard/cards";
 import { formatDate } from "@/lib/formatters";
@@ -8,7 +10,12 @@ import { addDays } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
-export default function Home() {
+export default async function Home() {
+  return asMember((member) => renderHome(member));
+}
+
+function renderHome(member: Member) {
+  void member;
   const dashboard = getDashboard();
   if (dashboard.activityCount === 0) {
     return (

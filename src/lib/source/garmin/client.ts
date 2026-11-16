@@ -49,6 +49,11 @@ export class GarminClient {
     this.now = options.now ?? (() => Date.now());
   }
 
+  /** Vérifie la clé en demandant un jeton neuf (aucune donnée lue). */
+  async verifyKey(): Promise<void> {
+    await this.getToken(true);
+  }
+
   private async getToken(force = false): Promise<string> {
     if (!force && this.token && this.token.expiresAt > this.now()) return this.token.value;
     const response = await this.fetchImpl(`${GARMIN_BASE_URL}${TOKEN_PATH}`, {

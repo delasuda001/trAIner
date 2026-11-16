@@ -38,7 +38,8 @@ export type LlmClient = {
   lastRateLimit(): LlmRateLimit | null;
 };
 
-export type LlmFailureKind = "rate_limited" | "unavailable" | "auth" | "invalid_output";
+/** `quota` : plafond d'un profil invité atteint (aucun appel n'est fait). */
+export type LlmFailureKind = "rate_limited" | "unavailable" | "auth" | "invalid_output" | "quota";
 
 export class LlmError extends Error {
   /** Consommation de l'appel quand il a abouti côté modèle (ex. réponse refusée par la validation). */
@@ -54,4 +55,5 @@ export const LLM_FAILURE_MESSAGES: Record<LlmFailureKind, string> = {
   unavailable: "Claude ne répond pas : l'analyse chiffrée reste affichée.",
   auth: "Claude n'est pas connecté sur cette machine : lance `claude` une fois dans un terminal pour te connecter.",
   invalid_output: "La réponse de Claude n'a pas passé les contrôles (format ou chiffres) : l'analyse chiffrée reste affichée.",
+  quota: "Limite d'analyses du test atteinte : les chiffres restent affichés, réessaie plus tard.",
 };

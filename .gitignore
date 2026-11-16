@@ -30,3 +30,9 @@ clean_copilot.py
 
 # Banc de tests (séances figées, rapports)
 /data/bench/
+
+# Sauvegardes et bases des profils invités
+/data/backups/
+/data/profiles/
+/.next-test/
+/data/test/

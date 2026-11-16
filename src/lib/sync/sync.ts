@@ -79,7 +79,15 @@ async function mapWithConcurrency<T>(items: T[], limit: number, worker: (item: T
  * (dans la limite de `detailBudget` par appel, pour garder chaque appel court),
  * bien-être et profil. Rejouable sans effet de bord : tout est en upsert.
  */
-export async function runSync(deps: SyncDependencies, options: { detailBudget: number }): Promise<SyncResult> {
+export type SyncOptions = {
+  detailBudget: number;
+  /** Première synchro : ne remonter que depuis cette date (invités à gros volume) ; null = tout l'historique. */
+  historyStart?: Date | null;
+  /** Profondeur du premier import de bien-être, en jours. */
+  wellnessBackfillDays?: number;
+};
+
+export async function runSync(deps: SyncDependencies, options: SyncOptions): Promise<SyncResult> {
   const now = deps.now?.() ?? new Date();
   const source = deps.source.name;
   const previous = deps.state.get(SYNC_STATE_KEY, syncStateSchema) ?? { lastSuccessAt: null, lastAttemptAt: null, lastError: null };
@@ -92,7 +100,7 @@ export async function runSync(deps: SyncDependencies, options: { detailBudget: n
       deps.state.set(DETAIL_SCHEMA_KEY, DETAIL_SCHEMA_VERSION);
     }
     const latest = deps.activities.latestStart(source);
-    const since = latest ? new Date(Date.parse(latest) - OVERLAP_DAYS * 86_400_000) : null;
+    const since = latest ? new Date(Date.parse(latest) - OVERLAP_DAYS * 86_400_000) : (options.historyStart ?? null);
     const summaries = await deps.source.listActivities(since);
     const { inserted } = deps.activities.upsertSummaries(source, summaries, initialDetailStatus, now.toISOString());
 
@@ -112,7 +120,7 @@ export async function runSync(deps: SyncDependencies, options: { detailBudget: n
 
     const today = localDate(now);
     const latestWellness = deps.wellness.latestDate();
-    const wellnessStart = latestWellness ? addDays(latestWellness, -OVERLAP_DAYS) : addDays(today, -WELLNESS_BACKFILL_DAYS);
+    const wellnessStart = latestWellness ? addDays(latestWellness, -OVERLAP_DAYS) : addDays(today, -(options.wellnessBackfillDays ?? WELLNESS_BACKFILL_DAYS));
     const days = await deps.source.getWellness(wellnessStart, today);
     deps.wellness.upsert(days, now.toISOString());
 

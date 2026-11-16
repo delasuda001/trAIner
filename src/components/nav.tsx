@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function Nav() {
+export function Nav({ admin }: { admin: boolean }) {
   const pathname = usePathname();
   const links = [
     { href: "/", label: "Tableau de bord" },
     { href: "/coach", label: "Demander au coach" },
     { href: "/objectif", label: "Objectif" },
-    { href: "/bilan", label: "Bilan" },
+    // Bilan hebdomadaire (Opus) et retours des testeurs : réservés à Bastien.
+    ...(admin ? [{ href: "/bilan", label: "Bilan" }, { href: "/retours", label: "Retours" }] : []),
   ];
   return (
     <nav className="nav" aria-label="Navigation principale">

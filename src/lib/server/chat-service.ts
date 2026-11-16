@@ -11,6 +11,8 @@ import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import { goalForCoach } from "@/lib/goal/goal";
 import { getDashboard, recentRunSummaries } from "./analytics";
+import { requireActiveMember } from "@/lib/profiles/context";
+import { checkQuota } from "./quota";
 import { recordFailure, recordUsage } from "./usage";
 
 /** Contexte synthétique déjà calculé : jamais de séries brutes, jamais d'historique complet. */
@@ -65,12 +67,16 @@ export function buildChatContext() {
 
 export type AskResult = { messages: ChatMessage[]; error: { kind: LlmFailureKind; message: string } | null };
 
-const inFlight = { busy: false };
+/** Une question à la fois par profil. */
+const busyMembers = new Set<string>();
 
 export async function askCoach(question: string): Promise<AskResult> {
   const repository = createChatRepository();
-  if (inFlight.busy) return { messages: repository.list(), error: { kind: "unavailable", message: "Le coach répond déjà à une question." } };
-  inFlight.busy = true;
+  const memberId = requireActiveMember().id;
+  if (busyMembers.has(memberId)) return { messages: repository.list(), error: { kind: "unavailable", message: "Le coach répond déjà à une question." } };
+  const quota = checkQuota();
+  if (!quota.allowed) return { messages: repository.list(), error: { kind: "quota", message: quota.message } };
+  busyMembers.add(memberId);
   try {
     const history = repository.list(CHAT_HISTORY_MESSAGES).filter((message) => !message.content.error).map((message) => ({ role: message.role, text: message.content.text }));
     repository.add("user", { text: question });
@@ -104,6 +110,6 @@ export async function askCoach(question: string): Promise<AskResult> {
     repository.add("coach", { text: LLM_FAILURE_MESSAGES[kind].replace("l'analyse chiffrée reste affichée", "pose ta question à nouveau un peu plus tard"), error: true });
     return { messages: repository.list(), error: { kind, message: LLM_FAILURE_MESSAGES[kind] } };
   } finally {
-    inFlight.busy = false;
+    busyMembers.delete(memberId);
   }
 }

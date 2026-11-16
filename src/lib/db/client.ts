@@ -5,16 +5,27 @@ import { dirname, resolve } from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { requireActiveMember } from "@/lib/profiles/context";
+import type { Member } from "@/lib/profiles/types";
 import { schema } from "./schema";
 
-const databaseUrl = process.env.DATABASE_URL ?? "file:./data/run-insights.db";
-const databasePath = databaseUrl.startsWith("file:") ? databaseUrl.slice("file:".length) : databaseUrl;
+/**
+ * Une base SQLite par profil. L'administrateur (Bastien) garde sa base
+ * historique (`DATABASE_URL`, par défaut `data/run-insights.db`), jamais
+ * déplacée ; chaque invité a `data/profiles/<id>.db`. Aucune requête ne peut
+ * donc lire les données d'un autre profil.
+ */
+const adminUrl = process.env.DATABASE_URL ?? "file:./data/run-insights.db";
+const adminPath = adminUrl.startsWith("file:") ? adminUrl.slice("file:".length) : adminUrl;
+const profilesDir = process.env.SILLAGE_PROFILES_DIR ?? "./data/profiles";
 
-const globalForDatabase = globalThis as typeof globalThis & { runInsightsDatabase?: ReturnType<typeof open> };
+export function databasePathFor(member: Pick<Member, "id" | "role">): string {
+  return member.role === "admin" ? resolve(adminPath) : resolve(profilesDir, `${member.id}.db`);
+}
 
-function open() {
-  mkdirSync(dirname(resolve(databasePath)), { recursive: true });
-  const sqlite = new Database(databasePath);
+function open(path: string) {
+  mkdirSync(dirname(path), { recursive: true });
+  const sqlite = new Database(path);
   sqlite.pragma("journal_mode = WAL");
   const db = drizzle(sqlite, { schema });
   // Les migrations sont appliquées automatiquement : aucune étape manuelle au premier lancement.
@@ -22,9 +33,24 @@ function open() {
   return db;
 }
 
-export function getDb() {
-  globalForDatabase.runInsightsDatabase ??= open();
-  return globalForDatabase.runInsightsDatabase;
+type Handle = ReturnType<typeof open>;
+const globalForDatabase = globalThis as typeof globalThis & { sillageDatabases?: Map<string, Handle> };
+
+/** Base d'un profil donné (vue administrateur de la consommation, tests d'isolation). */
+export function getDbFor(member: Pick<Member, "id" | "role">): Handle {
+  globalForDatabase.sillageDatabases ??= new Map();
+  const path = databasePathFor(member);
+  let handle = globalForDatabase.sillageDatabases.get(path);
+  if (!handle) {
+    handle = open(path);
+    globalForDatabase.sillageDatabases.set(path, handle);
+  }
+  return handle;
 }
 
-export type AppDatabase = ReturnType<typeof getDb>;
+/** Base du profil actif ; erreur s'il n'y en a pas. */
+export function getDb(): Handle {
+  return getDbFor(requireActiveMember());
+}
+
+export type AppDatabase = Handle;

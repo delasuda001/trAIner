@@ -13,6 +13,8 @@ import { goalForCoach } from "@/lib/goal/goal";
 import { buildOutlookPayload, buildOutlookPrompt, OUTLOOK_PROMPT_VERSION, OUTLOOK_SYSTEM_PROMPT, outlookCoachJsonSchema, outlookCoachSchema, type OutlookCoachOutput } from "@/lib/coach/outlook-coach";
 import { buildSessionPayload, buildSessionPrompt, normalizeSessionOutput, SESSION_PROMPT_VERSION, SESSION_SYSTEM_PROMPT, sessionCoachJsonSchema, sessionCoachSchema, type SessionCoachOutput } from "@/lib/coach/session-coach";
 import { createCoachOutputRepository } from "@/lib/db/repositories/coach-output-repository";
+import { requireActiveMember } from "@/lib/profiles/context";
+import { checkQuota } from "./quota";
 import { recordFailure, recordUsage } from "./usage";
 import type { Dashboard, SessionAnalysis } from "./analytics";
 
@@ -59,9 +61,12 @@ async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
   const hit = cached(job);
   if (hit.status === "ready") return hit;
   const inputHash = hashOf(job as Job<unknown>);
-  const key = `${job.kind}:${job.subject}:${inputHash}`;
+  const key = `${requireActiveMember().id}:${job.kind}:${job.subject}:${inputHash}`;
   const running = inFlight.get(key);
   if (running) return running as Promise<CoachResult<T>>;
+  // Plafonds du test familial : vérifiés seulement quand un appel serait réellement fait.
+  const quota = checkQuota();
+  if (!quota.allowed) return { status: "error", kind: "quota", message: quota.message };
 
   const task = (async (): Promise<CoachResult<T>> => {
     const allowed = allowedNumbers(job.payload);

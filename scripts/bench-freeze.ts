@@ -1,11 +1,15 @@
 /**
  * Fige le jeu de séances du banc dans data/bench/fixtures.json (aucun appel à Claude).
+ * Travaille sur le profil de Bastien uniquement.
  * Usage : npx tsx --conditions=react-server scripts/bench-freeze.ts
  */
 import { freezeFixtures } from "@/lib/bench/freeze";
 import { saveFixtures } from "@/lib/bench/store";
+import { adminMember, runAs } from "@/lib/profiles/context";
 
-const fixtures = freezeFixtures();
-saveFixtures(fixtures);
-for (const fixture of fixtures) console.log(`${fixture.category.padEnd(18)} ${fixture.label}`);
-console.log(`${fixtures.length} séances figées.`);
+runAs(adminMember(), () => {
+  const fixtures = freezeFixtures();
+  saveFixtures(fixtures);
+  for (const fixture of fixtures) console.log(`${fixture.category.padEnd(18)} ${fixture.label}`);
+  console.log(`${fixtures.length} séances figées.`);
+});

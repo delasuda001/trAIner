@@ -19,7 +19,7 @@ function cleanEnvironment(): Record<string, string> {
     if (value == null) continue;
     // On écarte les variables d'une éventuelle session Claude Code parente et toute clé API :
     // l'appel doit passer par la connexion claude.ai.
-    if (key.startsWith("CLAUDE_CODE") || key === "CLAUDECODE" || key === "ANTHROPIC_API_KEY" || key === "GARMIN_API_KEY") continue;
+    if (key.startsWith("CLAUDE_CODE") || key === "CLAUDECODE" || key === "ANTHROPIC_API_KEY" || key.startsWith("GARMIN_API_KEY") || key === "SESSION_SECRET") continue;
     env[key] = value;
   }
   return env;

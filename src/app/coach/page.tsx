@@ -1,3 +1,5 @@
+import { asMember } from "@/lib/profiles/request";
+import type { Member } from "@/lib/profiles/types";
 import { CoachChat } from "@/components/coach/coach-chat";
 import { createChatRepository } from "@/lib/db/repositories/chat-repository";
 import { formatDuration } from "@/lib/formatters";
@@ -5,7 +7,12 @@ import { getDashboard } from "@/lib/server/analytics";
 
 export const dynamic = "force-dynamic";
 
-export default function CoachPage() {
+export default async function CoachPage() {
+  return asMember((member) => renderCoachPage(member));
+}
+
+function renderCoachPage(member: Member) {
+  void member;
   const dashboard = getDashboard();
   const goal = dashboard.goal;
   // Ce que le coach a sous les yeux, en clair : l'athlète sait sur quoi repose la réponse.

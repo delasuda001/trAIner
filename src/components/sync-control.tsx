@@ -20,8 +20,11 @@ function relative(iso: string | null): string {
 }
 
 /** Explication actionnable d'un échec de synchro : ce qui se passe et quoi faire. */
-function explain(error: string): { title: string; action: React.ReactNode } {
+function explain(error: string, guest: boolean): { title: string; action: React.ReactNode } {
   const lower = error.toLowerCase();
+  if (guest && (lower.includes("clé") || lower.includes("401") || lower.includes("403") || lower.includes("garmin_api_key"))) {
+    return { title: "Ta clé Garmin n'est pas encore active dans l'application.", action: <>Préviens Bastien : il doit ajouter ou renouveler ta clé Garmin Connect (Personal API) de son côté.</> };
+  }
   if (lower.includes("clé") || lower.includes("401") || lower.includes("403") || lower.includes("garmin_api_key")) {
     return {
       title: "Garmin refuse la clé : elle a sans doute expiré ou été supprimée.",
@@ -35,7 +38,7 @@ function explain(error: string): { title: string; action: React.ReactNode } {
 }
 
 /** Synchro incrémentale : au chargement (si la dernière date de plus de 15 min) et sur demande. */
-export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt }: { lastSuccessAt: string | null; lastError: string | null; lastAttemptAt: string | null }) {
+export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = false }: { lastSuccessAt: string | null; lastError: string | null; lastAttemptAt: string | null; guest?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -88,7 +91,7 @@ export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt }: { lastS
     }
   }, [lastSuccessAt, run]);
 
-  const detail = error ? explain(error) : null;
+  const detail = error ? explain(error, guest) : null;
   return (
     <>
       <span className={`sync-status${error ? " error" : ""}`}>

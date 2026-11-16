@@ -373,3 +373,10 @@ table.data td.bar-cell { width: 35%; min-width: 120px; }
   .grid-4 { grid-template-columns: minmax(0, 1fr); }
   .brand-word { font-size: 20px; }
 }
+
+/* Connexion et profils (test familial) */
+.login-wrap { display: grid; place-items: center; min-height: 60vh; padding: 24px 0; }
+.login-card { width: min(440px, 100%); }
+.login-form { display: flex; flex-direction: column; gap: 14px; margin-top: 16px; }
+.login-form .field input { width: 100%; }
+.profile-chip { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; }

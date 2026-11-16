@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
+import { activeMember } from "@/lib/profiles/context";
 import { createClaudeAgentClient } from "./claude-agent-client";
 import type { LlmClient } from "./llm";
 
@@ -9,8 +10,12 @@ export const COACH_MODELS = ["sonnet", "opus", "haiku"] as const;
 export type CoachModel = (typeof COACH_MODELS)[number];
 export const COACH_MODEL_KEY = "coach_model";
 
-/** Modèle choisi dans les paramètres, sinon CLAUDE_COACH_MODEL, sinon Sonnet. */
+/** Modèle des invités pendant le test : Sonnet, jamais Opus. */
+export const GUEST_COACH_MODEL = "sonnet";
+
+/** Modèle choisi dans les paramètres, sinon CLAUDE_COACH_MODEL, sinon Sonnet. Imposé pour un invité. */
 export function currentCoachModel(): string {
+  if (activeMember()?.role === "guest") return GUEST_COACH_MODEL;
   const chosen = createAppStateRepository().get(COACH_MODEL_KEY, z.enum(COACH_MODELS));
   return chosen ?? (process.env.CLAUDE_COACH_MODEL?.trim() || "sonnet");
 }

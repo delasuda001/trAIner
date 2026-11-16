@@ -76,7 +76,13 @@ async function main() {
   log(`banc : ${summary.done.length} tâche(s) faite(s), ${summary.remaining} restante(s)${summary.stoppedBecause ? `, arrêt : ${summary.stoppedBecause}` : ""} ; ${summary.tokensUsed} tokens pour ce lancement`);
 }
 
-main().catch((error: unknown) => {
+async function asAdmin() {
+  // Le banc et le bilan travaillent uniquement sur le profil de Bastien (jamais sur un invité).
+  const { adminMember, runAs } = await import("@/lib/profiles/context");
+  return runAs(adminMember(), main);
+}
+
+asAdmin().catch((error: unknown) => {
   console.error(error);
   process.exitCode = 1;
 });

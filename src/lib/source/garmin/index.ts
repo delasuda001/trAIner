@@ -125,11 +125,34 @@ export class GarminSource implements DataSource {
   }
 }
 
-let cached: GarminSource | null = null;
+const cachedSources = new Map<string, { apiKey: string; source: GarminSource }>();
 
-export function getGarminSource(): GarminSource {
-  const apiKey = process.env.GARMIN_API_KEY;
-  if (!apiKey) throw new Error("GARMIN_API_KEY manquante dans .env.local (clé Garmin Connect Personal API).");
-  cached ??= new GarminSource(new GarminClient({ apiKey }));
-  return cached;
+/**
+ * Source Garmin d'un profil. Chaque profil a sa propre clé, lue côté serveur
+ * dans la variable d'environnement indiquée (`GARMIN_API_KEY` pour Bastien,
+ * `GARMIN_API_KEY_<PROFIL>` pour un invité). La clé n'est jamais renvoyée.
+ */
+export function getGarminSource(envVar = "GARMIN_API_KEY"): GarminSource {
+  const apiKey = process.env[envVar]?.trim();
+  if (!apiKey) throw new Error(`${envVar} manquante dans .env.local (clé Garmin Connect Personal API).`);
+  const hit = cachedSources.get(envVar);
+  if (hit && hit.apiKey === apiKey) return hit.source;
+  const source = new GarminSource(new GarminClient({ apiKey }));
+  cachedSources.set(envVar, { apiKey, source });
+  return source;
+}
+
+export type GarminKeyCheck = { present: boolean; valid: boolean | null; error: string | null };
+
+/** Présence de la clé et, sur demande, validité (échange contre un jeton, sans lire de données). */
+export async function checkGarminKey(envVar: string, verify: boolean): Promise<GarminKeyCheck> {
+  const apiKey = process.env[envVar]?.trim();
+  if (!apiKey) return { present: false, valid: null, error: null };
+  if (!verify) return { present: true, valid: null, error: null };
+  try {
+    await new GarminClient({ apiKey }).verifyKey();
+    return { present: true, valid: true, error: null };
+  } catch (error) {
+    return { present: true, valid: false, error: error instanceof Error ? error.message.slice(0, 200) : "Clé refusée" };
+  }
 }

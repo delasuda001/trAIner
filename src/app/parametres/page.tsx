@@ -1,3 +1,5 @@
+import { asMember } from "@/lib/profiles/request";
+import type { Member } from "@/lib/profiles/types";
 import { z } from "zod";
 import { Fact } from "@/components/ui/fact";
 import { ModelPicker } from "@/components/settings/model-picker";
@@ -38,7 +40,12 @@ function TotalsCard({ title, totals }: { title: string; totals: UsageTotals }) {
   );
 }
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  return asMember((member) => renderSettingsPage(member));
+}
+
+function renderSettingsPage(member: Member) {
+  void member;
   const repository = createUsageRepository();
   const now = new Date();
   const records = repository.since(new Date(now.getTime() - 30 * 86_400_000).toISOString());

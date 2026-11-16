@@ -1,3 +1,5 @@
+import { asAdmin } from "@/lib/profiles/request";
+import type { Member } from "@/lib/profiles/types";
 import { CoachRequest } from "@/components/coach-request";
 import { WeeklyReviewCard } from "@/components/weekly/weekly-card";
 import { addDays, localDate } from "@/lib/dates";
@@ -37,7 +39,12 @@ function Detail({ review }: { review: StoredWeeklyReview }) {
   );
 }
 
-export default function WeeklyReviewPage() {
+export default async function WeeklyReviewPage() {
+  return asAdmin((member) => renderWeeklyReviewPage(member));
+}
+
+function renderWeeklyReviewPage(member: Member) {
+  void member;
   const reviews = listWeeklyReviews(12);
   const week = defaultReviewWeek(localDate());
   const hasCurrent = reviews.some((review) => review.weekStart === week);
