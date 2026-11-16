@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SessionPoints } from "@/components/activity/session-points";
 import { GoalStatusList } from "@/components/goal/goal-status";
 import { CoachRequest } from "@/components/coach-request";
+import { RateCoach } from "@/components/feedback/rate-coach";
 import { IntensityChart, ProgressionChart, Sparkline, WeeklyVolumeChart } from "@/components/charts";
 import { Badge } from "@/components/ui/badge";
 import { CoachStamp } from "@/components/ui/coach-stamp";
@@ -77,7 +78,7 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
         <p className="coach-line"><span className="coach-tag">Pourquoi</span><span>{ready ? ready.suggestionWhy : suggestion.reason}</span></p>
         <p className="coach-line"><span className="coach-tag">Comment</span><span>{ready ? ready.executionTip : primary.structure}</span></p>
       </div>
-      {coach.status === "ready" ? <div style={{ marginTop: 6 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Avis" /></div> : null}
+      {coach.status === "ready" ? <div style={{ marginTop: 6 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Avis" /><RateCoach subjectKind="outlook" subjectId={coach.createdAt} label="Ce conseil t'est utile ?" /></div> : null}
       {suggestion.alternative ? <p className="alt"><strong>Plan B · {suggestion.alternative.title}</strong> ({formatDuration(suggestion.alternative.durationMin * 60)}). {suggestion.alternative.reason}</p> : null}
       {suggestion.then ? (
         <div className="next-after">

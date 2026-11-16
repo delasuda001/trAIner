@@ -23,7 +23,7 @@ import { readReportIndex, readReportMarkdown } from "@/lib/bench/store";
 
 export const dynamic = "force-dynamic";
 
-const KIND_LABELS: Record<string, string> = { session: "Analyse de séance", outlook: "Conseil du jour", chat: "Question au coach", weekly: "Bilan hebdomadaire", bench: "Banc de tests" };
+const KIND_LABELS: Record<string, string> = { session: "Analyse de séance", outlook: "Conseil du jour", chat: "Question au coach", weekly: "Bilan hebdomadaire", bench: "Banc de tests", feedback: "Synthèse des retours" };
 /** Travail automatique (bilan, banc), compté à part de l'usage de Bastien. */
 const AUTOMATIC_KINDS = new Set(["weekly", "bench"]);
 const OUTCOME_LABELS: Record<string, string> = { ok: "ok", rejected: "refusée", error: "échec" };

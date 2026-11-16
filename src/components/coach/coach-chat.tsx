@@ -3,6 +3,7 @@
 import { ArrowUp, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { generatedAtLabel, modelLabel } from "@/lib/coach/model-label";
+import { RateCoach } from "@/components/feedback/rate-coach";
 import type { ChatMessage } from "@/lib/db/repositories/chat-repository";
 
 const SUGGESTIONS = [
@@ -55,6 +56,7 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
             <p style={{ whiteSpace: "pre-wrap" }}>{message.content.text}</p>
             {message.content.evidence?.length ? <ul className="evidence">{message.content.evidence.map((item) => <li key={item}>{item}</li>)}</ul> : null}
             {message.role === "coach" && message.model ? <span className="coach-stamp"><Sparkles size={12} /> {modelLabel(message.model)} · {generatedAtLabel(message.createdAt)}</span> : null}
+            {message.role === "coach" && message.model && !message.content.error ? <RateCoach subjectKind="chat" subjectId={message.id} label="Utile ?" /> : null}
           </div>
         ))}
         {busy ? <div className="bubble coach"><span className="muted"><Sparkles size={13} className="spin" /> Le coach regarde tes données… (10 à 20 s)</span></div> : null}

@@ -11,6 +11,7 @@ import { runAs } from "@/lib/profiles/context";
 import { requestMember } from "@/lib/profiles/request";
 import { readSyncState } from "@/lib/server/analytics";
 import { LogoutButton } from "@/components/profiles/logout-button";
+import { FeedbackButton } from "@/components/feedback/feedback-button";
 import "./globals.css";
 
 // Polices auto-hébergées par Next au build : aucune requête externe à l'usage.
@@ -53,6 +54,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           </div>
         </header>
         <main className="shell">{children}</main>
+        {member ? <FeedbackButton /> : null}
       </body>
     </html>
   );

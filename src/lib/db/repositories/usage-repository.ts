@@ -5,7 +5,7 @@ import { getDb, type AppDatabase } from "../client";
 import { coachUsage } from "../schema";
 
 /** `weekly` et `bench` : bilan hebdomadaire et banc de tests, séparés de l'usage de Bastien. */
-export type UsageKind = "session" | "outlook" | "chat" | "weekly" | "bench";
+export type UsageKind = "session" | "outlook" | "chat" | "weekly" | "bench" | "feedback";
 export type UsageOutcome = "ok" | "rejected" | "error";
 export type UsageRow = typeof coachUsage.$inferSelect;
 

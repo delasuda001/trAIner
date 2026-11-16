@@ -3,11 +3,12 @@ import Link from "next/link";
 import { ComparisonChart, SessionStreamCharts } from "@/components/charts";
 import { CoachRequest } from "@/components/coach-request";
 import { CoachStamp } from "@/components/ui/coach-stamp";
+import { RateCoach } from "@/components/feedback/rate-coach";
 import { FeelingForm } from "./feeling-form";
 import { SessionPoints } from "./session-points";
 import { Badge } from "@/components/ui/badge";
 import { Fact } from "@/components/ui/fact";
-import type { SessionCoachOutput } from "@/lib/coach/session-coach";
+import { SESSION_PROMPT_VERSION, type SessionCoachOutput } from "@/lib/coach/session-coach";
 import { INTERVAL_INTENSITY_LABELS, paceSeconds, sessionTitle } from "@/lib/engine/activity-metrics";
 import { readDynamics } from "@/lib/engine/dynamics-reading";
 import { dominantZone, familyOfKind, SessionGlyph } from "@/components/ui/session-type";
@@ -58,7 +59,9 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
           <summary><ChevronRight size={14} className="chev" /> Analyse détaillée</summary>
           <p className="more-body">{ready.detail}</p>
         </details>
-      ) : (
+      ) : null}
+      {ready && coach?.status === "ready" ? <RateCoach subjectKind="session" subjectId={activity.id} promptVersion={SESSION_PROMPT_VERSION} label="Cette analyse t'est utile ?" /> : null}
+      {ready ? null : (
         <div style={{ marginTop: 16 }}>
           <CoachRequest endpoint={endpoint} label="Demander l'analyse du coach" initialError={coach?.status === "error" ? coach.message : null} />
           <p className="muted small" style={{ marginTop: 6 }}>Verdict ci-dessus calculé à partir de tes données ; Claude le commente et l&apos;explique.</p>
