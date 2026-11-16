@@ -44,10 +44,10 @@ export type BenchTask =
   | { type: "judge"; variant: BenchVariant; key: string };
 
 /** Ce qu'il reste à faire, dans l'ordre. */
-export function pendingTasks(model = currentCoachModel()): BenchTask[] {
+export function pendingTasks(model = currentCoachModel(), only: string[] | null = null): BenchTask[] {
   const fixtures = loadFixtures();
   if (!fixtures.length) return [];
-  const variants = loadVariants();
+  const variants = loadVariants().filter((variant) => !only || only.includes(variant.name));
   const tasks: BenchTask[] = [];
   const missing = (variant: BenchVariant) => fixtures.flatMap((fixture) => {
     const key = outputKey(fixture, variant, model);
@@ -165,11 +165,28 @@ export function automaticTokensSince(sinceIso: string): number {
   return createUsageRepository().since(sinceIso).filter((row) => row.kind === "bench" || row.kind === "weekly").reduce((sum, row) => sum + budgetTokens(row), 0);
 }
 
-export async function runBench(config: BudgetConfig, options: { nightStartIso: string; dryRun?: boolean } ): Promise<RunSummary> {
+let running = false;
+
+export function benchIsRunning(): boolean {
+  return running;
+}
+
+export async function runBench(config: BudgetConfig, options: { nightStartIso: string; dryRun?: boolean; only?: string[] | null }): Promise<RunSummary> {
+  if (running) return { done: [], stoppedBecause: "un banc tourne déjà", remaining: pendingTasks(currentCoachModel(), options.only ?? null).length, tokensUsed: 0 };
+  running = true;
+  try {
+    return await runQueue(config, options);
+  } finally {
+    running = false;
+  }
+}
+
+async function runQueue(config: BudgetConfig, options: { nightStartIso: string; dryRun?: boolean; only?: string[] | null }): Promise<RunSummary> {
   const done: string[] = [];
   const weekStartIso = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const client = createClaudeAgentClient(currentCoachModel());
-  let tasks = pendingTasks();
+  const only = options.only ?? null;
+  let tasks = pendingTasks(currentCoachModel(), only);
   while (tasks.length) {
     const task = tasks[0];
     const estimate = task.type === "judge" ? TASK_ESTIMATE.judge : TASK_ESTIMATE.generation;
@@ -191,7 +208,7 @@ export async function runBench(config: BudgetConfig, options: { nightStartIso: s
       logNightly(`banc : arrêt sur ${label} (${reason})`);
       return { done, stoppedBecause: reason, remaining: tasks.length, tokensUsed: automaticTokensSince(options.nightStartIso) };
     }
-    tasks = pendingTasks();
+    tasks = pendingTasks(currentCoachModel(), only);
   }
   return { done, stoppedBecause: null, remaining: 0, tokensUsed: automaticTokensSince(options.nightStartIso) };
 }

@@ -9,7 +9,8 @@ import { createUsageRepository } from "@/lib/db/repositories/usage-repository";
 import { formatDate, formatNumber } from "@/lib/formatters";
 import { RATE_LIMIT_KEY, readRateLimits } from "@/lib/server/usage";
 import { budgetFromEnv, budgetTokens } from "@/lib/bench/budget";
-import { pendingTasks } from "@/lib/bench/runner";
+import { benchIsRunning, pendingTasks } from "@/lib/bench/runner";
+import { BenchButton } from "@/components/settings/bench-button";
 import { readReportIndex, readReportMarkdown } from "@/lib/bench/store";
 
 export const dynamic = "force-dynamic";
@@ -100,8 +101,8 @@ export default function SettingsPage() {
 
       <section className="section">
         <div className="section-head">
-          <h2 className="section-title">Travail automatique de nuit (bilan et banc de tests)</h2>
-          <span className="section-note">compté à part de ton usage · plafonds : {tokens(budget.nightTokens)} par nuit, {tokens(budget.weekTokens)} par semaine</span>
+          <h2 className="section-title">Bilan et banc de tests</h2>
+          <span className="section-note">compté à part de ton usage · plafonds : {tokens(budget.nightTokens)} par lancement, {tokens(budget.weekTokens)} sur 7 jours</span>
         </div>
         <div className="grid grid-3">
           <TotalsCard title="7 derniers jours" totals={automaticSummary.last7Days} />
@@ -115,7 +116,9 @@ export default function SettingsPage() {
         </div>
         <div className="card" style={{ marginTop: 16 }}>
           <h3 className="section-title" style={{ fontSize: 18 }}>Banc de tests</h3>
-          <p className="small" style={{ marginTop: 4 }}>{pending.length ? `${pending.length} tâche(s) en attente (reprises chaque nuit dans la limite des plafonds).` : "Rien en attente : toutes les variantes ont été évaluées."} Le banc arrête aussi si la fenêtre de 5 h dépasse {Math.round(budget.maxUtilization.fiveHour * 100)} % ou la semaine {Math.round(budget.maxUtilization.sevenDay * 100)} %{windows.length ? ` (dernier relevé : ${windows.map((window) => `${WINDOW_LABELS[window.window ?? ""] ?? window.window} ${window.utilization != null ? `${Math.round(window.utilization * (window.utilization <= 1 ? 100 : 1))} %` : "—"}`).join(", ")})` : ""}. Il propose, rien n&apos;est appliqué sans validation.</p>
+          <p className="small" style={{ marginTop: 4 }}>{pending.length ? `${pending.length} tâche(s) en attente (reprises à chaque lancement, dans la limite des plafonds).` : "Rien en attente : toutes les variantes ont été évaluées."} Le banc arrête aussi si la fenêtre de 5 h dépasse {Math.round(budget.maxUtilization.fiveHour * 100)} % ou la semaine {Math.round(budget.maxUtilization.sevenDay * 100)} %{windows.length ? ` (dernier relevé : ${windows.map((window) => `${WINDOW_LABELS[window.window ?? ""] ?? window.window} ${window.utilization != null ? `${Math.round(window.utilization * (window.utilization <= 1 ? 100 : 1))} %` : "—"}`).join(", ")})` : ""}. Il propose, rien n&apos;est appliqué sans validation.</p>
+          <BenchButton pending={pending.length} running={benchIsRunning()} />
+          <p className="muted small" style={{ marginTop: 6 }}>Lance-le quand ton quota est disponible. Pour un budget plus large : <span className="mono">npm run bench -- --budget=150000</span>.</p>
           {reports.length ? (
             <div className="list" style={{ marginTop: 8 }}>
               {reports.map((report) => (

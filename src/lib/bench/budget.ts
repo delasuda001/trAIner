@@ -53,7 +53,11 @@ export function canSpend(input: { estimate: number; nightUsed: number; weekUsed:
     // Une fenêtre déjà réinitialisée ne dit plus rien.
     if (window.resetsAt && new Date(window.resetsAt) <= input.now) continue;
     if (window.status === "rejected") return { ok: false, reason: `quota atteint (${window.window})` };
-    if (window.utilization == null) continue;
+    // Alerte sans pourcentage : on ne sait pas où on en est, on s'arrête par prudence.
+    if (window.utilization == null) {
+      if (window.status === "allowed_warning") return { ok: false, reason: `quota ${window.window} proche de la limite (alerte de Claude)` };
+      continue;
+    }
     const limit = window.window.startsWith("seven_day") ? config.maxUtilization.sevenDay : config.maxUtilization.fiveHour;
     if (fraction(window.utilization) >= limit) return { ok: false, reason: `quota ${window.window} à ${Math.round(fraction(window.utilization) * 100)} % (seuil ${Math.round(limit * 100)} %)` };
   }

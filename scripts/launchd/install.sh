@@ -25,6 +25,7 @@ cat > "$PLIST" <<PLIST
     <string>tsx</string>
     <string>--conditions=react-server</string>
     <string>scripts/nightly.ts</string>
+    <string>--scheduled</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>

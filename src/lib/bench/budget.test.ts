@@ -24,4 +24,8 @@ describe("plafonds du banc", () => {
     expect(budgetFromEnv({ BENCH_WEEK_BUDGET_TOKENS: "150000" }).weekTokens).toBe(150_000);
     expect(budgetFromEnv({ BENCH_WEEK_BUDGET_TOKENS: "abc" }).weekTokens).toBe(100_000);
   });
+
+  it("s'arrête sur une alerte de quota sans pourcentage", () => {
+    expect(canSpend({ ...base, windows: [{ window: "five_hour", utilization: null, resetsAt: "2026-11-17T05:00:00Z", status: "allowed_warning" }] })).toMatchObject({ ok: false });
+  });
 });
