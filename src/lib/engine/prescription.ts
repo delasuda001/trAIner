@@ -1,4 +1,4 @@
-import { formatClock, formatPace } from "@/lib/formatters";
+import { formatClock, formatDate, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 import type { ActivityMetrics, SessionKind } from "./activity-metrics";
 import { paceSeconds } from "./activity-metrics";
@@ -10,37 +10,55 @@ import { zoneRange } from "./zones";
  * Claude ne fait que choisir et formuler : toutes les cibles qu'il cite
  * viennent d'ici (le garde-fou rejette tout chiffre absent de la charge utile).
  *
- * Allures de référence : seuil mesuré par la montre et objectifs chiffrés de
- * l'athlète. Les allures de course « réalistes » sont estimées à partir du
- * seuil (ratios usuels, voir RACE_RATIO_FROM_THRESHOLD) : ce sont des repères,
- * pas des prédictions.
+ * Règles :
+ * - une consigne principale dans « aurait dû », au plus une secondaire ;
+ *   quand la charge ou l'enchaînement explique la séance, c'est le placement ;
+ * - une correction n'est prescrite que sur un indicateur dégradé par rapport
+ *   aux séances comparables (pas sur un écart dans sa norme) ;
+ * - un écart marginal à la cible (≤ 3 s/km) ne donne lieu à aucun reproche.
+ *
+ * Allures de course « du moment » : fourchette entre l'estimation tirée du
+ * seuil montre (ratios usuels) et celle tirée de ses répétitions longues
+ * récentes (12 semaines). Ce sont des repères, pas des prédictions.
  */
 
 export type RaceTarget = { distanceKm: number; targetTimeS: number };
 
-/** Vitesse de course tenable ≈ vitesse au seuil × ratio (repères d'entraînement usuels). */
-export const RACE_RATIO_FROM_THRESHOLD: Record<string, { distanceKm: number; ratio: number; label: string }> = {
-  "5": { distanceKm: 5, ratio: 1.06, label: "5 km" },
-  "10": { distanceKm: 10, ratio: 1.025, label: "10 km" },
-  "21.0975": { distanceKm: 21.0975, ratio: 0.975, label: "semi" },
-  "42.195": { distanceKm: 42.195, ratio: 0.92, label: "marathon" },
-};
+const RACES = [
+  { distanceKm: 5, ratio: 1.06, label: "5 km" },
+  { distanceKm: 10, ratio: 1.025, label: "10 km" },
+  { distanceKm: 21.0975, ratio: 0.975, label: "semi" },
+  { distanceKm: 42.195, ratio: 0.92, label: "marathon" },
+] as const;
 
-/** Écart (s/km) entre l'allure visée et l'allure réaliste du moment. */
+/** Vitesse de course tenable ≈ vitesse au seuil × ratio (repères d'entraînement usuels). */
+export const RACE_RATIO_FROM_THRESHOLD = Object.fromEntries(RACES.map((race) => [race.label, race.ratio]));
+/** Exposant de Riegel : temps(d2) = temps(d1) × (d2/d1)^1,06. */
+const RIEGEL_EXPONENT = 1.06;
+/** Répétitions retenues comme référence 5 km : au moins 3 min chacune et 15 min d'effort au total. */
+const EFFORT_MIN_REP_S = 180;
+const EFFORT_MIN_TOTAL_S = 900;
+
+/** Écart (s/km) entre l'allure visée et l'allure du moment. */
 const REACHABLE_GAP_S = 3;
 const STRETCH_GAP_S = 8;
-/** Dégradation (s/km) entre premières et dernières répétitions, ou entre moitiés, jugée significative. */
+/** Dégradation (s/km) entre premières et dernières répétitions, ou entre moitiés, jugée significative… */
 const FADE_LIMIT_S = 5;
+/** …et seulement si elle dépasse celle des comparables de cette marge. */
+const FADE_ABOVE_REFERENCE_S = 3;
 /** Charge 7 j / moyenne 4 semaines au-delà de laquelle le moteur de suggestion propose une séance facile. */
 const HIGH_LOAD_RATIO = 1.5;
 /** Au-delà de cet écart (s/km) avec la cible du format, la séance est sans doute d'un autre type : pas de consigne. */
 const MISMATCH_LIMIT_S = 25;
-/** Marge (s/km) au-delà de la fourchette avant de dire « plus rapide / plus lent que la cible ». */
-const ON_TARGET_TOLERANCE_S = 1;
+/** Écart à la fourchette en deçà duquel on ne reproche rien (s/km). */
+const MARGINAL_S = 3;
+/** FC des répétitions plus haute que les comparables de cette valeur, pour un gain d'allure d'au plus GAIN_SMALL_S : coût cardiaque. */
+const HR_COST_BPM = 4;
+const GAIN_SMALL_S = 5;
 const MISMATCH_REASON = "allure trop éloignée de la cible du format reconnu, séance probablement d'un autre type";
 
 export type PrescriptionTarget = {
-  /** « allure 5 km réaliste », « seuil », « endurance Z2 »… */
+  /** « allure 5 km du moment », « seuil », « endurance Z2 »… */
   label: string;
   /** Fourchette d'allure en s/km (rapide, lente), si elle est calculable. */
   paceFastS: number | null;
@@ -50,13 +68,28 @@ export type PrescriptionTarget = {
   zone: string;
 };
 
+/** Séance récente utile pour estimer l'allure de course (répétitions longues). */
+export type RecentEffort = { localDate: string; kind: SessionKind; title: string; reps: number; repDurationS: number; workSpeedMps: number };
+
+export type PaceEstimate = {
+  race: string;
+  distanceKm: number;
+  fromThresholdS: number | null;
+  fromEffortsS: number | null;
+  fastS: number;
+  slowS: number;
+  centerS: number;
+  /** Sur quoi repose l'estimation (texte court, chiffré). */
+  basis: string;
+};
+
 export type GoalMarker = {
   race: string;
   goalTimeS: number;
   goalPaceS: number;
-  realisticPaceS: number;
+  estimate: PaceEstimate;
   realisticTimeS: number;
-  /** > 0 : l'allure visée est plus rapide que l'allure réaliste du moment. */
+  /** > 0 : l'allure visée est plus rapide que l'allure du moment. */
   gapS: number;
   status: "reachable" | "stretch" | "out_of_reach";
 };
@@ -67,13 +100,16 @@ export type Prescription =
       status: "ok";
       target: PrescriptionTarget;
       goal: GoalMarker | null;
-      /** Comment la séance aurait dû être menée : phrases courtes, chiffrées, par ordre d'importance. */
+      /** Comment la séance aurait dû être menée : la consigne principale, puis au plus une secondaire. Vide si rien à corriger. */
       shouldHave: string[];
       /** À reproduire : ce qui était dans la cible. */
       keep: string | null;
       /** La prochaine séance du même type. */
       next: { format: string; target: PrescriptionTarget; recoveryS: number | null; cue: string };
     };
+
+/** Repères des séances comparables (déjà calculés par le moteur de comparaison). */
+export type ComparableReference = { repSpeedMps: number | null; repHeartRateBpm: number | null; repSpreadSPerKm: number | null; halvesFadeSPerKm: number | null };
 
 export type PrescriptionInput = {
   metrics: ActivityMetrics;
@@ -84,99 +120,174 @@ export type PrescriptionInput = {
   recentSpeedPerBeat: number | null;
   movingTimeS: number | null;
   raceTargets: RaceTarget[];
+  /** Répétitions longues des 12 semaines précédant la séance. */
+  efforts: RecentEffort[];
+  reference: ComparableReference | null;
   context: { loadRatio: number | null; qualityBefore: Array<{ title: string; daysBefore: number }> } | null;
 };
+
+type PaceInputs = Pick<PrescriptionInput, "zones" | "lactateThresholdSpeedMps" | "raceTargets" | "efforts">;
 
 function pace(seconds: number): string {
   return formatPace(1000 / seconds);
 }
 
+function paceRange(fastS: number, slowS: number): string {
+  return fastS === slowS ? pace(fastS) : `${pace(fastS).replace("/km", "")}–${pace(slowS)}`;
+}
+
 function band(target: PrescriptionTarget): string {
   if (target.paceFastS == null || target.paceSlowS == null) return `${target.heartRateLow}–${target.heartRateHigh} bpm`;
-  return `${pace(target.paceFastS).replace("/km", "")}–${pace(target.paceSlowS)}`;
+  return paceRange(target.paceFastS, target.paceSlowS);
 }
 
 function roundTo(value: number, step: number): number {
   return Math.round(value / step) * step;
 }
 
-function realisticPaceS(lactateThresholdSpeedMps: number, distanceKm: number): number | null {
-  const entry = Object.values(RACE_RATIO_FROM_THRESHOLD).find((race) => Math.abs(race.distanceKm - distanceKm) < 0.05);
-  return entry ? paceSeconds(lactateThresholdSpeedMps * entry.ratio) : null;
+function decimal(value: number): string {
+  return String(Math.round(value * 10) / 10).replace(".", ",");
 }
 
-export function goalMarker(lactateThresholdSpeedMps: number | null, targets: RaceTarget[], distanceKm: number): GoalMarker | null {
+function raceOf(distanceKm: number) {
+  return RACES.find((race) => Math.abs(race.distanceKm - distanceKm) < 0.05) ?? null;
+}
+
+/** Allure 5 km tirée des répétitions longues récentes : moyenne des deux meilleures séances. */
+function effortsPace5kS(efforts: RecentEffort[]): { paceS: number; best: RecentEffort } | null {
+  const usable = efforts
+    .filter((effort) => effort.repDurationS >= EFFORT_MIN_REP_S && effort.reps * effort.repDurationS >= EFFORT_MIN_TOTAL_S)
+    .sort((a, b) => b.workSpeedMps - a.workSpeedMps);
+  if (!usable.length) return null;
+  const top = usable.slice(0, 2);
+  return { paceS: Math.round(top.reduce((sum, effort) => sum + paceSeconds(effort.workSpeedMps), 0) / top.length), best: top[0] };
+}
+
+/** Allure de course du moment : fourchette entre seuil montre et répétitions récentes. */
+export function raceEstimate(distanceKm: number, input: Pick<PrescriptionInput, "lactateThresholdSpeedMps" | "efforts">): PaceEstimate | null {
+  const race = raceOf(distanceKm);
+  if (!race) return null;
+  const lt = input.lactateThresholdSpeedMps;
+  const fromThresholdS = lt ? paceSeconds(lt * race.ratio) : null;
+  const efforts = effortsPace5kS(input.efforts);
+  const fromEffortsS = efforts ? Math.round(efforts.paceS * Math.pow(distanceKm / 5, RIEGEL_EXPONENT - 1)) : null;
+  const values = [fromThresholdS, fromEffortsS].filter((value): value is number => value != null);
+  if (!values.length) return null;
+  const basis = [
+    fromThresholdS != null && lt ? `seuil montre ${pace(paceSeconds(lt))}` : null,
+    efforts ? `${efforts.best.title} du ${formatDate(efforts.best.localDate, "short")} à ${pace(paceSeconds(efforts.best.workSpeedMps))}` : null,
+  ].filter(Boolean).join(" et ");
+  const fastS = Math.min(...values);
+  const slowS = Math.max(...values);
+  return { race: race.label, distanceKm, fromThresholdS, fromEffortsS, fastS, slowS, centerS: Math.round((fastS + slowS) / 2), basis };
+}
+
+export function goalMarker(targets: RaceTarget[], distanceKm: number, input: Pick<PrescriptionInput, "lactateThresholdSpeedMps" | "efforts">): GoalMarker | null {
   const target = targets.find((entry) => Math.abs(entry.distanceKm - distanceKm) < 0.05);
-  if (!target || !lactateThresholdSpeedMps) return null;
-  const realistic = realisticPaceS(lactateThresholdSpeedMps, distanceKm);
-  if (realistic == null) return null;
+  const estimate = raceEstimate(distanceKm, input);
+  if (!target || !estimate) return null;
   const goalPaceS = Math.round(target.targetTimeS / target.distanceKm);
-  const gapS = realistic - goalPaceS;
-  const label = Object.values(RACE_RATIO_FROM_THRESHOLD).find((race) => Math.abs(race.distanceKm - distanceKm) < 0.05)?.label ?? `${distanceKm} km`;
+  const gapS = estimate.centerS - goalPaceS;
   return {
-    race: label,
+    race: estimate.race,
     goalTimeS: target.targetTimeS,
     goalPaceS,
-    realisticPaceS: realistic,
-    realisticTimeS: Math.round(realistic * target.distanceKm),
+    estimate,
+    realisticTimeS: Math.round(estimate.centerS * target.distanceKm),
     gapS,
     status: gapS <= REACHABLE_GAP_S ? "reachable" : gapS <= STRETCH_GAP_S ? "stretch" : "out_of_reach",
   };
 }
 
-/** Phrase de situation par rapport à l'objectif, avec la cible réaliste quand l'objectif est hors de portée. */
-export function goalSentence(marker: GoalMarker): string {
-  const head = `Objectif ${marker.race} en ${formatClock(marker.goalTimeS)} : ${pace(marker.goalPaceS)}`;
-  const realistic = `ton repère actuel (seuil montre) donne environ ${pace(marker.realisticPaceS)}, soit ${formatClock(marker.realisticTimeS)}`;
-  if (marker.status === "reachable") return `${head} ; ${realistic} : l'objectif est à portée, travaille à l'allure visée.`;
-  if (marker.status === "stretch") return `${head} ; ${realistic} : ${marker.gapS} s/km à gagner, objectif ambitieux mais crédible.`;
-  return `${head} ; ${realistic} : ${marker.gapS} s/km d'écart, hors de portée aujourd'hui. Cible réaliste du moment : ${pace(marker.realisticPaceS)}.`;
+/** Repère du moment, pour une séance : sans jugement sur l'objectif (dit une seule fois, sur la page Objectif). */
+export function paceReferenceSentence(marker: GoalMarker): string {
+  return `Repère ${marker.estimate.race} du moment : ${paceRange(marker.estimate.fastS, marker.estimate.slowS)} (${marker.estimate.basis}).`;
+}
+
+export type GoalStatus = {
+  race: string;
+  goal: string;
+  current: string;
+  verdict: string;
+  /** Rythme de progression nécessaire si une date est fixée. */
+  timing: string;
+  status: GoalMarker["status"];
+};
+
+/** Situation d'un objectif chiffré : écart, repère actuel, temps restant et ce qu'il faudrait gagner. */
+export function goalStatus(marker: GoalMarker, eventDate: string | null, daysLeft: number | null): GoalStatus {
+  const verdict = marker.status === "reachable"
+    ? "À portée : travaille à l'allure visée."
+    : marker.status === "stretch"
+      ? `Ambitieux mais crédible : ${marker.gapS} s/km à gagner.`
+      : `Pas encore à portée : ${marker.gapS} s/km à gagner.`;
+  let timing = "Pas de date fixée : l'écart se suit séance après séance.";
+  if (eventDate && daysLeft != null && daysLeft > 0 && marker.gapS > 0) {
+    const months = daysLeft / 30.4;
+    timing = `Course dans ${Math.round(daysLeft / 7)} semaines : environ ${decimal(marker.gapS / Math.max(months, 0.25))} s/km à gagner par mois.`;
+  } else if (eventDate && daysLeft != null && daysLeft > 0) {
+    timing = `Course dans ${Math.round(daysLeft / 7)} semaines : garde le cap.`;
+  }
+  return {
+    race: marker.race,
+    goal: `${formatClock(marker.goalTimeS)} (${pace(marker.goalPaceS)})`,
+    current: `${paceRange(marker.estimate.fastS, marker.estimate.slowS)}, soit environ ${formatClock(marker.realisticTimeS)} (${marker.estimate.basis})`,
+    verdict,
+    timing,
+    status: marker.status,
+  };
 }
 
 type Plan = { target: PrescriptionTarget; goal: GoalMarker | null; recoveryS: number | null; maxReps: number };
 
-/** Allure d'entraînement visée sur la course de référence : l'objectif s'il est à portée, sinon l'allure réaliste. */
-function raceAimS(marker: GoalMarker | null, fallbackS: number): number {
-  if (!marker) return fallbackS;
-  return marker.status === "out_of_reach" ? marker.realisticPaceS : marker.goalPaceS;
+/** Allure d'entraînement visée : l'objectif s'il est à portée, sinon l'allure du moment. */
+function raceAimS(marker: GoalMarker | null, estimate: PaceEstimate | null): number | null {
+  if (marker && marker.status !== "out_of_reach") return marker.goalPaceS;
+  return estimate?.centerS ?? null;
+}
+
+function raceLabel(marker: GoalMarker | null, race: string): string {
+  return marker && marker.status !== "out_of_reach" ? `allure ${race} visée` : `allure ${race} du moment`;
 }
 
 function hr(zone: 1 | 2 | 3 | 4 | 5, zones: HeartRateZones): [number, number] {
   return zoneRange(zone, zones);
 }
 
+function around(centerS: number | null, half: number): { paceFastS: number | null; paceSlowS: number | null } {
+  return centerS == null ? { paceFastS: null, paceSlowS: null } : { paceFastS: centerS - half, paceSlowS: centerS + half };
+}
+
 /** Cible d'un format de fractionné (partagée avec la suggestion de prochaine séance). */
-export function intervalTarget(kind: SessionKind, repDurationS: number, input: Pick<PrescriptionInput, "zones" | "lactateThresholdSpeedMps" | "raceTargets">): PrescriptionTarget | null {
+export function intervalTarget(kind: SessionKind, repDurationS: number, input: PaceInputs): PrescriptionTarget | null {
   return intervalPlan(kind, repDurationS, input)?.target ?? null;
 }
 
-function intervalPlan(kind: SessionKind, repDurationS: number, input: Pick<PrescriptionInput, "zones" | "lactateThresholdSpeedMps" | "raceTargets">): Plan | null {
+function intervalPlan(kind: SessionKind, repDurationS: number, input: PaceInputs): Plan | null {
   const lt = input.lactateThresholdSpeedMps;
   const zones = input.zones;
   const ltS = lt ? paceSeconds(lt) : null;
-  const around = (centerS: number | null, half: number) => (centerS == null ? { paceFastS: null, paceSlowS: null } : { paceFastS: centerS - half, paceSlowS: centerS + half });
   if (kind === "intervals_short") {
     const [low] = hr(4, zones);
     const center = lt ? paceSeconds(lt * 1.14) : null;
-    return { target: { label: "vitesse (allure 1 500 m)", ...around(center, 3), heartRateLow: low, heartRateHigh: hr(5, zones)[1], zone: "Z4–Z5" }, goal: goalMarker(lt, input.raceTargets, 5), recoveryS: roundTo(Math.min(120, Math.max(60, repDurationS)), 15), maxReps: 12 };
+    return { target: { label: "vitesse (allure 1 500 m)", ...around(center, 3), heartRateLow: low, heartRateHigh: hr(5, zones)[1], zone: "Z4–Z5" }, goal: null, recoveryS: roundTo(Math.min(120, Math.max(60, repDurationS)), 15), maxReps: 12 };
   }
   if (kind === "intervals_vo2") {
-    const marker = goalMarker(lt, input.raceTargets, 5);
+    const marker = goalMarker(input.raceTargets, 5, input);
     const [low] = hr(5, zones);
     const high = zones.maxHeartRateBpm ? Math.round(low + (zones.maxHeartRateBpm - low) * 0.6) : low + 8;
     // Répétitions courtes (< 3 min) : allure 3 km ; plus longues : allure 5 km.
-    const center = repDurationS < 180 ? (lt ? paceSeconds(lt * 1.09) : null) : lt ? raceAimS(marker, paceSeconds(lt * 1.06)) : null;
-    const label = repDurationS < 180 ? "allure 3 km" : marker && marker.status !== "out_of_reach" ? "allure 5 km visée" : "allure 5 km réaliste";
-    return { target: { label, ...around(center, 3), heartRateLow: low, heartRateHigh: high, zone: "Z5" }, goal: marker, recoveryS: roundTo(Math.min(180, Math.max(90, repDurationS * 0.4)), 15), maxReps: repDurationS >= 240 ? 6 : 10 };
+    if (repDurationS < 180) return { target: { label: "allure 3 km", ...around(lt ? paceSeconds(lt * 1.09) : null, 3), heartRateLow: low, heartRateHigh: high, zone: "Z5" }, goal: null, recoveryS: roundTo(Math.max(90, repDurationS * 0.6), 15), maxReps: 10 };
+    const center = raceAimS(marker, raceEstimate(5, input));
+    return { target: { label: raceLabel(marker, "5 km"), ...around(center, 3), heartRateLow: low, heartRateHigh: high, zone: "Z5" }, goal: marker, recoveryS: roundTo(Math.min(180, Math.max(90, repDurationS * 0.4)), 15), maxReps: repDurationS >= 240 ? 6 : 10 };
   }
   if (kind === "intervals_threshold") {
     const [low, high] = hr(4, zones);
-    return { target: { label: "seuil", paceFastS: ltS != null ? ltS - 3 : null, paceSlowS: ltS != null ? ltS + 4 : null, heartRateLow: low, heartRateHigh: high, zone: "Z4" }, goal: goalMarker(lt, input.raceTargets, 21.0975), recoveryS: roundTo(Math.min(120, Math.max(60, repDurationS * 0.2)), 15), maxReps: 6 };
+    return { target: { label: "seuil", paceFastS: ltS != null ? ltS - 3 : null, paceSlowS: ltS != null ? ltS + 4 : null, heartRateLow: low, heartRateHigh: high, zone: "Z4" }, goal: goalMarker(input.raceTargets, 21.0975, input), recoveryS: roundTo(Math.min(120, Math.max(60, repDurationS * 0.2)), 15), maxReps: 6 };
   }
   if (kind === "intervals_tempo") {
-    const marker = goalMarker(lt, input.raceTargets, 21.0975);
-    const center = lt ? raceAimS(marker, paceSeconds(lt * 0.975)) : null;
-    return { target: { label: marker && marker.status !== "out_of_reach" ? "allure semi visée" : "allure semi réaliste", ...around(center, 4), heartRateLow: hr(3, zones)[0], heartRateHigh: hr(4, zones)[1], zone: "Z3–Z4" }, goal: marker, recoveryS: 60, maxReps: 5 };
+    const marker = goalMarker(input.raceTargets, 21.0975, input);
+    return { target: { label: raceLabel(marker, "semi"), ...around(raceAimS(marker, raceEstimate(21.0975, input)), 4), heartRateLow: hr(3, zones)[0], heartRateHigh: hr(4, zones)[1], zone: "Z3–Z4" }, goal: marker, recoveryS: 60, maxReps: 5 };
   }
   return null;
 }
@@ -187,12 +298,11 @@ function continuousPlan(kind: SessionKind, input: PrescriptionInput): Plan | nul
   if (kind === "threshold") {
     const ltS = lt ? paceSeconds(lt) : null;
     const [low, high] = hr(4, zones);
-    return { target: { label: "seuil", paceFastS: ltS != null ? ltS - 3 : null, paceSlowS: ltS != null ? ltS + 4 : null, heartRateLow: low, heartRateHigh: high, zone: "Z4" }, goal: goalMarker(lt, input.raceTargets, 21.0975), recoveryS: null, maxReps: 1 };
+    return { target: { label: "seuil", paceFastS: ltS != null ? ltS - 3 : null, paceSlowS: ltS != null ? ltS + 4 : null, heartRateLow: low, heartRateHigh: high, zone: "Z4" }, goal: goalMarker(input.raceTargets, 21.0975, input), recoveryS: null, maxReps: 1 };
   }
   if (kind === "tempo") {
-    const marker = goalMarker(lt, input.raceTargets, 21.0975);
-    const center = lt ? raceAimS(marker, paceSeconds(lt * 0.975)) : null;
-    return { target: { label: marker && marker.status !== "out_of_reach" ? "allure semi visée" : "allure semi réaliste", paceFastS: center != null ? center - 4 : null, paceSlowS: center != null ? center + 4 : null, heartRateLow: hr(3, zones)[0], heartRateHigh: hr(4, zones)[1], zone: "Z3–Z4" }, goal: marker, recoveryS: null, maxReps: 1 };
+    const marker = goalMarker(input.raceTargets, 21.0975, input);
+    return { target: { label: raceLabel(marker, "semi"), ...around(raceAimS(marker, raceEstimate(21.0975, input)), 4), heartRateLow: hr(3, zones)[0], heartRateHigh: hr(4, zones)[1], zone: "Z3–Z4" }, goal: marker, recoveryS: null, maxReps: 1 };
   }
   // Endurance, récupération, sortie longue : FC en Z2 (Z1–Z2 en récupération), allure traduite de la FC.
   const [z2Low, z2High] = hr(2, zones);
@@ -210,78 +320,103 @@ function repFormat(distanceM: number | null, durationS: number): string {
   return durationS < 90 ? `${Math.round(durationS / 5) * 5} s` : formatClock(roundTo(durationS, 15));
 }
 
-function placementLines(input: PrescriptionInput, quality: boolean): string[] {
-  const lines: string[] = [];
+/** Placement dans la semaine : le levier principal quand la charge ou l'enchaînement explique la séance. */
+function placementLine(input: PrescriptionInput): string | null {
   const context = input.context;
-  if (!context || !quality) return lines;
+  if (!context) return null;
   if (context.loadRatio != null && context.loadRatio >= HIGH_LOAD_RATIO) {
-    lines.push(`Placement : charge 7 jours à ${String(Math.round(context.loadRatio * 10) / 10).replace(".", ",")} fois ta moyenne ce jour-là ; au-delà de ${String(HIGH_LOAD_RATIO).replace(".", ",")}, une endurance facile ou un report de 1 à 2 jours aurait mieux servi cette séance.`);
+    return `Placement : avec une charge 7 jours à ${decimal(context.loadRatio)} fois ta moyenne, reporte de 1 à 2 jours ou remplace par une endurance facile (au-delà de ${decimal(HIGH_LOAD_RATIO)}, la qualité ne paie plus).`;
   }
   const close = context.qualityBefore.find((entry) => entry.daysBefore < 3);
-  if (close) lines.push(`Placement : ${close.title} seulement ${close.daysBefore} jour${close.daysBefore > 1 ? "s" : ""} avant ; laisse 72 h entre deux séances de qualité.`);
-  return lines;
+  if (close) return `Placement : ${close.title} seulement ${close.daysBefore} jour${close.daysBefore > 1 ? "s" : ""} avant ; laisse 72 h entre deux séances de qualité.`;
+  return null;
+}
+
+/** Une consigne principale, au plus une secondaire. */
+function prioritize(placement: string | null, execution: string[]): string[] {
+  return [placement, ...execution].filter((line): line is string => line != null).slice(0, 2);
+}
+
+function intervalPrescription(input: PrescriptionInput): Prescription {
+  const { metrics, reference } = input;
+  const work = metrics.work;
+  if (!work || work.reps < 2) return { status: "none", reason: "répétitions non reconnues" };
+  const plan = intervalPlan(metrics.kind, work.averageDurationS, input);
+  if (!plan) return { status: "none", reason: "type de fractionné non pris en charge" };
+  const { target } = plan;
+  const hasPace = target.paceFastS != null && target.paceSlowS != null;
+  const fast = target.paceFastS ?? 0;
+  const slow = target.paceSlowS ?? 0;
+  const averageS = paceSeconds(work.averageSpeedMps);
+  if (hasPace && (averageS > slow + MISMATCH_LIMIT_S || averageS < fast - MISMATCH_LIMIT_S)) return { status: "none", reason: MISMATCH_REASON };
+
+  const reps = work.repsDetail.map((rep) => paceSeconds(rep.speedMps));
+  const first = reps[0];
+  const last = reps[reps.length - 1];
+  const fade = work.fadeSPerKm ?? 0;
+  const repHr = work.averageHeartRateBpm != null ? Math.round(work.averageHeartRateBpm) : null;
+  const recovery = work.averageRecoveryS != null ? Math.round(work.averageRecoveryS) : null;
+  const shortRecovery = plan.recoveryS != null && recovery != null && recovery < plan.recoveryS - 15;
+  // Dégradation réelle seulement si elle dépasse celle de ses comparables.
+  const referenceSpread = reference?.repSpreadSPerKm ?? null;
+  const fadeDegraded = fade >= FADE_LIMIT_S && (referenceSpread == null || fade >= referenceSpread + FADE_ABOVE_REFERENCE_S);
+  // Coût cardiaque : FC nettement plus haute que les comparables pour une allure à peine meilleure.
+  const refHr = reference?.repHeartRateBpm != null ? Math.round(reference.repHeartRateBpm) : null;
+  const refPaceS = reference?.repSpeedMps ? paceSeconds(reference.repSpeedMps) : null;
+  const hrCost = repHr != null && refHr != null && refPaceS != null && repHr >= refHr + HR_COST_BPM && refPaceS - averageS <= GAIN_SMALL_S;
+  const tooSlow = hasPace && averageS > slow + MARGINAL_S;
+  const tooFast = hasPace && averageS < fast - MARGINAL_S;
+
+  const execution: string[] = [];
+  if (fadeDegraded) {
+    if (hasPace && first < fast) execution.push(`Départ : 1re répétition à ${pace(first)} pour une cible ${band(target)} ; partir à ${pace(slow)} évite de finir à ${pace(last)}.`);
+    else if (shortRecovery) execution.push(`Récupération : ${formatClock(plan.recoveryS)} entre les répétitions au lieu de ${formatClock(recovery)}, pour ne plus perdre ${fade} s/km sur la dernière.`);
+    else execution.push(`Gestion : pars à ${hasPace ? pace(slow) : "l'allure de ta dernière répétition"} dès la 1re pour ne plus perdre ${fade} s/km en fin de séance.`);
+  }
+  if (hrCost) execution.push(`Intensité : tiens ${band(target)} sans chercher plus vite ; FC des répétitions à ${repHr} bpm contre ${refHr} bpm sur tes comparables pour ${Math.max(0, (refPaceS as number) - averageS)} s/km de mieux seulement.`);
+  else if (tooFast && !fadeDegraded) execution.push(`Allure : reste dans ${band(target)} ; ${pace(averageS)} t'a fait travailler au-dessus de l'intensité visée.`);
+  if (repHr != null && repHr > target.heartRateHigh && (metrics.kind === "intervals_threshold" || metrics.kind === "intervals_tempo")) execution.push(`Intensité : repasse sous ${target.heartRateHigh} bpm (${target.zone}) ; ${repHr} bpm, c'est déjà plus que ce format.`);
+  const placement = placementLine(input);
+  // Une allure trop lente expliquée par la charge relève du placement, pas de l'exécution.
+  if (tooSlow && !fadeDegraded && !placement) execution.push(`Allure : vise ${band(target)} dès la 1re répétition ; ${pace(averageS)}, c'est sous l'intensité du format.`);
+  const shouldHave = prioritize(placement, execution);
+
+  const onTarget = hasPace && !tooFast && !tooSlow && !fadeDegraded && !hrCost;
+  const strictlyOnTarget = onTarget && averageS >= fast && averageS <= slow;
+  const keep = strictlyOnTarget
+    ? `Répétitions à ${pace(averageS)} dans la cible ${band(target)}, régulières (${Math.abs(fade)} s/km entre premières et dernières) : à reproduire.`
+    : !fadeDegraded ? `Régularité : ${Math.abs(fade)} s/km entre premières et dernières répétitions${referenceSpread != null ? `, ${Math.abs(fade) < referenceSpread - 2 ? "mieux que" : "comme"} tes comparables (${referenceSpread} s/km)` : ""}.` : null;
+
+  const format = `${work.reps} × ${repFormat(work.averageDistanceM, work.averageDurationS)}`;
+  const recoveryText = formatClock(plan.recoveryS ?? recovery);
+  let nextFormat = format;
+  let nextTarget = target;
+  let cue: string;
+  if (placement) {
+    cue = `Même format ${format} à ${band(target)}, récupération ${recoveryText}, sur une semaine sans pic de charge et à 72 h au moins d'une autre séance de qualité.`;
+  } else if (hrCost) {
+    cue = `Même format ${format} à ${band(target)}, en visant ${refHr} bpm sur les répétitions plutôt que la vitesse.`;
+  } else if (!onTarget) {
+    cue = `Même format ${format} à ${band(target)}, récupération ${recoveryText} ; 1re répétition à ${hasPace ? pace(slow) : `${target.heartRateLow} bpm`}, pas plus vite.`;
+  } else if (plan.goal && plan.goal.status !== "out_of_reach" && fast > plan.goal.goalPaceS) {
+    nextTarget = { ...target, paceFastS: fast - 3, paceSlowS: slow - 3 };
+    cue = `Même format ${format}, 3 s/km plus vite : ${band(nextTarget)}, récupération ${recoveryText}.`;
+  } else if (work.reps < plan.maxReps) {
+    nextFormat = format.replace(/^\d+/, String(work.reps + 1));
+    cue = `Une répétition de plus : ${nextFormat} à ${band(target)}, récupération ${recoveryText}.`;
+  } else {
+    cue = `Même format ${format} à ${band(target)} : le volume est au maximum utile, garde la qualité.`;
+  }
+  return { status: "ok", target, goal: plan.goal, shouldHave, keep, next: { format: nextFormat, target: nextTarget, recoveryS: plan.recoveryS, cue } };
 }
 
 export function prescribe(input: PrescriptionInput): Prescription {
   const { metrics } = input;
-  const work = metrics.work;
-  const isQuality = metrics.family === "intervals" || metrics.family === "steady";
-
-  if (metrics.family === "intervals") {
-    if (!work || work.reps < 2) return { status: "none", reason: "répétitions non reconnues" };
-    const plan = intervalPlan(metrics.kind, work.averageDurationS, input);
-    if (!plan) return { status: "none", reason: "type de fractionné non pris en charge" };
-    const { target } = plan;
-    const reps = work.repsDetail.map((rep) => paceSeconds(rep.speedMps));
-    const first = reps[0];
-    const last = reps[reps.length - 1];
-    const averageS = paceSeconds(work.averageSpeedMps);
-    const fade = work.fadeSPerKm ?? 0;
-    const repHr = work.averageHeartRateBpm != null ? Math.round(work.averageHeartRateBpm) : null;
-    const lines: string[] = [];
-    const hasPace = target.paceFastS != null && target.paceSlowS != null;
-    const fast = target.paceFastS ?? 0;
-    const slow = target.paceSlowS ?? 0;
-    const recovery = work.averageRecoveryS != null ? Math.round(work.averageRecoveryS) : null;
-    const shortRecovery = plan.recoveryS != null && recovery != null && recovery < plan.recoveryS - 15;
-    if (hasPace && (averageS > slow + MISMATCH_LIMIT_S || averageS < fast - MISMATCH_LIMIT_S)) return { status: "none", reason: MISMATCH_REASON };
-
-    if (fade >= FADE_LIMIT_S) {
-      if (hasPace && first < fast) lines.push(`Départ trop rapide : 1re répétition à ${pace(first)} pour une cible ${band(target)} ; partir à ${pace(slow)} aurait évité de finir à ${pace(last)}.`);
-      else if (shortRecovery) lines.push(`Récupération : ${formatClock(recovery)} entre les répétitions pour ${formatClock(plan.recoveryS)} conseillées sur ce format ; c'est le levier le plus direct contre les ${fade} s/km perdus sur la dernière.`);
-      else lines.push(`Gestion : ${fade} s/km perdus de la 1re à la dernière répétition ; pars à ${hasPace ? pace(slow) : "l'allure de la dernière"} dès la 1re pour finir à la même allure.`);
-    }
-    if (hasPace && averageS > slow + ON_TARGET_TOLERANCE_S && fade < FADE_LIMIT_S) lines.push(`Allure : répétitions à ${pace(averageS)}, plus lentes que la cible ${band(target)}, sans perte en fin de séance : l'effort était plafonné dès le départ.`);
-    if (hasPace && averageS < fast - ON_TARGET_TOLERANCE_S && fade < FADE_LIMIT_S) lines.push(`Allure : répétitions à ${pace(averageS)}, plus rapides que la cible ${band(target)} ; reste dans la fourchette pour garder la bonne intensité.`);
-    if (repHr != null && repHr > target.heartRateHigh && metrics.kind !== "intervals_short" && metrics.kind !== "intervals_vo2") lines.push(`Intensité : FC des répétitions à ${repHr} bpm, au-dessus de la cible ${target.heartRateLow}–${target.heartRateHigh} bpm (${target.zone}) ; ralentir jusqu'à repasser sous ${target.heartRateHigh} bpm.`);
-    if (shortRecovery && !lines.some((line) => line.startsWith("Récupération"))) lines.push(`Récupération : ${formatClock(recovery)} prises, ${formatClock(plan.recoveryS)} conseillées pour ce format.`);
-    lines.push(...placementLines(input, isQuality));
-
-    const onTarget = hasPace && averageS >= fast - ON_TARGET_TOLERANCE_S && averageS <= slow + ON_TARGET_TOLERANCE_S && fade < FADE_LIMIT_S;
-    const keep = onTarget ? `Répétitions à ${pace(averageS)} dans la cible ${band(target)}, avec ${Math.abs(fade)} s/km d'écart entre premières et dernières : à reproduire.` : fade < FADE_LIMIT_S ? `Régularité : ${Math.abs(fade)} s/km d'écart entre premières et dernières répétitions, à garder.` : null;
-
-    const format = `${work.reps} × ${repFormat(work.averageDistanceM, work.averageDurationS)}`;
-    let nextFormat = format;
-    let nextTarget = target;
-    let cue: string;
-    if (!onTarget || fade >= FADE_LIMIT_S) {
-      cue = `Même format ${format} à ${band(target)}, récupération ${formatClock(plan.recoveryS ?? recovery)} ; 1re répétition à ${hasPace ? pace(slow) : `${target.heartRateLow} bpm`}, pas plus vite.`;
-    } else if (plan.goal && plan.goal.status !== "out_of_reach" && hasPace && fast > plan.goal.goalPaceS) {
-      nextTarget = { ...target, paceFastS: fast - 3, paceSlowS: slow - 3 };
-      cue = `Même format ${format}, 3 s/km plus vite : ${band(nextTarget)}, récupération ${formatClock(plan.recoveryS ?? recovery)}.`;
-    } else if (work.reps < plan.maxReps) {
-      nextFormat = format.replace(/^\d+/, String(work.reps + 1));
-      cue = `Une répétition de plus : ${nextFormat} à ${band(target)}, récupération ${formatClock(plan.recoveryS ?? recovery)}.`;
-    } else {
-      cue = `Même format ${format} à ${band(target)} : le volume est au maximum utile, garde la qualité.`;
-    }
-    return { status: "ok", target, goal: plan.goal, shouldHave: lines, keep, next: { format: nextFormat, target: nextTarget, recoveryS: plan.recoveryS, cue } };
-  }
+  if (metrics.family === "intervals") return intervalPrescription(input);
 
   const plan = continuousPlan(metrics.kind, input);
   if (!plan) return { status: "none", reason: "type de séance non pris en charge" };
   const { target } = plan;
-  const lines: string[] = [];
   const mainHr = metrics.mainHeartRateBpm != null ? Math.round(metrics.mainHeartRateBpm) : null;
   const mainS = metrics.mainSpeedMps ? paceSeconds(metrics.mainSpeedMps) : null;
   const halves = metrics.halves;
@@ -289,31 +424,35 @@ export function prescribe(input: PrescriptionInput): Prescription {
   const minutes = input.movingTimeS ? Math.max(5, roundTo(input.movingTimeS / 60, 5)) : null;
 
   if (metrics.family === "easy" || metrics.family === "long") {
-    if (mainHr != null && mainHr > target.heartRateHigh) lines.push(`Intensité : FC moyenne à ${mainHr} bpm, au-dessus de ${target.heartRateHigh} bpm (haut de ${target.zone}) ; ${hasPace ? `ralentir vers ${band(target)}` : "ralentir"} pour rester en endurance.`);
-    if (halves?.driftPct != null && halves.driftPct > 5) lines.push(`Départ : dérive cardiaque de ${String(Math.round(halves.driftPct * 10) / 10).replace(".", ",")} % entre les moitiés ; partir ${hasPace ? `à ${pace(target.paceSlowS as number)}` : "plus lentement"} sur les 15 premières minutes.`);
+    const execution: string[] = [];
+    if (mainHr != null && mainHr > target.heartRateHigh) execution.push(`Intensité : reste sous ${target.heartRateHigh} bpm (haut de ${target.zone})${hasPace ? `, soit ${band(target)}` : ""} ; ${mainHr} bpm de moyenne, ce n'est plus de l'endurance.`);
+    if (halves?.driftPct != null && halves.driftPct > 5) execution.push(`Départ : ${hasPace ? `pars à ${pace(target.paceSlowS as number)}` : "pars plus lentement"} sur les 15 premières minutes pour limiter la dérive cardiaque (${decimal(halves.driftPct)} %).`);
     const keep = mainHr != null && mainHr <= target.heartRateHigh ? `FC moyenne à ${mainHr} bpm, dans la cible ${target.heartRateLow}–${target.heartRateHigh} bpm : à reproduire.` : null;
     const nextMinutes = metrics.family === "long" && minutes ? Math.min(120, roundTo(minutes * 1.1, 5)) : minutes;
     const format = nextMinutes ? `${nextMinutes} min` : "même durée";
     const cue = `${metrics.family === "long" ? "Sortie longue" : "Endurance"} de ${format} entre ${target.heartRateLow} et ${target.heartRateHigh} bpm${hasPace ? `, soit environ ${band(target)}` : ""} ; la fin aussi facile que le début.`;
-    return { status: "ok", target, goal: null, shouldHave: lines, keep, next: { format, target, recoveryS: null, cue } };
+    return { status: "ok", target, goal: null, shouldHave: execution.slice(0, 2), keep, next: { format, target, recoveryS: null, cue } };
   }
 
   // Tempo / seuil continu.
   if (hasPace && mainS != null && (mainS > (target.paceSlowS as number) + MISMATCH_LIMIT_S || mainS < (target.paceFastS as number) - MISMATCH_LIMIT_S)) return { status: "none", reason: MISMATCH_REASON };
-  if (halves && halves.fadeSPerKm >= FADE_LIMIT_S) {
+  const referenceFade = input.reference?.halvesFadeSPerKm ?? null;
+  const fadeDegraded = halves != null && halves.fadeSPerKm >= FADE_LIMIT_S && (referenceFade == null || halves.fadeSPerKm >= referenceFade + FADE_ABOVE_REFERENCE_S);
+  const execution: string[] = [];
+  if (fadeDegraded && halves) {
     const firstS = paceSeconds(halves.first.speedMps);
-    const split = `2e moitié ${halves.fadeSPerKm} s/km plus lente que la 1re (${pace(firstS)} puis ${pace(paceSeconds(halves.second.speedMps))})`;
-    if (hasPace && firstS < (target.paceSlowS as number)) lines.push(`Départ : ${split} ; partir à ${pace(target.paceSlowS as number)} pour tenir jusqu'au bout.`);
-    else lines.push(`Gestion : ${split} ; en 2 blocs avec 2:00 de trot, l'allure tient mieux.`);
+    if (hasPace && firstS < (target.paceSlowS as number)) execution.push(`Départ : pars à ${pace(target.paceSlowS as number)} (1re moitié à ${pace(firstS)}) pour ne plus perdre ${halves.fadeSPerKm} s/km en 2e moitié.`);
+    else execution.push(`Gestion : coupe en 2 blocs avec 2:00 de trot pour ne plus perdre ${halves.fadeSPerKm} s/km en 2e moitié.`);
   }
-  if (hasPace && mainS != null && mainS > (target.paceSlowS as number) + 3) lines.push(`Allure : ${pace(mainS)} pour une cible ${band(target)}.`);
-  if (mainHr != null && mainHr > target.heartRateHigh) lines.push(`Intensité : FC à ${mainHr} bpm, au-dessus de ${target.heartRateHigh} bpm (${target.zone}) : trop intense pour ce format.`);
-  lines.push(...placementLines(input, isQuality));
-  const steadyOk = (!halves || halves.fadeSPerKm < FADE_LIMIT_S) && (mainHr == null || mainHr <= target.heartRateHigh);
+  if (mainHr != null && mainHr > target.heartRateHigh) execution.push(`Intensité : repasse sous ${target.heartRateHigh} bpm (${target.zone}) ; ${mainHr} bpm, c'est trop intense pour ce format.`);
+  const placement = placementLine(input);
+  if (hasPace && mainS != null && mainS > (target.paceSlowS as number) + MARGINAL_S && !fadeDegraded && !placement) execution.push(`Allure : vise ${band(target)} ; ${pace(mainS)}, c'est sous l'intensité du format.`);
+  const shouldHave = prioritize(placement, execution);
+  const steadyOk = !fadeDegraded && (mainHr == null || mainHr <= target.heartRateHigh);
   const keep = steadyOk && mainS != null ? `Allure tenue à ${pace(mainS)} sans perte entre les moitiés : à reproduire.` : null;
   const format = minutes ? `${minutes} min` : "même durée";
   const cue = steadyOk
     ? `Même effort à ${band(target)}${minutes ? `, prolongé à ${minutes + 5} min` : ""} ou fractionné en 2 blocs avec 2:00 de trot.`
-    : `${format} à ${band(target)}, en 2 blocs avec 2:00 de trot si la 2e moitié décroche encore.`;
-  return { status: "ok", target, goal: plan.goal, shouldHave: lines, keep, next: { format, target, recoveryS: null, cue } };
+    : `${format} à ${band(target)}, en 2 blocs avec 2:00 de trot.`;
+  return { status: "ok", target, goal: plan.goal, shouldHave, keep, next: { format, target, recoveryS: null, cue } };
 }

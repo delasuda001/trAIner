@@ -2,13 +2,13 @@ import { z } from "zod";
 import { INTERVAL_INTENSITY_LABELS, paceSeconds, SESSION_KIND_LABELS, sessionTitle, type ActivityMetrics, type DynamicsValues } from "@/lib/engine/activity-metrics";
 import type { ComparisonDeltas } from "@/lib/engine/comparable";
 import { readDynamics } from "@/lib/engine/dynamics-reading";
-import { goalSentence, type Prescription, type PrescriptionTarget } from "@/lib/engine/prescription";
+import { paceReferenceSentence, type Prescription, type PrescriptionTarget } from "@/lib/engine/prescription";
 import { VERDICT_LABELS, type SessionVerdict } from "@/lib/engine/verdict";
 import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 
-export const SESSION_PROMPT_VERSION = "session-v7";
+export const SESSION_PROMPT_VERSION = "session-v8";
 
 export const sessionCoachSchema = z.object({
   verdict: z.string().min(10).max(260),
@@ -55,7 +55,8 @@ Règles :
 - Un indicateur = une seule lecture, celle de "verdict_calcule" : jamais le même fait dans "keep" et dans "shouldHave".
 - Les constats et la cause probable de l'écart (charge « ce jour-là », séances de qualité rapprochées, récupération, ressenti) vont dans "bullets", jamais dans "shouldHave" ni "nextTime".
 - "shouldHave" et "nextTime" sont des consignes, pas des constats : verbe d'action, cible chiffrée en tête (allure, FC, récupération, placement), reprises de "consignes_moteur". N'invente aucune autre cible. Si "consignes_moteur" n'en donne pas, dis simplement qu'il n'y a pas de consigne chiffrée pour ce format.
-- Quand "consignes_moteur.objectif" existe, situe la consigne par rapport à l'objectif en quelques mots (à portée, ou cible réaliste du moment).
+- "shouldHave" : une consigne principale (la première de "consignes_moteur.aurait_du"), au plus une secondaire très courte. Si "aurait_du" dit qu'il n'y a rien à corriger, écris-le en une phrase, sans inventer de reproche.
+- Ne juge pas l'objectif (c'est fait ailleurs) : cite au plus "consignes_moteur.repere_du_moment".
 - Dynamique de course : compare-la à ses propres valeurs uniquement, et seulement si un écart ressort.
 - Pas de conseil générique, pas de température, aucune interprétation médicale.
 
@@ -253,10 +254,10 @@ function describePrescription(prescription: Prescription | null) {
   if (prescription.status === "none") return { note: `pas de consigne chiffrée (${prescription.reason})` };
   return {
     cible_du_format: targetText(prescription.target),
-    aurait_du: prescription.shouldHave.length ? prescription.shouldHave : ["rien à corriger : séance dans la cible"],
+    aurait_du: prescription.shouldHave.length ? prescription.shouldHave : ["rien à corriger sur l'exécution"],
     a_reproduire: prescription.keep ?? "—",
     prochaine_fois: prescription.next.cue,
-    ...(prescription.goal ? { objectif: goalSentence(prescription.goal) } : {}),
+    ...(prescription.goal ? { repere_du_moment: paceReferenceSentence(prescription.goal) } : {}),
   };
 }
 

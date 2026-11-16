@@ -6,7 +6,7 @@ import { SESSION_KIND_LABELS } from "./activity-metrics";
 import type { LoadSummary } from "./load";
 import type { RecoverySignals } from "./recovery";
 import { median, present, round } from "./stats";
-import { intervalTarget, type RaceTarget } from "./prescription";
+import { intervalTarget, type RaceTarget, type RecentEffort } from "./prescription";
 import { zoneRange } from "./zones";
 
 /**
@@ -86,6 +86,8 @@ export type SuggestionInput = {
   goal?: SuggestionGoal | null;
   /** Objectifs chiffrés : les allures des séances de qualité en tiennent compte. */
   raceTargets?: RaceTarget[];
+  /** Répétitions longues récentes : affinent l'allure 5 km du moment. */
+  efforts?: RecentEffort[];
 };
 
 const HARD_FAMILIES: ReadonlySet<SessionFamily> = new Set(["intervals", "steady"]);
@@ -127,7 +129,7 @@ function enduranceSession(input: SuggestionInput, durationMin: number, title = "
 
 /** Cible partagée avec les consignes de séance : mêmes allures dans la suggestion et dans l'analyse. */
 function sharedTarget(input: SuggestionInput, kind: SessionKind, repDurationS: number, zone: string): SessionTarget | null {
-  const target = intervalTarget(kind, repDurationS, { zones: input.zones, lactateThresholdSpeedMps: input.lactateThresholdSpeedMps, raceTargets: input.raceTargets ?? [] });
+  const target = intervalTarget(kind, repDurationS, { zones: input.zones, lactateThresholdSpeedMps: input.lactateThresholdSpeedMps, raceTargets: input.raceTargets ?? [], efforts: input.efforts ?? [] });
   if (!target) return null;
   return { zone, heartRateLow: target.heartRateLow, heartRateHigh: target.heartRateHigh, paceFastMps: target.paceFastS ? round(1000 / target.paceFastS, 3) : null, paceSlowMps: target.paceSlowS ? round(1000 / target.paceSlowS, 3) : null };
 }

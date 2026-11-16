@@ -19,11 +19,12 @@ function targetChip(target: PrescriptionTarget, recoveryS: number | null): strin
 export function SessionPoints({ ready, prescription, fallbackKeep }: { ready: SessionCoachOutput | null; prescription: Prescription; fallbackKeep: string | null }) {
   const ok = prescription.status === "ok" ? prescription : null;
   const keep = ready?.keep || ok?.keep || fallbackKeep;
-  const shouldHave = ready?.shouldHave || ok?.shouldHave[0] || null;
+  // Rien de dégradé selon le moteur : case vide plutôt qu'un reproche artificiel.
+  const shouldHave = ok && ok.shouldHave.length === 0 ? null : ready?.shouldHave || ok?.shouldHave[0] || null;
   const nextTime = ready?.nextTime || ok?.next.cue || null;
   if (!keep && !shouldHave && !nextTime) return null;
   return (
-    <div className="three-points">
+    <div className={shouldHave ? "three-points" : "two-points"}>
       {keep ? <div className="point point-good"><div className="point-label"><ThumbsUp size={12} /> À reproduire</div>{keep}</div> : null}
       {shouldHave ? (
         <div className="point point-work">

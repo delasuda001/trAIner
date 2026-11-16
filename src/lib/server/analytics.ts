@@ -12,7 +12,7 @@ import { isRun, summarizeLoad, type LoadSummary } from "@/lib/engine/load";
 import { computeProgression, referenceHeartRate, type Progression } from "@/lib/engine/progression";
 import { assessRecovery, type RecoverySignals } from "@/lib/engine/recovery";
 import { median, present } from "@/lib/engine/stats";
-import { prescribe, type Prescription } from "@/lib/engine/prescription";
+import { goalMarker, prescribe, type GoalMarker, type Prescription, type RecentEffort } from "@/lib/engine/prescription";
 import { suggestNextSession, type Suggestion } from "@/lib/engine/suggestion";
 import { classifyVerdict, type SessionVerdict } from "@/lib/engine/verdict";
 import { fallbackZones } from "@/lib/engine/zones";
@@ -151,6 +151,16 @@ function sessionContext(current: AnalyzedRun, context: Context): SessionContext 
   };
 }
 
+/** Répétitions longues (VO2max) des 12 semaines précédant `date` : base de l'allure 5 km du moment. */
+function recentEfforts(runs: AnalyzedRun[], date: string): RecentEffort[] {
+  return runs
+    .filter((run) => run.localDate < date && run.localDate >= addDays(date, -84) && run.metrics.kind === "intervals_vo2" && run.metrics.work)
+    .map((run) => {
+      const work = run.metrics.work as NonNullable<ActivityMetrics["work"]>;
+      return { localDate: run.localDate, kind: run.metrics.kind, title: sessionTitle(run.metrics), reps: work.reps, repDurationS: work.averageDurationS, workSpeedMps: work.averageSpeedMps };
+    });
+}
+
 export function analyzeSession(activityId: string, context: Context = loadContext()): SessionAnalysis | null {
   const current = context.runs.find((run) => run.id === activityId);
   if (!current) return null;
@@ -168,6 +178,8 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     recentSpeedPerBeat: perBeat.length ? median(perBeat) : null,
     movingTimeS: current.movingTimeS,
     raceTargets: context.goal?.raceTargets ?? [],
+    efforts: recentEfforts(history, current.localDate),
+    reference: deltas.count ? { repSpeedMps: deltas.work?.reference?.speedMps ?? null, repHeartRateBpm: deltas.work?.reference?.heartRateBpm ?? null, repSpreadSPerKm: deltas.work?.reference?.paceSpreadSPerKm ?? null, halvesFadeSPerKm: deltas.fadeSPerKm.reference } : null,
     context: { loadRatio: sessionCtx.loadRatio, qualityBefore: sessionCtx.qualityBefore14d },
   });
   return {
@@ -242,6 +254,8 @@ export type Dashboard = {
   activityCount: number;
   sync: SyncState | null;
   goal: Goal | null;
+  /** Objectifs chiffrés situés par rapport aux repères du moment. */
+  goalMarkers: GoalMarker[];
   /** Dernière séance du même type que la prochaine proposée, et sa consigne « prochaine fois ». */
   lastSameType: { id: string; localDate: string; title: string; prescription: Prescription } | null;
   /** Semaine en cours, lundi → dimanche : séances faites et séances proposées. */
@@ -286,6 +300,7 @@ export function getDashboard(): Dashboard {
     load,
     recovery,
     raceTargets: goal?.raceTargets ?? [],
+    efforts: recentEfforts(runs, addDays(today, 1)),
     goal: goal ? { eventDate: goal.eventDate, distanceKm: goal.distanceKm, targetPaceMps: targetPaceMps(goal), runsPerWeek: goal.runsPerWeek, preferredDays: goal.preferredDays } : null,
   });
 
@@ -302,6 +317,7 @@ export function getDashboard(): Dashboard {
     progression,
     suggestion,
     lastRun: last ? analyzeSession(last.id, context) : null,
+    goalMarkers: (goal?.raceTargets ?? []).map((target) => goalMarker(goal?.raceTargets ?? [], target.distanceKm, { lactateThresholdSpeedMps: profile.lactateThresholdSpeedMps, efforts: recentEfforts(runs, addDays(today, 1)) })).filter((marker): marker is GoalMarker => marker != null),
     lastSameType: sameRun && sameAnalysis ? { id: sameRun.id, localDate: sameRun.localDate, title: sessionTitle(sameRun.metrics), prescription: sameAnalysis.prescription } : null,
     recent: [...rows].reverse().slice(0, 10).map((row) => ({ id: row.id, name: row.name, sport: row.sport, localDate: row.localDate, startTimeLocal: row.startTimeLocal, distanceM: row.distanceM, movingTimeS: row.movingTimeS, averageSpeedMps: row.averageSpeedMps, averageHeartRateBpm: row.averageHeartRateBpm, kind: runById.get(row.id)?.metrics.kind ?? null, title: runById.get(row.id) ? sessionTitle((runById.get(row.id) as AnalyzedRun).metrics) : null, zoneShares: runById.get(row.id)?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null) })),
     activityCount: rows.length,

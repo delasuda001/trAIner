@@ -1,6 +1,7 @@
 import { ArrowRight, Gauge, HeartPulse, Moon, Target, Waves } from "lucide-react";
 import Link from "next/link";
 import { SessionPoints } from "@/components/activity/session-points";
+import { GoalStatusList } from "@/components/goal/goal-status";
 import { CoachRequest } from "@/components/coach-request";
 import { IntensityChart, ProgressionChart, Sparkline, WeeklyVolumeChart } from "@/components/charts";
 import { Badge } from "@/components/ui/badge";
@@ -142,6 +143,7 @@ export function ProgressionCard({ dashboard, coach }: { dashboard: Dashboard; co
         <Fact label="Volume course" value={formatNumber(progression.recent.runKmPerWeek, 1)} unit="km/sem" sub={`avant : ${formatNumber(progression.previous.runKmPerWeek, 1)}`} />
         <Fact label="Sorties faciles mesurées" value={String(progression.recent.runs)} sub={`contre ${progression.previous.runs} avant`} />
       </div>
+      <GoalStatusList markers={dashboard.goalMarkers} goal={dashboard.goal} today={dashboard.today} compact />
     </section>
   );
 }

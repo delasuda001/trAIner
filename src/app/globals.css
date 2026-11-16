@@ -232,6 +232,11 @@ ul.bullets li::marker { color: var(--sl-pink); }
 .point-good { border-left-color: var(--sl-green); }
 .point-work { border-left-color: var(--sl-orange); }
 .point-next { border-left-color: var(--sl-blue); }
+.goal-status { display: grid; gap: 10px; margin-top: 14px; }
+.goal-status-row { border: 1.5px solid var(--sl-border); border-left-width: 6px; border-left-color: var(--sl-blue); border-radius: var(--sl-radius-sm); padding: 10px 12px; font-size: 13.5px; background: var(--sl-surface); }
+.goal-status-row.goal-reachable { border-left-color: var(--sl-green); }
+.goal-status-row.goal-out_of_reach { border-left-color: var(--sl-orange); }
+.goal-status-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .three-points { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
 .point-target { font-family: var(--font-data); font-size: 13px; font-weight: 600; color: var(--sl-ink); margin-bottom: 4px; }
 

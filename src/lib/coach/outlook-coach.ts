@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { LoadSummary } from "@/lib/engine/load";
-import { goalSentence, type Prescription } from "@/lib/engine/prescription";
+import { paceReferenceSentence, type Prescription } from "@/lib/engine/prescription";
 import type { Progression } from "@/lib/engine/progression";
 import type { RecoverySignals } from "@/lib/engine/recovery";
 import type { Suggestion } from "@/lib/engine/suggestion";
@@ -63,7 +63,7 @@ function describeLesson(lesson: SameTypeLesson) {
     seance: `${lesson.title}, ${formatDate(lesson.localDate, "medium")}`,
     a_corriger: lesson.prescription.shouldHave.length ? lesson.prescription.shouldHave : ["rien : séance dans la cible"],
     consigne: lesson.prescription.next.cue,
-    ...(lesson.prescription.goal ? { objectif: goalSentence(lesson.prescription.goal) } : {}),
+    ...(lesson.prescription.goal ? { repere_du_moment: paceReferenceSentence(lesson.prescription.goal) } : {}),
   };
 }
 
