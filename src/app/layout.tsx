@@ -15,6 +15,7 @@ import { FeedbackButton } from "@/components/feedback/feedback-button";
 import { GaugeProvider } from "@/components/coach/coach-gauge";
 import { coachGauge } from "@/lib/server/quota";
 import { RegisterProvider } from "@/components/ui/register";
+import { ConnectionProvider, OfflineBanner } from "@/components/offline/connection";
 import { registerForRole } from "@/lib/register";
 import "./globals.css";
 
@@ -48,12 +49,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // Jauge de l'abonnement de Bastien, montrée aux invités près des boutons du coach.
   const gauge = member?.role === "guest" ? runAs(member, () => coachGauge()) : null;
   return (
-    <html lang="fr" className={`${display.variable} ${text.variable}`} suppressHydrationWarning>
+    <html lang="fr" className={`${display.variable} ${text.variable}`} data-rendered-at={new Date().toISOString()} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
         <RegisterProvider register={registerForRole(member?.role)}>
+        <ConnectionProvider>
         <header className="topbar">
           <div className="topbar-inner">
             <Link href="/" className="brand" aria-label={`${BRAND.name}, tableau de bord`}><LogoMark /><Wordmark /></Link>
@@ -69,8 +71,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             {member ? <span className="desktop-only"><LogoutButton name={member.name} /></span> : null}
           </div>
         </header>
-        <main className="shell"><GaugeProvider gauge={gauge}>{children}</GaugeProvider></main>
+        <main className="shell"><OfflineBanner /><GaugeProvider gauge={gauge}>{children}</GaugeProvider></main>
         {member ? <FeedbackButton /> : null}
+        </ConnectionProvider>
         </RegisterProvider>
       </body>
     </html>

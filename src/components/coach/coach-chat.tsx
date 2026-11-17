@@ -2,12 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { CoachGaugeLine } from "./coach-gauge";
-import { ArrowUp, Sparkles, Trash2 } from "lucide-react";
+import { ArrowUp, Clock, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { generatedAtLabel, modelLabel } from "@/lib/coach/model-label";
 import { RateCoach } from "@/components/feedback/rate-coach";
 import type { ChatMessage } from "@/lib/db/repositories/chat-repository";
 import { useSay } from "@/components/ui/register";
+import { useConnection } from "@/components/offline/connection";
+import { reachable } from "@/lib/offline/queue";
 
 const SUGGESTIONS = [
   "Est-ce que je suis bien le plan cette semaine ?",
@@ -19,6 +21,8 @@ const SUGGESTIONS = [
 
 export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: string[] }) {
   const say = useSay();
+  const connection = useConnection();
+  const offline = connection.status === "offline";
   const [messages, setMessages] = useState<ChatMessage[]>(initial);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
@@ -31,12 +35,28 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
   async function ask(text: string) {
     const value = text.trim();
     if (value.length < 2 || busy) return;
+    if (offline) {
+      if (connection.add({ kind: "chat", question: value })) setQuestion("");
+      return;
+    }
     setAsked(true);
     setBusy(true);
     setQuestion("");
     setMessages((current) => [...current, { id: `pending-${Date.now()}`, role: "user", content: { text: value }, model: null, createdAt: new Date().toISOString() }]);
     try {
-      const response = await fetch("/api/coach/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: value }) });
+      let response: Response;
+      try {
+        response = await fetch("/api/coach/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: value }) });
+      } catch {
+        response = new Response(null, { status: 503 });
+      }
+      if (!reachable(response.status)) {
+        // Mac éteint : la question part en file d'attente au lieu d'être perdue.
+        setMessages((current) => current.filter((message) => !message.id.startsWith("pending-")));
+        connection.markOffline();
+        connection.add({ kind: "chat", question: value });
+        return;
+      }
       const body = (await response.json()) as { messages?: ChatMessage[]; error?: string };
       if (body.messages) setMessages(body.messages);
       router.refresh();
@@ -67,6 +87,12 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
             {message.role === "coach" && message.model && !message.content.error ? <RateCoach subjectKind="chat" subjectId={message.id} label="Utile ?" /> : null}
           </div>
         ))}
+        {connection.queue.flatMap((item) => (item.kind === "chat" ? [item] : [])).map((item) => (
+          <div key={item.id} className="bubble user queued">
+            <p style={{ whiteSpace: "pre-wrap" }}>{item.question}</p>
+            <span className="coach-stamp"><Clock size={12} /> En file : partira au retour du Mac de Bastien</span>
+          </div>
+        ))}
         {busy ? <div className="bubble coach"><span className="muted"><Sparkles size={13} className="spin" /> {say("Le coach regarde tes données… (10 à 20 s)", "Le coach examine vos données… (10 à 20 s)")}</span></div> : null}
         <div ref={end} />
       </div>
@@ -74,6 +100,7 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
         <textarea rows={2} maxLength={800} value={question} placeholder={say("Ta question au coach…", "Votre question au coach…")} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void ask(question); } }} />
         <button type="submit" className="btn btn-primary icon-btn" disabled={busy || question.trim().length < 2} aria-label="Envoyer"><ArrowUp size={16} /></button>
       </form>
+      {offline ? <p className="muted small" style={{ marginTop: 6 }}><Clock size={12} /> {say("Hors ligne : ta question sera mise en file et partira au retour du Mac.", "Hors ligne : votre question sera mise en file et partira au retour du Mac.")}</p> : null}
       <CoachGaugeLine reveal={asked} />
       <div className="row-between" style={{ marginTop: 8, alignItems: "center" }}>
         <span className="muted small">{say("Le coach voit les 6 derniers messages et un résumé de tes données, pas tes séries brutes.", "Le coach voit les 6 derniers messages et un résumé de vos données, pas vos séries brutes.")}</span>

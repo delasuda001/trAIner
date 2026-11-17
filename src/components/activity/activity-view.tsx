@@ -47,7 +47,7 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
       {previous ? (
         <div className="stale-note">
           <span style={{ flex: 1 }}><Say tu="Tes données ont changé depuis cette analyse (ressenti, nouvelles séances ou réglages du coach)." /></span>
-          <CoachRequest endpoint={endpoint} label="Mettre à jour l'analyse" />
+          <CoachRequest endpoint={endpoint} label="Mettre à jour l'analyse" queueLabel={`Analyse de la séance du ${formatDate(activity.localDate, "short")}`} />
         </div>
       ) : null}
       <p className="verdict-line">{ready ? ready.verdict : verdict.headline}</p>
@@ -64,7 +64,7 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
       {ready && coach?.status === "ready" ? <RateCoach subjectKind="session" subjectId={activity.id} promptVersion={SESSION_PROMPT_VERSION} label="Cette analyse t'est utile ?" /> : null}
       {ready ? null : (
         <div style={{ marginTop: 16 }}>
-          <CoachRequest endpoint={endpoint} label="Demander l'analyse du coach" initialError={coach?.status === "error" ? coach.message : null} />
+          <CoachRequest endpoint={endpoint} label="Demander l'analyse du coach" queueLabel={`Analyse de la séance du ${formatDate(activity.localDate, "short")}`} initialError={coach?.status === "error" ? coach.message : null} />
           <p className="muted small" style={{ marginTop: 6 }}><Say tu="Verdict ci-dessus calculé à partir de tes données ; Claude le commente et l'explique." /></p>
         </div>
       )}

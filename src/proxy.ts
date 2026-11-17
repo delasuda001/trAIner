@@ -6,7 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * faite par chaque page et route via `asMember` / `apiAsMember`.
  */
 const SESSION_COOKIE = "sillage_session";
-const PUBLIC_PATHS = ["/connexion", "/api/session"];
+const PUBLIC_PATHS = ["/connexion", "/api/session", "/api/ping"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -17,6 +17,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Fichiers publics sans donnée : styles et scripts du build, icônes et manifeste (demandés sans cookie par iOS).
-  matcher: ["/((?!_next/static|_next/image|icon\\.svg|icons/|apple-icon|manifest\\.webmanifest|favicon\\.ico).*)"],
+  // Fichiers publics sans donnée : styles et scripts du build, icônes et manifeste (demandés sans cookie par iOS),
+  // service worker et page hors ligne.
+  matcher: ["/((?!_next/static|_next/image|icon\\.svg|icons/|apple-icon|manifest\\.webmanifest|favicon\\.ico|sw\\.js|offline\\.html).*)"],
 };

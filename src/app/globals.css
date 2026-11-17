@@ -534,3 +534,15 @@ a.welcome-stat:hover { transform: translate(-1px, -1px); }
 
 /* Second jour de la fenêtre conseillée : même séance, jour de repli. */
 .week-dot.planned.planned-alt, .card-next .week-dot.planned.planned-alt { background: transparent; border: 2px dashed var(--sl-pink); }
+
+/* Hors ligne : bandeau (Mac éteint), file d'attente du coach. */
+.offline-banner { margin: 0 auto 12px; border: var(--sl-stroke, 2px) solid var(--fixed-ink, currentColor); border-radius: 14px; padding: 10px 14px; background: var(--surface, var(--sl-paper, transparent)); }
+.offline-banner.is-offline { background: var(--sl-yellow, #f5e663); color: var(--fixed-ink, #15151e); }
+.offline-banner p { margin: 0; }
+.offline-title svg { vertical-align: -2px; margin-right: 4px; }
+.offline-queue { margin-top: 8px; }
+.offline-queue ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+.offline-queue li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.offline-report { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.offline-report .block { display: block; }
+.bubble.queued { opacity: 0.75; border-style: dashed; }

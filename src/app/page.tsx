@@ -40,7 +40,7 @@ function renderHome(member: Member) {
           <p className="eyebrow">{weekday}</p>
           <h1 className="page-title">{say(register, "Ta forme", "Votre forme")}, <mark>{say(register, "ta prochaine séance", "votre prochaine séance")}</mark></h1>
         </div>
-        {outlook.status !== "ready" ? <CoachRequest endpoint="/api/coach/outlook" label="Demander l'avis du coach" initialError={outlook.status === "error" ? outlook.message : null} /> : null}
+        {outlook.status !== "ready" ? <CoachRequest endpoint="/api/coach/outlook" label="Demander l'avis du coach" queueLabel="Conseil du jour du coach" initialError={outlook.status === "error" ? outlook.message : null} /> : null}
       </div>
 
       <MobileGlance dashboard={dashboard} />

@@ -2,11 +2,13 @@
 
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { clearOfflineData } from "@/components/offline/connection";
 
 export function LogoutButton({ name, label }: { name: string; label?: string }) {
   const router = useRouter();
   async function logout() {
     await fetch("/api/session", { method: "DELETE" });
+    await clearOfflineData();
     router.replace("/connexion");
     router.refresh();
   }

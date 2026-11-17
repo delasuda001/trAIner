@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 17 novembre 2026.
+Dernière mise à jour : 17 novembre 2026 (après-midi).
 
 ## En deux phrases
 
@@ -233,6 +233,50 @@ Plan validé par le coordinateur (2 séances pré-analysées, préparation compt
   `data/test/cdp-eval.mjs`.
 - Aucun appel réel à Claude dans ce fil. Le chemin réel de la préparation reste à vérifier au premier
   vrai invité (≈ 27 k Sonnet).
+
+## Invités vouvoyés, confidentialité, hors ligne, prochaine séance (fil du 17 nov., après-midi)
+
+Plan validé par le coordinateur (ordre 3, 2, 1, 5, 4). Aucun appel réel à Claude.
+
+- Deux serveurs sur le port 3000 : un ancien `npm start` du 16 nov. (avant les profils, sans connexion,
+  ouvert sur `*:3000` en IPv6) répondait sur `localhost`, le bon sur 127.0.0.1. Arrêt de l'ancien
+  (PID 66898) : refusé à l'assistant, à faire par Bastien (`kill 66898`). `npm start` passe désormais par
+  `scripts/check-port.mjs` (prestart) : refus de démarrer si 3000 est pris en IPv4 ou IPv6.
+- Registre par profil (`src/lib/register.ts`) : Bastien « tu » (inchangé à l'octet, photographie du moteur
+  identique), invités « vous ». Les phrases du moteur restent au « tu » et sont converties par `vouvoyer`
+  (règles testées sur tous les gabarits du moteur : `register.test.ts`) dans `analytics.ts` (`voiceDeep` sur
+  suggestion, consignes, verdict, contexte). Interface : `RegisterProvider` dans le layout, `<Say tu vous>` pour
+  les composants serveur, `useSay()` côté client, `say(register, tu, vous)` dans les pages. Consignes du
+  coach pour un invité : « Tu le vouvoies, ton professionnel » (`coach/athlete.ts`). Messages de quota,
+  de session et d'échec du coach réécrits (neutres ou au « vous »). Nouveau texte au « tu » : toujours écrire
+  les deux registres.
+- Prénoms : les invités réels sont Benoît, Charles, Marie (pas « Papa »/« Frère »). Champ de création :
+  prénom, aide « l'application le vouvoie ». Synthèse des retours : `feedback-v2` (plus de « père et frère »).
+- Confidentialité (`components/profiles/privacy-notice.tsx`, accueil et Paramètres de l'invité) : stockage
+  sur le Mac de Bastien, synthèses (jamais le GPS) envoyées à Claude via son compte personnel, engagement de
+  Bastien à ne pas consulter (techniquement possible, dit tel quel), suppression sur demande. Entraînement des
+  modèles : affirmé seulement si Bastien coche dans Paramètres « J'ai désactivé "Aider à améliorer Claude" »
+  (`claude_training_opt_out` dans le registre) ; sinon renvoi à la politique d'Anthropic.
+- Prochaine séance (`engine/suggestion.ts`) : `when.dates` = fenêtre de 1 ou 2 jours consécutifs, une seule
+  séance ; `when.label` « Mardi ou mercredi ». Placement : premier jour possible (récupération minimale), +1 jour
+  pour une séance dure si la récupération est « watch »/« poor », puis jour préféré de l'objectif ou jour habituel
+  (`habitualDays` : ≥ 3 fois et ≥ 20 % des séances du genre sur 12 semaines ; qualité, longue, ou toutes) si
+  atteint en 2 jours au plus. Lendemain ajouté sauf jours préférés imposés, course ou veille de course.
+  « Ensuite » après la fenêtre. Rond rose : « dès aujourd'hui », « demain ou après », « mar. ou mer. ».
+  Semaine : second jour en pointillé. Bastien : consignes de séance identiques ; sa suggestion du 17 nov.
+  passe de « Aujourd'hui » à « Demain ou jeudi » (conseil du jour à régénérer, empreinte changée).
+- Hors ligne (Mac éteint) : service worker `public/sw.js` (pages réseau d'abord avec 4 s de délai, copie
+  gardée ; build en cache d'abord ; /api jamais en cache ; 502/503/504 = injoignable ; renvoi vers /connexion
+  = tout effacé), `public/offline.html` pour une page jamais gardée. Préparation : `GET /api/offline` (accueil,
+  objectif, coach, paramètres, 20 dernières séances dont les séries sont en base : aucun appel Garmin), au plus
+  toutes les 30 min et après une synchro avec nouvelle séance. `components/offline/connection.tsx` : ping
+  `/api/ping` (public), bandeau « Hors ligne … données du <date de rendu> » (`data-rendered-at` sur <html>),
+  file d'attente du coach (`lib/offline/queue.ts`, localStorage, 10 au plus, une analyse une seule fois) montrée
+  en clair (« Partira au retour du Mac : … », retrait possible), envoyée dans l'ordre au retour, compte rendu
+  « N demandes envoyées » ou « Non envoyé : raison » (plafonds inchangés). Déconnexion : file et pages
+  effacées. La synchro Garmin renvoie 424 (et non 502) en cas d'échec. Service worker enregistré en production
+  seulement. Essai de bout en bout : `data/test/cdp-offline.mjs` (arrête puis relance le serveur d'essai 3100).
+  Limite : iOS peut purger le cache d'une app non ouverte depuis plusieurs semaines.
 
 ## État
 

@@ -3,6 +3,8 @@
 import { AlertTriangle, RefreshCw, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { useConnection, warmPages } from "@/components/offline/connection";
+import { reachable } from "@/lib/offline/queue";
 
 type SyncResponse = { newActivities: number; latestNewRunId: string | null; pendingDetails: number; error?: string };
 
@@ -46,6 +48,8 @@ export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = f
   const [error, setError] = useState<string | null>(lastError && (!lastSuccessAt || (lastAttemptAt ?? "") > lastSuccessAt) ? lastError : null);
   const [dismissed, setDismissed] = useState(false);
   const [label, setLabel] = useState(() => relative(lastSuccessAt));
+  const { status: connection, markOffline } = useConnection();
+  const offline = connection === "offline";
 
   const run = useCallback(async () => {
     setBusy(true);
@@ -54,7 +58,20 @@ export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = f
     let latestNewRunId: string | null = null;
     try {
       for (let round = 0; round < MAX_ROUNDS; round += 1) {
-        const response = await fetch("/api/sync", { method: "POST" });
+        let response: Response;
+        try {
+          response = await fetch("/api/sync", { method: "POST" });
+        } catch {
+          // Sillage injoignable (Mac éteint) : pas une erreur Garmin, le bandeau hors ligne le dit.
+          markOffline();
+          setStatus(null);
+          return;
+        }
+        if (!reachable(response.status)) {
+          markOffline();
+          setStatus(null);
+          return;
+        }
         const body = (await response.json()) as SyncResponse;
         if (!response.ok || body.error) throw new Error(body.error ?? "Synchronisation impossible");
         latestNewRunId ??= body.latestNewRunId;
@@ -65,6 +82,7 @@ export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = f
       setStatus(null);
       setLabel(relative(new Date().toISOString()));
       router.refresh();
+      void warmPages(latestNewRunId != null);
       // Seule une nouvelle course déclenche Claude, et seulement pour la plus récente.
       if (latestNewRunId) {
         setStatus(guest ? "Le coach analyse votre dernière séance…" : "Le coach analyse ta dernière séance…");
@@ -81,15 +99,16 @@ export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = f
     } finally {
       setBusy(false);
     }
-  }, [router, guest]);
+  }, [router, guest, markOffline]);
 
   useEffect(() => {
+    if (offline) return;
     if (!lastSuccessAt || Date.now() - Date.parse(lastSuccessAt) > AUTO_SYNC_AFTER_MS) {
       // Synchro de fond au chargement : déclenchée hors du rendu, sur un minuteur.
       const timer = setTimeout(() => void run(), 0);
       return () => clearTimeout(timer);
     }
-  }, [lastSuccessAt, run]);
+  }, [lastSuccessAt, run, offline]);
 
   const detail = error ? explain(error, guest) : null;
   return (
@@ -97,7 +116,7 @@ export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = f
       <span className={`sync-status${error ? " error" : ""}`}>
         {error ? "Synchro Garmin en échec" : status ?? (busy ? "Synchronisation…" : `Garmin · ${label}`)}
       </span>
-      <button type="button" className="btn" onClick={() => void run()} disabled={busy} aria-label="Synchroniser avec Garmin">
+      <button type="button" className="btn" onClick={() => void run()} disabled={busy || offline} aria-label="Synchroniser avec Garmin">
         <RefreshCw size={14} className={busy ? "spin" : undefined} />
         <span>Synchroniser</span>
       </button>

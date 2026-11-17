@@ -18,7 +18,8 @@ export function POST() {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erreur inconnue";
-      return NextResponse.json({ error: `Synchronisation Garmin impossible : ${message}` }, { status: 502 });
+      // 424 et non 502 : un 502 signifie « Sillage injoignable » (relais du tunnel, Mac éteint) pour le mode hors ligne.
+      return NextResponse.json({ error: `Synchronisation Garmin impossible : ${message}` }, { status: 424 });
     }
   });
 }
