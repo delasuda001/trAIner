@@ -305,6 +305,17 @@ Plan validé par le coordinateur (ordre 3, 2, 1, 5, 4). Aucun appel réel à Cla
   regroupées échauffement / récupérations (nombre, durée moyenne, allure, FC) / retour au calme ; « Voir les N
   tours » déplie le tableau complet. Sortie continue : inchangée.
 
+## Ouverture à Marie (17 nov., soir)
+
+- Tailscale installé par Bastien (App Store), Funnel activé par l'assistant après son accord écrit :
+  `https://mac0172.tail204306.ts.net` → `http://127.0.0.1:3000` (`tailscale funnel --bg 3000`, reprend seul au
+  redémarrage ; couper : `tailscale funnel --https=443 off`). Adresse enregistrée dans le registre (`public_url`).
+- Vérifié par l'adresse publique : /api/ping 200, / → /connexion, API sans session 401, cookie de session
+  `Secure; HttpOnly; SameSite=lax`. Adresse du journal vue depuis le Mac = son IP Tailscale ; à revérifier à la
+  première connexion de Marie (adresse réelle si Tailscale transmet X-Forwarded-For).
+- Lien d'invitation de Marie créé (usage unique, 7 jours, adresse publique). Restent à Bastien : sa clé Garmin
+  (`GARMIN_API_KEY_MARIE`), la case confidentialité, « Préparer le profil », puis l'envoi du lien.
+
 ## État
 
 - Branche `claude/project-thread-1m6x8x`, tout commité, rien poussé (push GitHub bloqué).
