@@ -30,7 +30,11 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
   const router = useRouter();
   const end = useRef<HTMLDivElement>(null);
 
-  useEffect(() => end.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [messages, busy]);
+  // Corps entre accolades : dans les navigateurs récents, scrollIntoView renvoie une promesse, que React
+  // prendrait pour la fonction de nettoyage de l'effet (« i is not a function » au message suivant).
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, busy]);
 
   async function ask(text: string) {
     const value = text.trim();
