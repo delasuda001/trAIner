@@ -77,7 +77,7 @@ type Session = {
   averageCadenceSpm: number | null;
 };
 
-type Comparable = { localDate: string; title: string; ageDays: number; movingTimeS: number | null; distanceM: number | null; mainSpeedMps: number | null; mainHeartRateBpm: number | null; workSpeedMps: number | null; workHeartRateBpm: number | null };
+type Comparable = { localDate: string; title: string; ageDays: number; nature?: "format" | "family"; older?: boolean; movingTimeS: number | null; distanceM: number | null; mainSpeedMps: number | null; mainHeartRateBpm: number | null; workSpeedMps: number | null; workHeartRateBpm: number | null };
 
 export type SessionContextInput = {
   loadRatio: number | null;
@@ -209,8 +209,13 @@ export function buildSessionPayload(input: {
       nombre_seances_comparables: deltas.count,
       ecart_face_aux_comparables: verdict.signals.find((signal) => signal.primary)?.label ?? "—",
       comparaison_fragile: verdict.fewComparables,
-      criteres: "même famille de séance, même format de répétitions, durée et dénivelé proches, moins d'un an",
+      // Texte d'origine quand toutes les séances sont du même format et de moins d'un an (charge utile inchangée).
+      criteres: input.comparables.some((run) => run.nature === "family" || run.older)
+        ? "d'abord même format de répétitions, durée et dénivelé proches, moins d'un an ; faute de 3 séances, même famille (fractionné court ou long, format différent : seules l'allure moyenne des répétitions et la FC se comparent, pas la régularité) et jusqu'à 2 ans"
+        : "même famille de séance, même format de répétitions, durée et dénivelé proches, moins d'un an",
       seances: input.comparables.map((run) => ({
+        ...(run.nature === "family" ? { nature: "même famille, format différent" } : {}),
+        ...(run.older ? { ancienne: "plus d'un an : repère moins fiable" } : {}),
         date: formatDate(run.localDate, "medium"),
         anciennete: ageText(run.ageDays),
         type: run.title,

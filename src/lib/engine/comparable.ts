@@ -19,12 +19,21 @@ export type RunForComparison = {
   metrics: ActivityMetrics;
 };
 
-export type ComparableMatch = RunForComparison & { score: number };
+/**
+ * Nature du rapprochement : « format » = même format de répétitions (ou même type de
+ * sortie continue) ; « famille » = même famille (fractionné court ou long), format
+ * différent : on compare l'allure moyenne des répétitions et la FC, pas la régularité.
+ */
+export type ComparableNature = "format" | "family";
+export type ComparableMatch = RunForComparison & { score: number; nature: ComparableNature; older: boolean };
 
 const MAX_COMPARABLES = 5;
 const MAX_SCORE = 2.2;
-/** Au-delà d'un an, la forme n'est plus comparable. */
+/** Au-delà d'un an, la forme n'est plus vraiment comparable : repli jusqu'à 2 ans faute de mieux. */
 const MAX_AGE_DAYS = 365;
+const FALLBACK_MAX_AGE_DAYS = 730;
+/** Répétitions de 75 s au plus : fractionné court ; au-delà, fractionné long. */
+const SHORT_REP_S = 75;
 /** En dessous, l'interface et le coach signalent que la comparaison est fragile. */
 export const MIN_SOLID_COMPARABLES = 3;
 
@@ -42,7 +51,7 @@ function logRatio(a: number | null, b: number | null): number {
 }
 
 /** Score de dissemblance : 0 = identique. */
-export function dissimilarity(current: RunForComparison, candidate: RunForComparison): number | null {
+export function dissimilarity(current: RunForComparison, candidate: RunForComparison, nature: ComparableNature = "format"): number | null {
   const currentFamily = current.metrics.family;
   const candidateFamily = candidate.metrics.family;
   let score = 0;
@@ -63,7 +72,14 @@ export function dissimilarity(current: RunForComparison, candidate: RunForCompar
   score += Math.min(0.8, Math.abs(climbA - climbB) / 25);
 
 
-  if (current.metrics.work && candidate.metrics.work) {
+  if (current.metrics.work && candidate.metrics.work && nature === "family") {
+    // Même famille : fractionné court avec court, long avec long ; on rapproche la durée totale de travail.
+    const short = (work: NonNullable<ActivityMetrics["work"]>) => work.averageDurationS <= SHORT_REP_S;
+    if (short(current.metrics.work) !== short(candidate.metrics.work)) return null;
+    const total = (work: NonNullable<ActivityMetrics["work"]>) => work.reps * work.averageDurationS;
+    score += 0.8 * logRatio(total(current.metrics.work), total(candidate.metrics.work));
+    score += 0.3 * logRatio(current.metrics.work.averageDurationS, candidate.metrics.work.averageDurationS);
+  } else if (current.metrics.work && candidate.metrics.work) {
     // Même format exigé : comparer l'allure de répétitions de 2 km à celle de 400 m n'a pas de sens.
     const durationRatio = current.metrics.work.averageDurationS / candidate.metrics.work.averageDurationS;
     if (durationRatio < 0.6 || durationRatio > 1.7) return null;
@@ -76,22 +92,42 @@ export function dissimilarity(current: RunForComparison, candidate: RunForCompar
 
   // Récence : la forme d'il y a un an n'est plus un repère. Pénalité légère sur 6 mois, forte au-delà.
   const ageDays = (Date.parse(current.startTimeUtc) - Date.parse(candidate.startTimeUtc)) / 86_400_000;
-  score += ageDays <= 180 ? (ageDays / 180) * 0.3 : 0.3 + ((ageDays - 180) / 180) * 0.8;
+  score += ageDays <= 180 ? (ageDays / 180) * 0.3 : Math.min(1.1, 0.3 + ((ageDays - 180) / 180) * 0.8);
   return round(score, 3);
 }
 
+/**
+ * Comparables par paliers, tant qu'il y en a moins de 3 : même format sur un an ;
+ * puis même famille (fractionné court ou long, format différent) sur un an ; puis
+ * les deux jusqu'à 2 ans. Le même format passe toujours en premier.
+ */
 export function selectComparables(current: RunForComparison, history: RunForComparison[]): ComparableMatch[] {
   const currentStart = Date.parse(current.startTimeUtc);
-  return history
-    .filter((candidate) => candidate.id !== current.id)
-    .filter((candidate) => {
-      const age = (currentStart - Date.parse(candidate.startTimeUtc)) / 86_400_000;
-      return age > 0 && age <= MAX_AGE_DAYS;
-    })
-    .map((candidate) => ({ ...candidate, score: dissimilarity(current, candidate) }))
+  const ageOf = (candidate: RunForComparison) => (currentStart - Date.parse(candidate.startTimeUtc)) / 86_400_000;
+  const pool = history.filter((candidate) => candidate.id !== current.id && ageOf(candidate) > 0);
+  const chosen: ComparableMatch[] = [];
+  const tier = (nature: ComparableNature, maxAge: number) => {
+    if (chosen.length >= MIN_SOLID_COMPARABLES) return;
+    const taken = new Set(chosen.map((run) => run.id));
+    const found = pool
+      .filter((candidate) => !taken.has(candidate.id) && ageOf(candidate) <= maxAge)
+      .map((candidate) => ({ ...candidate, score: dissimilarity(current, candidate, nature), nature, older: ageOf(candidate) > MAX_AGE_DAYS }))
+      .filter((candidate): candidate is ComparableMatch => candidate.score != null && candidate.score <= MAX_SCORE)
+      .sort((a, b) => a.score - b.score);
+    chosen.push(...found.slice(0, MAX_COMPARABLES - chosen.length));
+  };
+  // Le premier palier garde jusqu'à 5 séances ; les replis complètent.
+  const first = pool
+    .filter((candidate) => ageOf(candidate) <= MAX_AGE_DAYS)
+    .map((candidate) => ({ ...candidate, score: dissimilarity(current, candidate, "format"), nature: "format" as ComparableNature, older: false }))
     .filter((candidate): candidate is ComparableMatch => candidate.score != null && candidate.score <= MAX_SCORE)
     .sort((a, b) => a.score - b.score)
     .slice(0, MAX_COMPARABLES);
+  chosen.push(...first);
+  if (current.metrics.work) tier("family", MAX_AGE_DAYS);
+  tier("format", FALLBACK_MAX_AGE_DAYS);
+  if (current.metrics.work) tier("family", FALLBACK_MAX_AGE_DAYS);
+  return chosen;
 }
 
 export type ComparisonDeltas = {
@@ -133,8 +169,9 @@ function secondsPerKm(speed: number): number {
  * (5 premières minutes exclues). Modèle : vitesse ∝ (FC − FC repos), valable
  * sur une plage de FC étroite, d'où l'usage de séances comparables uniquement.
  */
-export function computeDeltas(current: RunForComparison, comparables: RunForComparison[]): ComparisonDeltas {
+export function computeDeltas(current: RunForComparison, comparables: Array<RunForComparison & { nature?: ComparableNature }>): ComparisonDeltas {
   const rest = current.metrics.restingHeartRateUsed;
+  const sameFormat = comparables.filter((run) => run.nature !== "family");
   const currentSpeed = current.metrics.mainSpeedMps;
   const currentHr = current.metrics.mainHeartRateBpm;
   const refSpeed = mean(present(comparables.map((run) => run.metrics.mainSpeedMps)));
@@ -176,9 +213,10 @@ export function computeDeltas(current: RunForComparison, comparables: RunForComp
           ? {
               speedMps: mean(present(comparables.map((run) => run.metrics.work?.averageSpeedMps))),
               heartRateBpm: mean(present(comparables.map((run) => run.metrics.work?.averageHeartRateBpm))),
-              speedCvPct: mean(present(comparables.map((run) => run.metrics.work?.speedCvPct))),
-              fadePct: mean(present(comparables.map((run) => run.metrics.work?.fadePct))),
-              paceSpreadSPerKm: (() => { const value = mean(present(comparables.map((run) => run.metrics.work?.paceSpreadSPerKm))); return value == null ? null : round(value, 0); })(),
+              // Régularité (écarts entre répétitions) : seulement face au même format ; d'un format à l'autre, elle ne se compare pas.
+              speedCvPct: mean(present(sameFormat.map((run) => run.metrics.work?.speedCvPct))),
+              fadePct: mean(present(sameFormat.map((run) => run.metrics.work?.fadePct))),
+              paceSpreadSPerKm: (() => { const value = mean(present(sameFormat.map((run) => run.metrics.work?.paceSpreadSPerKm))); return value == null ? null : round(value, 0); })(),
             }
           : null,
       }

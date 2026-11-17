@@ -20,6 +20,7 @@ import type { ActivityView as View, SessionAnalysis } from "@/lib/server/analyti
 import type { CoachResult } from "@/lib/server/coach-service";
 import type { Sport } from "@/lib/source/types";
 import { Say } from "@/components/ui/register";
+import { compactLaps } from "@/lib/activity/laps-view";
 
 function bpm(value: number | null | undefined) {
   return value == null ? "—" : String(Math.round(value));
@@ -168,6 +169,7 @@ function ComparisonCard({ analysis }: { analysis: SessionAnalysis }) {
         <span className="section-note">{intervals ? "allure des répétitions" : "allure hors échauffement"}</span>
       </div>
       {analysis.verdict.fewComparables ? <p className="notice small" style={{ marginTop: 0, marginBottom: 10 }}>Seulement {deltas.count} séance{deltas.count > 1 ? "" : ""} vraiment comparable{deltas.count > 1 ? "s" : ""} (même format, moins d&apos;un an) : comparaison fragile.</p> : null}
+      {comparables.some((run) => run.nature === "family" || run.older) ? <p className="muted small" style={{ marginTop: 0, marginBottom: 10 }}>{comparables.some((run) => run.nature === "family") ? `Faute de séances au même format, comparaison élargie à la même famille (${metrics.work && metrics.work.averageDurationS <= 75 ? "fractionnés courts" : "fractionnés longs"}) : seules l'allure moyenne des répétitions et la FC se comparent. ` : ""}{comparables.some((run) => run.older) ? "Certaines séances ont plus d'un an." : ""}</p> : null}
       <ComparisonChart rows={rows} metricLabel={intervals ? "Répétitions" : "Allure"} />
       <div className="facts" style={{ marginTop: 12 }}>
         {deltas.paceAtEqualHrGainSPerKm != null ? <Fact label="Allure à FC égale" value={signed(deltas.paceAtEqualHrGainSPerKm, "s/km", "rapide", "lent")} /> : null}
@@ -183,7 +185,7 @@ function ComparisonCard({ analysis }: { analysis: SessionAnalysis }) {
           {comparables.map((run) => (
             <Link key={run.id} href={`/activities/${encodeURIComponent(run.id)}`} className="list-row">
               <span className="list-date num">{formatDate(run.localDate, "short")}</span>
-              <span><span className="list-title">{run.title}</span><span className="list-sub">{ageShort(run.ageDays)}</span></span>
+              <span><span className="list-title">{run.title}</span><span className="list-sub">{ageShort(run.ageDays)}{run.nature === "family" ? " · même famille, format différent" : ""}</span></span>
               <span className="list-metric num">{formatDistance(run.distanceM, 1)}<small>{formatDuration(run.movingTimeS)}</small></span>
             </Link>
           ))}
@@ -203,30 +205,72 @@ function LapsCard({ view }: { view: View }) {
     laps.forEach((lap) => { if ((lap.averageSpeedMps ?? 0) >= cut) workIndexes.add(lap.index); });
   }
   const fastest = Math.max(...laps.map((lap) => lap.averageSpeedMps ?? 0));
+  // Fractionné : répétitions seules par défaut, le reste regroupé ; le détail complet se déplie.
+  const compact = work ? compactLaps(laps, (lap) => workIndexes.has(lap.index)) : null;
+  const bar = (speed: number | null, isWork: boolean) => <div className={`lap-bar${isWork ? " work" : ""}`} style={{ width: `${Math.max(4, ((speed ?? 0) / fastest) * 100)}%` }} />;
+  const head = <thead><tr><th>#</th><th>Durée</th><th>Distance</th><th>Allure</th><th className="bar-cell">Vitesse relative</th><th>FC moy.</th><th>FC max</th></tr></thead>;
+  const fullTable = (
+    <div className="table-wrap">
+      <table className="data">
+        {head}
+        <tbody>
+          {laps.map((lap) => (
+            <tr key={lap.index} className={workIndexes.has(lap.index) ? "is-work" : undefined}>
+              <td>{lap.index + 1}</td>
+              <td>{formatClock(lap.durationS)}</td>
+              <td>{lap.distanceM ? formatDistance(lap.distanceM, 2) : "—"}</td>
+              <td>{formatPace(lap.averageSpeedMps)}</td>
+              <td className="bar-cell">{bar(lap.averageSpeedMps, workIndexes.has(lap.index))}</td>
+              <td>{bpm(lap.averageHeartRateBpm)}</td>
+              <td>{bpm(lap.maxHeartRateBpm)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
   return (
     <section className="card">
       <div className="section-head">
         <h2 className="section-title">Laps</h2>
-        <span className="section-note">{work ? "en gras : répétitions détectées" : `${laps.length} laps`}</span>
+        <span className="section-note">{compact ? `${workIndexes.size} répétitions ; échauffement, récupérations et retour au calme regroupés` : work ? "en gras : répétitions détectées" : `${laps.length} laps`}</span>
       </div>
-      <div className="table-wrap">
-        <table className="data">
-          <thead><tr><th>#</th><th>Durée</th><th>Distance</th><th>Allure</th><th className="bar-cell">Vitesse relative</th><th>FC moy.</th><th>FC max</th></tr></thead>
-          <tbody>
-            {laps.map((lap) => (
-              <tr key={lap.index} className={workIndexes.has(lap.index) ? "is-work" : undefined}>
-                <td>{lap.index + 1}</td>
-                <td>{formatClock(lap.durationS)}</td>
-                <td>{lap.distanceM ? formatDistance(lap.distanceM, 2) : "—"}</td>
-                <td>{formatPace(lap.averageSpeedMps)}</td>
-                <td className="bar-cell"><div className={`lap-bar${workIndexes.has(lap.index) ? " work" : ""}`} style={{ width: `${Math.max(4, ((lap.averageSpeedMps ?? 0) / fastest) * 100)}%` }} /></td>
-                <td>{bpm(lap.averageHeartRateBpm)}</td>
-                <td>{bpm(lap.maxHeartRateBpm)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {compact ? (
+        <>
+          <div className="table-wrap">
+            <table className="data">
+              {head}
+              <tbody>
+                {compact.map((row) => row.kind === "rep" ? (
+                  <tr key={`rep-${row.lap.index}`} className="is-work">
+                    <td>Rép. {row.number}</td>
+                    <td>{formatClock(row.lap.durationS)}</td>
+                    <td>{row.lap.distanceM ? formatDistance(row.lap.distanceM, 2) : "—"}</td>
+                    <td>{formatPace(row.lap.averageSpeedMps)}</td>
+                    <td className="bar-cell">{bar(row.lap.averageSpeedMps, true)}</td>
+                    <td>{bpm(row.lap.averageHeartRateBpm)}</td>
+                    <td>{bpm(row.lap.maxHeartRateBpm)}</td>
+                  </tr>
+                ) : (
+                  <tr key={row.group.label} className="lap-group">
+                    <td>{row.group.label}{row.group.count > 1 ? ` (${row.group.count})` : ""}</td>
+                    <td>{row.group.count > 1 ? `${formatClock(row.group.durationS)} · moy. ${formatClock(Math.round(row.group.durationS / row.group.count))}` : formatClock(row.group.durationS)}</td>
+                    <td>{row.group.distanceM ? formatDistance(row.group.distanceM, 2) : "—"}</td>
+                    <td>{formatPace(row.group.speedMps)}</td>
+                    <td className="bar-cell">{bar(row.group.speedMps, false)}</td>
+                    <td>{bpm(row.group.heartRateBpm)}</td>
+                    <td>{bpm(row.group.maxHeartRateBpm)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <details className="more">
+            <summary><ChevronRight size={14} className="chev" /> Voir les {laps.length} tours</summary>
+            <div className="more-body">{fullTable}</div>
+          </details>
+        </>
+      ) : fullTable}
     </section>
   );
 }

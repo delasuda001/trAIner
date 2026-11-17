@@ -288,6 +288,23 @@ Plan validé par le coordinateur (ordre 3, 2, 1, 5, 4). Aucun appel réel à Cla
   photographie viennent des comparables. Consigne : format ≤ 45 s, cible VMA (allure 1 000 m, seuil × 1,18 au lieu de × 1,14), récupération égale à l'effort et jusqu'à
   20 répétitions (`intervalPlan`). Jeu figé du banc à refaire (`npm run bench:freeze`).
 
+## Chat, comparables par famille, tours regroupés (17 nov., soir)
+
+- Chat du coach (« i is not a function ») : `useEffect(() => end.current?.scrollIntoView(...))` ; Chrome récent
+  renvoie une promesse, prise par React pour la fonction de nettoyage. Corps entre accolades ; test
+  `src/lib/effects-guard.test.ts` qui interdit tout effet à corps concis.
+- Comparables par paliers (`selectComparables`) tant qu'il y en a moins de 3 : même format sur un an (inchangé,
+  jusqu'à 5), puis même famille (fractionné court ≤ 75 s par rép, ou long ; durée totale de travail proche)
+  sur un an, puis même format puis même famille jusqu'à 2 ans (pénalité d'ancienneté plafonnée à 1,1).
+  `nature` (« format »/« family ») et `older` sur chaque comparable. Face à la famille : allure moyenne des
+  répétitions et FC seulement, la régularité (écart, fade, CV) n'est calculée que sur le même format. Charge
+  utile : `criteres` et les clés `nature`/`ancienne` n'apparaissent que si un comparable est élargi (les autres
+  analyses gardent leur empreinte ; 20 fractionnés de Bastien changent). Interface : mention sous « Face à tes
+  séances comparables » et dans la liste.
+- Tours (`lib/activity/laps-view.ts`, `LapsCard`) : pour un fractionné, répétitions numérotées, puis lignes
+  regroupées échauffement / récupérations (nombre, durée moyenne, allure, FC) / retour au calme ; « Voir les N
+  tours » déplie le tableau complet. Sortie continue : inchangée.
+
 ## État
 
 - Branche `claude/project-thread-1m6x8x`, tout commité, rien poussé (push GitHub bloqué).

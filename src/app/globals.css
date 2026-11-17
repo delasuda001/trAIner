@@ -546,3 +546,6 @@ a.welcome-stat:hover { transform: translate(-1px, -1px); }
 .offline-report { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .offline-report .block { display: block; }
 .bubble.queued { opacity: 0.75; border-style: dashed; }
+
+/* Tours regroupés (échauffement, récupérations, retour au calme) d'un fractionné. */
+.data tr.lap-group td { color: var(--sl-ink-muted, inherit); font-style: italic; }

@@ -43,6 +43,43 @@ describe("selectComparables", () => {
   });
 });
 
+describe("comparables par paliers (format, puis famille, puis jusqu'à 2 ans)", () => {
+  function work(reps: number, durationS: number, recoveryS: number, speedMps: number, heartRate: number): NonNullable<ActivityMetrics["work"]> {
+    return { reps, averageDurationS: durationS, averageDistanceM: Math.round(speedMps * durationS), averageSpeedMps: speedMps, averageHeartRateBpm: heartRate, peakHeartRateBpm: heartRate + 5, speedCvPct: 3, fadePct: 2, paceSpreadSPerKm: 20, fadeSPerKm: 6, averageRecoveryS: recoveryS, repsDetail: [] };
+  }
+  const interval = (id: string, date: string, w: NonNullable<ActivityMetrics["work"]>, kind: ActivityMetrics["kind"] = "intervals_short") =>
+    run(id, date, { movingTimeS: 2100, distanceM: 6200 }, { structure: "intervals", family: "intervals", kind, work: w });
+  const today = interval("now", "2026-11-17", work(14, 31, 31, 4.68, 165));
+
+  it("sans autre 30/30 récent, retient un fractionné court d'un autre format (même famille), jamais un fractionné long", () => {
+    const history = [
+      interval("short-60", "2026-07-13", work(7, 60, 90, 4.6, 162)),
+      interval("long-103", "2026-02-23", work(6, 103, 94, 4.3, 168), "intervals_vo2"),
+    ];
+    const matches = selectComparables(today, history);
+    expect(matches.map((match) => [match.id, match.nature])).toEqual([["short-60", "family"]]);
+  });
+
+  it("le même format passe d'abord ; un 30/30 de plus d'un an est accepté en dernier recours, signalé", () => {
+    const history = [
+      interval("short-60", "2026-07-13", work(7, 60, 90, 4.6, 162)),
+      interval("old-30-30", "2025-09-16", work(10, 31, 30, 4.6, 163)),
+    ];
+    const matches = selectComparables(today, history);
+    expect(matches.map((match) => match.id)).toEqual(["short-60", "old-30-30"]);
+    expect(matches[1]).toMatchObject({ nature: "format", older: true });
+  });
+
+  it("face à un format différent, compare l'allure moyenne et la FC, pas la régularité", () => {
+    const family = { ...interval("short-60", "2026-07-13", work(7, 60, 90, 4.6, 162)), nature: "family" as const };
+    const deltas = computeDeltas(today, [family]);
+    expect(deltas.work?.reference?.speedMps).toBeCloseTo(4.6);
+    expect(deltas.work?.reference?.heartRateBpm).toBe(162);
+    expect(deltas.work?.reference?.paceSpreadSPerKm).toBeNull();
+    expect(deltas.work?.reference?.fadePct).toBeNull();
+  });
+});
+
 describe("computeDeltas", () => {
   it("chiffre le gain d'allure à FC égale et l'écart de FC à allure égale", () => {
     const current = run("now", "2026-11-07", {}, { mainSpeedMps: 2.7, mainHeartRateBpm: 132 });
