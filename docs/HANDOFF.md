@@ -285,7 +285,7 @@ Plan validé par le coordinateur (ordre 3, 2, 1, 5, 4). Aucun appel réel à Cla
   dense est reconnu à partir de 6 répétitions et 4 min de travail si le travail occupe au moins 40 % du bloc
   (de la 1re à la dernière répétition). `METRICS_VERSION` 11. Sept séances de Bastien deviennent des
   fractionnés (dont deux 30/30 de septembre 2025, un 7 × 45/65 et un 6 × 103/94) ; les autres écarts de la
-  photographie viennent des comparables. Consigne : format ≤ 45 s, récupération égale à l'effort et jusqu'à
+  photographie viennent des comparables. Consigne : format ≤ 45 s, cible VMA (allure 1 000 m, seuil × 1,18 au lieu de × 1,14), récupération égale à l'effort et jusqu'à
   20 répétitions (`intervalPlan`). Jeu figé du banc à refaire (`npm run bench:freeze`).
 
 ## État

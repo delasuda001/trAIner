@@ -122,6 +122,12 @@ describe("prescribe, fractionné", () => {
     const result = prescribe(input(metrics, { context: null, reference: null }));
     if (result.status !== "ok") throw new Error("attendu ok");
     expect(result.next.recoveryS).toBe(30);
+    // Cible VMA (seuil × 1,18) plus rapide que l'allure 1 500 m (× 1,14) d'un format plus long.
+    expect(result.target.label).toBe("VMA (allure 1 000 m)");
+    const longer = prescribe(input({ ...metrics, work: { ...(metrics.work as Work), averageDurationS: 70, repsDetail: Array.from({ length: 8 }, () => ({ ...short, durationS: 70 })) } }, { context: null, reference: null }));
+    if (longer.status !== "ok") throw new Error("attendu ok");
+    expect(longer.target.label).toBe("vitesse (allure 1 500 m)");
+    expect((result.target.paceFastS as number) < (longer.target.paceFastS as number)).toBe(true);
     expect(result.shouldHave.join(" ")).not.toContain("Récupération");
   });
 

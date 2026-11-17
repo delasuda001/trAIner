@@ -281,10 +281,11 @@ function intervalPlan(kind: SessionKind, repDurationS: number, input: PaceInputs
   const ltS = lt ? paceSeconds(lt) : null;
   if (kind === "intervals_short") {
     const [low] = hr(4, zones);
-    const center = lt ? paceSeconds(lt * 1.14) : null;
-    // Format court et dense (30/30, 40/40) : récupération égale à l'effort, jusqu'à 20 répétitions.
+    // Format court et dense (30/30, 40/40) : allure VMA (≈ 1 000 m, seuil × 1,18) au lieu du 1 500 m (× 1,14),
+    // récupération égale à l'effort, jusqu'à 20 répétitions.
     const dense = repDurationS <= 45;
-    return { target: { label: "vitesse (allure 1 500 m)", ...around(center, 3), heartRateLow: low, heartRateHigh: hr(5, zones)[1], zone: "Z4–Z5" }, goal: null, recoveryS: dense ? roundTo(Math.max(15, repDurationS), 15) : roundTo(Math.min(120, Math.max(60, repDurationS)), 15), maxReps: dense ? 20 : 12 };
+    const center = lt ? paceSeconds(lt * (dense ? 1.18 : 1.14)) : null;
+    return { target: { label: dense ? "VMA (allure 1 000 m)" : "vitesse (allure 1 500 m)", ...around(center, 3), heartRateLow: low, heartRateHigh: hr(5, zones)[1], zone: "Z4–Z5" }, goal: null, recoveryS: dense ? roundTo(Math.max(15, repDurationS), 15) : roundTo(Math.min(120, Math.max(60, repDurationS)), 15), maxReps: dense ? 20 : 12 };
   }
   if (kind === "intervals_vo2") {
     const marker = goalMarker(input.raceTargets, 5, input);
