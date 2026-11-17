@@ -393,7 +393,7 @@ export function getDashboard(): Dashboard {
     goal,
     week: Array.from({ length: 7 }, (_, index) => {
       const date = addDays(startOfIsoWeek(today), index);
-      const planned = suggestion.when.date === date ? suggestion.primary.type : suggestion.then?.when.date === date ? suggestion.then.type : null;
+      const planned = suggestion.when.dates.includes(date) ? suggestion.primary.type : suggestion.then?.when.date === date ? suggestion.then.type : null;
       return { date, done: rows.filter((row) => row.localDate === date).map((row) => ({ kind: runById.get(row.id)?.metrics.kind ?? null, sport: row.sport })), planned };
     }),
   };

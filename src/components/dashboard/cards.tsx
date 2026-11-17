@@ -37,8 +37,10 @@ function WeekStrip({ dashboard }: { dashboard: Dashboard }) {
     <div className="week-strip" aria-label="Semaine en cours">
       {dashboard.week.map((day, index) => {
         const isToday = day.date === dashboard.today;
-        const state = day.done.length ? "done" : day.planned ? "planned" : "";
-        const title = day.done.length ? `${formatDate(day.date, "short")} : ${day.done.map((item) => (item.kind ? FAMILY_STYLE[familyOfKind(item.kind)].label : SPORT_LABELS[item.sport as Sport] ?? "activité")).join(", ")}` : day.planned ? "Séance proposée" : undefined;
+        // Fenêtre de 2 jours : une seule séance, le second jour est un repli (pastille en pointillé).
+        const fallback = day.planned && dashboard.suggestion.when.dates.length === 2 && day.date === dashboard.suggestion.when.dates[1];
+        const state = day.done.length ? "done" : day.planned ? `planned${fallback ? " planned-alt" : ""}` : "";
+        const title = day.done.length ? `${formatDate(day.date, "short")} : ${day.done.map((item) => (item.kind ? FAMILY_STYLE[familyOfKind(item.kind)].label : SPORT_LABELS[item.sport as Sport] ?? "activité")).join(", ")}` : day.planned ? (fallback ? "Ou ce jour-là (une seule séance)" : "Séance proposée") : undefined;
         return (
           <div key={day.date} className={`week-day${isToday ? " today" : ""}`} title={title}>
             <span className="week-letter">{DAY_LETTERS[index]}</span>
@@ -50,7 +52,17 @@ function WeekStrip({ dashboard }: { dashboard: Dashboard }) {
   );
 }
 
-function stickerText(label: string): string {
+const WEEKDAY_SHORT = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."];
+
+/** Texte du rond rose : le jour conseillé, ou la fenêtre de 2 jours en abrégé (doit tenir dans le cercle). */
+function stickerText(dates: string[], label: string, today: string): string {
+  const offset = daysBetween(today, dates[0]);
+  if (dates.length === 2) {
+    if (offset <= 0) return "dès aujourd'hui";
+    if (offset === 1) return "demain ou après";
+    const short = (date: string) => WEEKDAY_SHORT[(new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7];
+    return offset < 7 ? `${short(dates[0])} ou ${short(dates[1])}` : label.split(" ").slice(0, 2).join(" ").toLowerCase();
+  }
   const lower = label.toLowerCase();
   if (lower === "aujourd'hui") return "c'est aujourd'hui";
   if (lower === "demain") return "demain";
@@ -68,7 +80,7 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
   return (
     <section className="card card-hero card-next" aria-labelledby="next-title">
       {(() => {
-        const sticker = primary.type === "rest" ? "repos" : stickerText(suggestion.when.label);
+        const sticker = primary.type === "rest" ? "repos" : stickerText(suggestion.when.dates, suggestion.when.label, today);
         // Mot long (« aujourd'hui ») : corps réduit pour rester dans le cercle.
         return <span className={`sticker${sticker.length > 10 ? " sticker-long" : ""}`} aria-hidden>{sticker}</span>;
       })()}

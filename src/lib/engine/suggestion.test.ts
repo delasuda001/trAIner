@@ -32,7 +32,8 @@ describe("suggestNextSession", () => {
     const fast = 1000 / (result.primary.target?.paceFastMps ?? 1);
     const slow = 1000 / (result.primary.target?.paceSlowMps ?? 1);
     expect(Math.round(slow - fast)).toBe(16);
-    expect(result.when.label).toBe("Aujourd'hui");
+    expect(result.when.label).toBe("Aujourd'hui ou demain");
+    expect(result.when.dates).toEqual([today, addDays(today, 1)]);
   });
 
   it("sans qualité depuis 8 jours, propose une séance au seuil calée sur l'allure seuil de la montre", () => {
@@ -117,7 +118,7 @@ describe("suggestion adaptée au rythme du coureur", () => {
     const runs = [run(9, "endurance", "easy"), run(8, "intervals_threshold", "intervals"), run(5, "endurance", "easy"), run(4, "endurance", "easy"), run(2, "intervals_vo2", "intervals", 48)];
     expect(suggestNextSession(input(runs)).primary.type).toBe("endurance");
     const habitual = suggestNextSession(input(runs, { rhythm: { qualitySpacingDays: 2, highLoadRatio: 1.3 } }));
-    expect(habitual.when.label).toBe("Aujourd'hui");
+    expect(habitual.when.date).toBe(today);
   });
 
   it("ratio 1,4 corroboré : sans effet au seuil 1,5, séance facile au seuil 1,3 d'un gros volume", () => {
@@ -129,3 +130,59 @@ describe("suggestion adaptée au rythme du coureur", () => {
   });
 });
 
+
+describe("jour conseillé selon la semaine type", () => {
+  // today = dimanche 15 novembre 2026.
+  const weeks = [2, 3, 4, 5, 6];
+
+  it("place la qualité sur son jour habituel (mardi), avec le lendemain en repli, et pas aujourd'hui", () => {
+    const runs = [
+      ...weeks.map((week) => run(5 + 7 * week, "intervals_threshold", "intervals")),
+      ...weeks.map((week) => run(1 + 7 * week, "endurance", "easy")),
+      run(12, "intervals_threshold", "intervals"),
+      run(6, "long", "long", 90),
+      run(1, "endurance", "easy"),
+    ].sort((a, b) => a.localDate.localeCompare(b.localDate));
+    const result = suggestNextSession(input(runs));
+    expect(result.primary.type).toBe("vo2max");
+    expect(result.when.dates).toEqual([addDays(today, 2), addDays(today, 3)]);
+    expect(result.when.label).toBe("Mardi ou mercredi");
+    // « Ensuite » vient après la fenêtre.
+    expect(result.then && result.then.when.date > addDays(today, 3)).toBe(true);
+  });
+
+  it("n'attend pas un jour habituel trop lointain (vendredi, à 5 jours)", () => {
+    const runs = [
+      ...weeks.map((week) => run(2 + 7 * week, "intervals_threshold", "intervals")),
+      run(9, "intervals_threshold", "intervals"),
+      run(6, "long", "long", 90),
+      run(1, "endurance", "easy"),
+    ].sort((a, b) => a.localDate.localeCompare(b.localDate));
+    const result = suggestNextSession(input(runs));
+    expect(result.primary.type).toBe("vo2max");
+    expect(result.when.date).toBe(today);
+  });
+
+  it("récupération dégradée : la séance dure glisse d'un jour, le plan B reste proposé", () => {
+    const runs = [run(12, "intervals_vo2", "intervals"), run(4, "endurance", "easy")];
+    const ok = suggestNextSession(input(runs));
+    const watch = suggestNextSession(input(runs, { recovery: recovery("watch", ["sleep_short"]) }));
+    expect(watch.when.date).toBe(addDays(ok.when.date, 1));
+    expect(watch.alternative?.type).toBe("recovery_run");
+  });
+
+  it("jours préférés imposés : pas de lendemain hors de ces jours", () => {
+    const goal = { eventDate: null, distanceKm: null, targetPaceMps: null, runsPerWeek: 2, preferredDays: [1, 4] };
+    const result = suggestNextSession(input([run(12, "intervals_vo2", "intervals"), run(4, "endurance", "easy")], { goal }));
+    expect(result.when.dates).toHaveLength(1);
+    expect([1, 4]).toContain((new Date(`${result.when.date}T12:00:00Z`).getUTCDay() + 6) % 7);
+  });
+
+  it("une seule séance nommée, fenêtre de 2 jours consécutifs au plus", () => {
+    for (const runs of [[run(3, "endurance", "easy")], [run(1, "intervals_vo2", "intervals")], weeks.map((week) => run(7 * week, "endurance", "easy"))]) {
+      const result = suggestNextSession(input(runs));
+      expect(result.when.dates.length).toBeLessThanOrEqual(2);
+      if (result.when.dates.length === 2) expect(result.when.dates[1]).toBe(addDays(result.when.dates[0], 1));
+    }
+  });
+});

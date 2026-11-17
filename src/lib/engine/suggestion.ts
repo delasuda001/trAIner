@@ -32,7 +32,12 @@ export type SuggestedSession = {
 
 export type Suggestion = {
   primary: SuggestedSession;
-  when: { date: string; label: string };
+  /**
+   * Quand : `date` est le premier jour conseillé, `dates` la fenêtre (1 ou 2 jours
+   * consécutifs, une seule séance à placer dedans), `label` la fenêtre en clair
+   * (« Mardi ou mercredi », « Aujourd'hui »).
+   */
+  when: { date: string; label: string; dates: string[] };
   reason: string;
   /** Proposée quand les signaux de récupération sont dégradés. */
   alternative: (SuggestedSession & { reason: string }) | null;
@@ -190,6 +195,51 @@ function snapToPreferredDay(date: string, preferredDays: number[]): string {
   return date;
 }
 
+const WEEKDAY_NAMES = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+/** Fenêtre d'observation de la semaine type (12 semaines, ou ce que l'historique fourni couvre). */
+const HABIT_DAYS = 84;
+/** On attend le jour habituel s'il tombe au plus 2 jours après le premier jour possible ; au-delà, pas d'attente. */
+const MAX_WAIT_DAYS = 2;
+
+type HabitCategory = "quality" | "long" | "any";
+
+function habitCategory(type: SuggestionType): HabitCategory {
+  if (type === "threshold" || type === "vo2max" || type === "specific") return "quality";
+  if (type === "long") return "long";
+  return "any";
+}
+
+/**
+ * Semaine type : jours de la semaine où le coureur place d'habitude ce genre de
+ * séance (au moins 3 fois et au moins 20 % de ses séances de ce genre sur la
+ * période). Faute de 3 séances du genre, on regarde toutes ses sorties ; faute de
+ * 3 sorties, pas de semaine type.
+ */
+export function habitualDays(runs: SuggestionRun[], today: string, category: HabitCategory): number[] {
+  const start = addDays(today, -HABIT_DAYS);
+  const inWindow = runs.filter((run) => run.localDate > start && run.localDate <= today);
+  const matches = (run: SuggestionRun) => (category === "quality" ? HARD_FAMILIES.has(run.family) : category === "long" ? run.family === "long" : true);
+  let dates = [...new Set(inWindow.filter(matches).map((run) => run.localDate))];
+  if (dates.length < 3 && category !== "any") dates = [...new Set(inWindow.map((run) => run.localDate))];
+  if (dates.length < 3) return [];
+  const counts = new Array<number>(7).fill(0);
+  for (const date of dates) counts[weekday(date)] += 1;
+  return counts.flatMap((count, day) => (count >= 3 && count >= dates.length * 0.2 ? [day] : []));
+}
+
+function dayWord(date: string, today: string): string {
+  const offset = daysBetween(today, date);
+  if (offset <= 0) return "aujourd'hui";
+  if (offset === 1) return "demain";
+  return offset < 7 ? WEEKDAY_NAMES[weekday(date)] : formatDate(date, "long");
+}
+
+function windowLabel(dates: string[], today: string): string {
+  if (dates.length === 1) return whenLabel(dates[0], today);
+  const label = dates.map((date) => dayWord(date, today)).join(" ou ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function whenLabel(date: string, today: string): string {
   const offset = daysBetween(today, date);
   if (offset <= 0) return "Aujourd'hui";
@@ -207,7 +257,7 @@ function kindOf(type: SuggestionType): { kind: SessionKind; family: SessionFamil
   return { kind: "endurance", family: "easy", hard: false };
 }
 
-type Core = { primary: SuggestedSession; reason: string; when: string };
+type Core = { primary: SuggestedSession; reason: string; when: string; dates: string[] };
 
 function decide(input: SuggestionInput, labelToday: string): Core & { facts: Suggestion["facts"] } {
   const { today, runs, load, recovery } = input;
@@ -294,13 +344,31 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
     const candidate = addDays(lastHard.localDate, qualitySpacing);
     if (candidate > earliest) earliest = candidate;
   }
-  if (primary.type !== "race") earliest = snapToPreferredDay(earliest, goal?.preferredDays ?? []);
-  if (goal?.eventDate && earliest > goal.eventDate) earliest = goal.eventDate;
+  // Récupération dégradée : une séance dure glisse d'un jour (le plan B reste proposé pour le jour même).
+  if (kindOf(primary.type).hard && (recovery.state === "poor" || recovery.state === "watch")) earliest = addDays(earliest, 1);
+
+  // Semaine type : jours préférés de l'objectif, sinon jours habituels pour ce genre de séance.
+  const explicitDays = goal?.preferredDays ?? [];
+  const days = explicitDays.length ? explicitDays : habitualDays(runs, today, habitCategory(primary.type));
+  let start = earliest;
+  if (primary.type !== "race") {
+    const habitual = snapToPreferredDay(earliest, days);
+    if (explicitDays.length || daysBetween(earliest, habitual) <= MAX_WAIT_DAYS) start = habitual;
+  }
+  if (goal?.eventDate && start > goal.eventDate) start = goal.eventDate;
+
+  // Fenêtre de 2 jours au plus : le jour conseillé et le lendemain, sauf jour imposé (course, jours préférés, veille de course).
+  const second = addDays(start, 1);
+  const secondOk = primary.type !== "race"
+    && (!explicitDays.length || explicitDays.includes(weekday(second)))
+    && (!goal?.eventDate || second < goal.eventDate);
+  const dates = secondOk ? [start, second] : [start];
 
   return {
     primary,
     reason,
-    when: earliest,
+    when: start,
+    dates,
     facts: {
       daysSinceLastRun,
       lastRunKind: lastRun ? (lastRun.title ?? SESSION_KIND_LABELS[lastRun.kind]) : null,
@@ -340,11 +408,13 @@ export function suggestNextSession(input: SuggestionInput): Suggestion {
     const next = decide({ ...input, today: core.when, runs: [...input.runs, simulatedRun], load: { ...input.load, ratio: null }, loadAlert: null, recovery: neutralRecovery }, input.today);
     // Rythme visé : pas plus de N séances par semaine.
     const spacing = Math.max(1, Math.round(7 / next.facts.plannedRunsPerWeek) - 1);
-    let date = next.when > core.when ? next.when : addDays(core.when, 1);
+    const windowEnd = core.dates.at(-1) ?? core.when;
+    let date = next.when > windowEnd ? next.when : addDays(windowEnd, 1);
     if (daysBetween(core.when, date) < spacing) date = snapToPreferredDay(addDays(core.when, spacing), input.goal?.preferredDays ?? []);
+    if (date <= windowEnd) date = addDays(windowEnd, 1);
     if (input.goal?.eventDate && date > input.goal.eventDate) date = input.goal.eventDate;
     then = { title: next.primary.title, durationMin: next.primary.durationMin, type: next.primary.type, when: { date, label: whenLabel(date, input.today) } };
   }
 
-  return { primary, when: { date: core.when, label: whenLabel(core.when, input.today) }, reason: core.reason, alternative, then, facts: core.facts };
+  return { primary, when: { date: core.when, label: windowLabel(core.dates, input.today), dates: core.dates }, reason: core.reason, alternative, then, facts: core.facts };
 }

@@ -531,3 +531,6 @@ a.welcome-stat:hover { transform: translate(-1px, -1px); }
 
 /* Confidentialité dans l'accueil des invités. */
 .welcome-privacy .welcome-list svg { color: var(--sl-ink-muted); }
+
+/* Second jour de la fenêtre conseillée : même séance, jour de repli. */
+.week-dot.planned.planned-alt, .card-next .week-dot.planned.planned-alt { background: transparent; border: 2px dashed var(--sl-pink); }
