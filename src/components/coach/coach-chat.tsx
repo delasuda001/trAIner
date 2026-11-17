@@ -20,6 +20,7 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
   const [messages, setMessages] = useState<ChatMessage[]>(initial);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
+  const [asked, setAsked] = useState(false);
   const router = useRouter();
   const end = useRef<HTMLDivElement>(null);
 
@@ -28,6 +29,7 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
   async function ask(text: string) {
     const value = text.trim();
     if (value.length < 2 || busy) return;
+    setAsked(true);
     setBusy(true);
     setQuestion("");
     setMessages((current) => [...current, { id: `pending-${Date.now()}`, role: "user", content: { text: value }, model: null, createdAt: new Date().toISOString() }]);
@@ -70,7 +72,7 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
         <textarea rows={2} maxLength={800} value={question} placeholder="Ta question au coach…" onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void ask(question); } }} />
         <button type="submit" className="btn btn-primary icon-btn" disabled={busy || question.trim().length < 2} aria-label="Envoyer"><ArrowUp size={16} /></button>
       </form>
-      <CoachGaugeLine />
+      <CoachGaugeLine reveal={asked} />
       <div className="row-between" style={{ marginTop: 8, alignItems: "center" }}>
         <span className="muted small">Le coach voit les 6 derniers messages et un résumé de tes données, pas tes séries brutes.</span>
         {messages.length ? <button type="button" className="btn btn-ghost" onClick={() => void clear()}><Trash2 size={13} /> Effacer</button> : null}

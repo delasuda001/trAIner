@@ -511,3 +511,16 @@ a.welcome-stat:hover { transform: translate(-1px, -1px); }
 }
 .welcome-stat:first-child .card-eyebrow { color: var(--fixed-ink); opacity: 0.75; }
 .glance-tile.next .card-eyebrow { color: var(--fixed-ink); opacity: 0.75; }
+
+/* Téléphone : le coup d'œil remplace les grandes cartes (repliées, ouvertes au toucher) */
+.glance-tile { font: inherit; text-align: left; width: 100%; cursor: pointer; }
+.glance-more { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 12.5px; font-weight: 700; opacity: 0.75; }
+.glance-more .flip { transform: rotate(180deg); }
+@media (max-width: 820px) {
+  html:not([data-open-next]) .card-next, html:not([data-open-progress]) .card-progress { display: none; }
+  .glance-tile.next .glance-line, .glance-tile.next .glance-more { color: var(--fixed-ink); }
+}
+
+/* Jauge : une ligne, le détail au toucher */
+.coach-gauge .gauge-head { font: inherit; font-size: 12.5px; background: none; border: 0; padding: 2px 0; cursor: pointer; color: var(--sl-ink-muted); text-align: left; }
+.coach-gauge .gauge-head strong { color: var(--sl-ink); }

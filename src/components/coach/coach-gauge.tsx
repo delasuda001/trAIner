@@ -40,26 +40,33 @@ function useLocalTime(iso: string | null): string | null {
   return label;
 }
 
-export function CoachGaugeLine({ compact = false }: { compact?: boolean }) {
+/**
+ * Une seule ligne discrète : trois pastilles et le niveau. Le détail (remise à zéro,
+ * dernière analyse du jour) ne s'ouvre qu'au toucher, ou quand l'invité vient
+ * d'appuyer sur un bouton du coach (`reveal`).
+ */
+export function CoachGaugeLine({ reveal = false }: { reveal?: boolean }) {
   const gauge = useCoachGauge();
+  const [open, setOpen] = useState(false);
   const reset = useLocalTime(gauge && gauge.level !== "large" ? gauge.resetsAt : null);
   if (!gauge || !gauge.guest) return null;
   const level = LEVELS[gauge.level];
   const filled = gauge.level === "large" ? 1 : gauge.level === "menager" ? 2 : 3;
+  const shown = open || (reveal && (gauge.level !== "large" || (gauge.left != null && gauge.left <= 1)));
   return (
-    <div className={`coach-gauge gauge-${gauge.level}`} role="status">
-      <span className="gauge-head">
+    <div className={`coach-gauge gauge-${gauge.level}`}>
+      <button type="button" className="gauge-head" aria-expanded={shown} onClick={() => setOpen((value) => !value)} title="L'abonnement Claude de Bastien, partagé entre vous">
         <span className="gauge-bars" aria-hidden>{[1, 2, 3].map((index) => <span key={index} className={index <= filled ? "on" : ""} />)}</span>
         <span>Abonnement de Bastien : <strong>{level.label}</strong></span>
-      </span>
-      {compact && gauge.level === "large" && (gauge.left == null || gauge.left > 1) ? null : (
-        <span className="gauge-text">
+      </button>
+      {shown ? (
+        <span className="gauge-text" role="status">
           {level.text}
           {gauge.level !== "large" && reset ? ` Remise à zéro ${reset}.` : ""}
           {gauge.left === 1 ? " Il te reste une analyse aujourd'hui : choisis celle qui te tente le plus !" : ""}
           {gauge.left === 0 ? " Tes analyses du jour sont faites : le coach revient pour toi demain, et tout ce qui est déjà analysé se relit librement." : ""}
         </span>
-      )}
+      ) : null}
     </div>
   );
 }

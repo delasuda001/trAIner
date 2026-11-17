@@ -106,7 +106,7 @@ function renderWelcome(member: Member) {
 
       <section className="card welcome-card">
         <h2 className="section-title">Le coach, une ressource partagée</h2>
-        <p className="small">Tous tes chiffres sont calculés pour chaque séance, sans compter. Les commentaires du coach (Claude) passent par l&apos;abonnement de Bastien, que vous partagez : {lastAnalyzed ? "tes dernières séances sont déjà commentées, " : ""}demande les autres quand elles t&apos;intéressent, et regarde ce petit indicateur avant.</p>
+        <p className="small">Tes chiffres sont calculés pour chaque séance, sans limite. Les commentaires du coach passent par l&apos;abonnement Claude de Bastien : un coup d&apos;œil à la jauge avant d&apos;en demander.</p>
         <CoachGaugeLine />
       </section>
 

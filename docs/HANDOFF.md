@@ -206,7 +206,12 @@ Plan validé par le coordinateur (2 séances pré-analysées, préparation compt
   rapportée au seuil d'arrêt invités (60 % 5 h, 70 % 7 j) : large < 75 %, à ménager, presque plein ≥ 100 %
   (coach en pause, bouton désactivé). Fournie par le layout (`GaugeProvider`), affichée sous chaque
   `CoachRequest`, dans « Demander au coach », sur l'accueil et dans Paramètres de l'invité (plus aucun
-  chiffre de tokens chez eux). Analyses restantes montrées seulement à 1 ou 0. Messages de refus
+  chiffre de tokens chez eux). UNE ligne (pastilles + niveau) ; le détail (remise à zéro, analyses
+  restantes, seulement à 1 ou 0) s'ouvre au toucher ou après un appui sur un bouton du coach.
+- Téléphone : plus de doublon. Le coup d'œil (prochaine séance, progression) reste en tête ; les grandes
+  cartes correspondantes sont repliées et s'ouvrent d'un toucher sur la tuile (`dashboard/glance-tile.tsx`,
+  attributs `data-open-next` / `data-open-progress`). Barre d'onglets : 91 px de marge sous le dernier
+  contenu, mesuré (son apparition au milieu des captures pleine page est un effet d'assemblage). Messages de refus
   réécrits sur un ton positif.
 - Accueil `/bienvenue` refait : « Bonjour {prénom}, tout est prêt », 3 chiffres marquants
   (`lib/welcome/highlights.ts` : km, courses, heures, semaines actives, meilleur mois ; allure à FC égale ;

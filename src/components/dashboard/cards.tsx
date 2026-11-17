@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SessionPoints } from "@/components/activity/session-points";
 import { GoalStatusList } from "@/components/goal/goal-status";
 import { CoachRequest } from "@/components/coach-request";
+import { GlanceTile } from "./glance-tile";
 import { RateCoach } from "@/components/feedback/rate-coach";
 import { IntensityChart, ProgressionChart, Sparkline, WeeklyVolumeChart } from "@/components/charts";
 import { Badge } from "@/components/ui/badge";
@@ -133,15 +134,15 @@ export function MobileGlance({ dashboard }: { dashboard: Dashboard }) {
   const gain = progression.paceGainSPerKm;
   return (
     <div className="glance" aria-label="En bref">
-      <a className="glance-tile next" href="#next-title">
+      <GlanceTile panel="next" anchor="next-title" className="next">
         <div className="card-eyebrow">Prochaine séance · {suggestion.when.label}</div>
         <div className="glance-title">{primary.title}</div>
         <p className="glance-line">
           {[primary.durationMin ? formatDuration(primary.durationMin * 60) : null, target ? `${target.zone} · ${target.heartRateLow}–${target.heartRateHigh} bpm` : null, paceCenter ? `≈ ${formatPace(paceCenter)}` : null].filter(Boolean).join(" · ")}
         </p>
         <p className="glance-line">{suggestion.reason}</p>
-      </a>
-      <a className="glance-tile" href="#progress-title">
+      </GlanceTile>
+      <GlanceTile panel="progress" anchor="progress-title">
         <div className="card-eyebrow"><Gauge size={13} /> Progression aérobie · {STATE_BADGE[progression.state]}</div>
         {progression.state !== "insufficient" ? (
           <>
@@ -149,7 +150,7 @@ export function MobileGlance({ dashboard }: { dashboard: Dashboard }) {
             {gain != null ? <p className="glance-line">{Math.abs(gain) < 1 ? "Même allure" : `${formatNumber(Math.abs(gain))} s/km plus ${gain > 0 ? "rapide" : "lent"}`} que les {progression.windowWeeks} semaines précédentes</p> : null}
           </>
         ) : <p className="glance-line">Pas encore de tendance : il faut quelques sorties faciles de plus.</p>}
-      </a>
+      </GlanceTile>
     </div>
   );
 }
@@ -165,7 +166,7 @@ export function ProgressionCard({ dashboard, coach }: { dashboard: Dashboard; co
     ? `Écart dans la variation normale : tes sorties faciles varient de ±${progression.runToRunSpreadSPerKm} s/km d'une fois à l'autre.`
     : null;
   return (
-    <section className="card card-hero" aria-labelledby="progress-title">
+    <section className="card card-hero card-progress" aria-labelledby="progress-title">
       <span className="state-badge">{STATE_BADGE[progression.state]}</span>
       <div className="card-eyebrow"><Gauge size={13} /> Progression aérobie</div>
       <h2 id="progress-title" style={{ position: "absolute", left: -9999 }}>Progression : {STATE_BADGE[progression.state]}</h2>

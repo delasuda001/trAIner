@@ -12,11 +12,13 @@ export function CoachRequest({ endpoint, label, initialError }: { endpoint: stri
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
+  const [pressed, setPressed] = useState(false);
   const gauge = useCoachGauge();
   // Coach en pause (abonnement presque plein ou analyses du jour faites) : le bouton attend, sans erreur à lire.
   const paused = gauge?.guest === true && (gauge.level === "plein" || gauge.left === 0);
 
   async function request() {
+    setPressed(true);
     setBusy(true);
     setError(null);
     try {
@@ -38,7 +40,7 @@ export function CoachRequest({ endpoint, label, initialError }: { endpoint: stri
         <Sparkles size={14} className={busy ? "spin" : undefined} />
         {busy ? "Le coach réfléchit… (10 à 20 s)" : label}
       </button>
-      <CoachGaugeLine compact />
+      <CoachGaugeLine reveal={pressed} />
       {error && !paused ? <p className="notice notice-error">{error}</p> : null}
     </div>
   );
