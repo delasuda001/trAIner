@@ -38,6 +38,30 @@ describe("detectWorkBlock", () => {
     expect(detectWorkBlock(laps)).toBeNull();
   });
 
+  it("reconnaît un 14 × 30/30 (séance réelle du 17/11 : 7 min 20 de travail en tout)", () => {
+    const reps = [32, 31, 33, 31, 32, 32, 31, 33, 32, 32, 31, 32, 28, 30];
+    const repSpeeds = [4.873, 4.775, 4.87, 4.763, 4.783, 4.63, 4.635, 4.721, 4.72, 4.599, 4.332, 4.346, 4.804, 4.33];
+    const recoverySpeeds = [2.449, 2.014, 2.429, 1.692, 1.928, 1.954, 1.77, 1.739, 1.869, 1.893, 1.413, 1.251, 1.403];
+    const laps: Lap[] = [{ ...lap(0, 698, 5.94, 139), averageSpeedMps: 2.804 }];
+    reps.forEach((duration, index) => {
+      laps.push({ ...lap(laps.length, duration, 3.5, 165), averageSpeedMps: repSpeeds[index], distanceM: repSpeeds[index] * duration });
+      if (index < recoverySpeeds.length) laps.push({ ...lap(laps.length, 31, 9, 166), averageSpeedMps: recoverySpeeds[index], distanceM: recoverySpeeds[index] * 31 });
+    });
+    laps.push({ ...lap(laps.length, 642, 7.22, 144), averageSpeedMps: 2.307 });
+    const work = detectWorkBlock(laps);
+    expect(work?.reps).toBe(14);
+    expect(work?.averageDurationS).toBe(31);
+    expect(work?.averageRecoveryS).toBe(31);
+    expect(classifyKind({ work, zoneShares: null, movingTimeS: 2036, distanceM: 6217, zones, trainingEffectLabel: "VO2MAX" })).toBe("intervals_short");
+  });
+
+  it("ne prend pas 6 accélérations de 20 s espacées de 2 min dans un footing pour un fractionné", () => {
+    const laps = [lap(0, 2400, 6.2, 135)];
+    for (let index = 0; index < 6; index += 1) laps.push(lap(laps.length, 20, 3.4, 150), lap(laps.length + 1, 120, 6.3, 140));
+    laps.push(lap(laps.length, 300, 6.4, 136));
+    expect(detectWorkBlock(laps)).toBeNull();
+  });
+
   it("ignore des laps automatiques au kilomètre d'une sortie régulière", () => {
     const laps = Array.from({ length: 10 }, (_, index) => lap(index, 360 + (index % 2) * 8, 6 + (index % 3) * 0.08, 135));
     expect(detectWorkBlock(laps)).toBeNull();

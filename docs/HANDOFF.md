@@ -278,6 +278,16 @@ Plan validé par le coordinateur (ordre 3, 2, 1, 5, 4). Aucun appel réel à Cla
   seulement. Essai de bout en bout : `data/test/cdp-offline.mjs` (arrête puis relance le serveur d'essai 3100).
   Limite : iOS peut purger le cache d'une app non ouverte depuis plusieurs semaines.
 
+## Fractionné court et dense (17 nov., soir)
+
+- Le 14 × 30/30 du 17 nov. était classé « seuil » : `detectWorkBlock` exigeait 8 min de travail au total
+  (garde-fou contre les accélérations dans un footing) et 14 × 31 s n'en font que 7 min 20. Ajout : un bloc
+  dense est reconnu à partir de 6 répétitions et 4 min de travail si le travail occupe au moins 40 % du bloc
+  (de la 1re à la dernière répétition). `METRICS_VERSION` 11. Sept séances de Bastien deviennent des
+  fractionnés (dont deux 30/30 de septembre 2025, un 7 × 45/65 et un 6 × 103/94) ; les autres écarts de la
+  photographie viennent des comparables. Consigne : format ≤ 45 s, récupération égale à l'effort et jusqu'à
+  20 répétitions (`intervalPlan`). Jeu figé du banc à refaire (`npm run bench:freeze`).
+
 ## État
 
 - Branche `claude/project-thread-1m6x8x`, tout commité, rien poussé (push GitHub bloqué).

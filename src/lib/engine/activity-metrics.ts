@@ -9,7 +9,7 @@ import { zoneOf, type ZoneIndex } from "./zones";
  * découlent : le LLM ne calcule rien.
  */
 
-export const METRICS_VERSION = 10;
+export const METRICS_VERSION = 11;
 
 export type SessionKind =
   | "recovery"
@@ -277,13 +277,29 @@ function splitLapsBySpeed(laps: Lap[]): { fast: Lap[]; slow: Lap[]; ratio: numbe
 /** En dessous, les portions rapides sont des accélérations dans un footing, pas une séance fractionnée. */
 const MIN_WORK_SHARE = 0.2;
 const MIN_WORK_TOTAL_S = 8 * 60;
+/**
+ * Fractionné court et dense (14 × 30/30, 10 × 200 m…) : moins de 8 min de travail au total,
+ * mais une vraie séance. Reconnu à partir de 6 répétitions et 4 min de travail si le bloc
+ * (de la 1re à la dernière répétition) est dense : au moins 40 % de travail, quand des
+ * accélérations dans un footing restent autour de 15 à 25 %.
+ */
+const DENSE_MIN_REPS = 6;
+const DENSE_MIN_WORK_S = 4 * 60;
+const DENSE_MIN_BLOCK_SHARE = 0.4;
 
 export function detectWorkBlock(laps: Lap[]): WorkBlock | null {
   const split = splitLapsBySpeed(laps);
   if (!split || split.ratio < 1.15 || split.fast.length < 3) return null;
   const totalS = laps.reduce((sum, lap) => sum + lap.durationS, 0);
   const workS = split.fast.reduce((sum, lap) => sum + lap.durationS, 0);
-  if (workS < MIN_WORK_TOTAL_S || (totalS > 0 && workS / totalS < MIN_WORK_SHARE)) return null;
+  // Durée du bloc de la 1re à la dernière répétition (laps dans l'ordre, récupérations comprises).
+  const inOrder = [...laps].sort((a, b) => a.index - b.index);
+  const fastSet = new Set(split.fast.map((lap) => lap.index));
+  const firstFast = inOrder.findIndex((lap) => fastSet.has(lap.index));
+  const lastFast = inOrder.length - 1 - [...inOrder].reverse().findIndex((lap) => fastSet.has(lap.index));
+  const blockS = inOrder.slice(firstFast, lastFast + 1).reduce((sum, lap) => sum + lap.durationS, 0);
+  const dense = split.fast.length >= DENSE_MIN_REPS && workS >= DENSE_MIN_WORK_S && blockS > 0 && workS / blockS >= DENSE_MIN_BLOCK_SHARE;
+  if ((workS < MIN_WORK_TOTAL_S && !dense) || (totalS > 0 && workS / totalS < MIN_WORK_SHARE && !dense)) return null;
   const fastIndexes = new Set(split.fast.map((lap) => lap.index));
   // Une vraie séance fractionnée alterne travail et récupération.
   let alternations = 0;

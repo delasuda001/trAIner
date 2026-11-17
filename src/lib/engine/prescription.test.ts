@@ -116,6 +116,15 @@ describe("prescribe, fractionné", () => {
     expect(result.next.format).toBe("9 × 70 s");
   });
 
+  it("30/30 : la récupération proposée reste égale à l'effort (pas 1 min)", () => {
+    const short = { ...rep(229, 30), durationS: 30, distanceM: 131 };
+    const metrics: ActivityMetrics = { ...base, kind: "intervals_short", work: { ...(base.work as Work), reps: 14, averageDurationS: 30, averageDistanceM: 131, averageSpeedMps: 1000 / 229, fadeSPerKm: -3, averageRecoveryS: 30, repsDetail: Array.from({ length: 14 }, () => short) } };
+    const result = prescribe(input(metrics, { context: null, reference: null }));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.next.recoveryS).toBe(30);
+    expect(result.shouldHave.join(" ")).not.toContain("Récupération");
+  });
+
   it("pas de consigne quand les répétitions ne sont pas reconnues", () => {
     expect(prescribe(input({ ...base, work: null })).status).toBe("none");
   });
