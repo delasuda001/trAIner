@@ -3,11 +3,13 @@
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useSay } from "@/components/ui/register";
 
 type Props = { subjectKind: "session" | "outlook" | "chat"; subjectId: string; promptVersion?: string | null; label?: string };
 
 /** Pouce haut / bas sur une réponse du coach, avec une note facultative. */
 export function RateCoach({ subjectKind, subjectId, promptVersion = null, label = "Utile ?" }: Props) {
+  const say = useSay();
   const pathname = usePathname();
   const [rating, setRating] = useState<1 | -1 | null>(null);
   const [note, setNote] = useState("");
@@ -29,12 +31,12 @@ export function RateCoach({ subjectKind, subjectId, promptVersion = null, label 
 
   return (
     <div className="rate-coach">
-      <span className="muted small">{label}</span>
+      <span className="muted small">{say(label)}</span>
       <button type="button" className={`rate-btn${rating === 1 ? " on" : ""}`} aria-pressed={rating === 1} aria-label="Utile" onClick={() => { void send(1, ""); setState("noting"); }}><ThumbsUp size={14} /></button>
       <button type="button" className={`rate-btn${rating === -1 ? " on" : ""}`} aria-pressed={rating === -1} aria-label="Pas utile" onClick={() => { void send(-1, ""); setState("noting"); }}><ThumbsDown size={14} /></button>
       {state === "noting" && rating ? (
         <form className="rate-note" onSubmit={(event) => { event.preventDefault(); void send(rating, note.trim()).then(() => setState("sent")); }}>
-          <input value={note} onChange={(event) => setNote(event.target.value)} placeholder={rating === 1 ? "Qu'est-ce qui t'a servi ? (facultatif)" : "Qu'est-ce qui cloche ? (facultatif)"} maxLength={600} />
+          <input value={note} onChange={(event) => setNote(event.target.value)} placeholder={rating === 1 ? say("Qu'est-ce qui t'a servi ? (facultatif)") : "Qu'est-ce qui cloche ? (facultatif)"} maxLength={600} />
           <button type="submit" className="btn btn-ghost">Envoyer</button>
         </form>
       ) : null}

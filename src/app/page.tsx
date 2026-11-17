@@ -7,6 +7,7 @@ import { getDashboard } from "@/lib/server/analytics";
 import { readPrepareStatus } from "@/lib/server/prepare-service";
 import { PreparingNotice } from "@/components/profiles/welcome-steps";
 import { readOutlookCoach, readSessionCoach } from "@/lib/server/coach-service";
+import { registerForRole, say } from "@/lib/register";
 
 export const dynamic = "force-dynamic";
 
@@ -31,12 +32,13 @@ function renderHome(member: Member) {
   const outlook = readOutlookCoach(dashboard);
   const lastCoach = dashboard.lastRun ? readSessionCoach(dashboard.lastRun) : null;
   const weekday = formatDate(dashboard.today, "long");
+  const register = registerForRole(member.role);
   return (
     <>
       <div className="page-head home-head">
         <div>
           <p className="eyebrow">{weekday}</p>
-          <h1 className="page-title">Ta forme, <mark>ta prochaine séance</mark></h1>
+          <h1 className="page-title">{say(register, "Ta forme", "Votre forme")}, <mark>{say(register, "ta prochaine séance", "votre prochaine séance")}</mark></h1>
         </div>
         {outlook.status !== "ready" ? <CoachRequest endpoint="/api/coach/outlook" label="Demander l'avis du coach" initialError={outlook.status === "error" ? outlook.message : null} /> : null}
       </div>
@@ -51,7 +53,7 @@ function renderHome(member: Member) {
       <section className="section">
         <div className="section-head">
           <h2 className="section-title">Forme et récupération</h2>
-          <span className="section-note">Comparé à ta propre base, jamais à une norme</span>
+          <span className="section-note">{say(register, "Comparé à ta propre base, jamais à une norme", "Comparé à votre propre base, jamais à une norme")}</span>
         </div>
         <RecoveryRow dashboard={dashboard} />
       </section>

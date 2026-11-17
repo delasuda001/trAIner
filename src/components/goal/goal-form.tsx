@@ -6,6 +6,7 @@ import { useState } from "react";
 import { RACE_DISTANCES, WEEKDAY_LABELS, type Goal } from "@/lib/goal/goal";
 import { appendExample, CONTEXT_EXAMPLES, GOAL_EXAMPLES } from "@/lib/goal/examples";
 import { ExampleChips } from "@/components/ui/example-chips";
+import { useSay } from "@/components/ui/register";
 
 const DISTANCES = RACE_DISTANCES;
 
@@ -30,6 +31,7 @@ function paceText(distanceKm: number | null, seconds: number | null): string | n
 }
 
 export function GoalForm({ initial }: { initial: Goal }) {
+  const say = useSay();
   const router = useRouter();
   const [goal, setGoal] = useState<Goal>(initial);
   const [time, setTime] = useState(formatTime(initial.targetTimeS));
@@ -61,13 +63,13 @@ export function GoalForm({ initial }: { initial: Goal }) {
         <label className="field wide">
           <span>Objectif</span>
           <input value={goal.title} maxLength={100} placeholder="ex. Marathon de Paris sous 3:30, ou « courir plus facilement »" onChange={(event) => update({ title: event.target.value })} />
-          <ExampleChips label="Pour t'inspirer" examples={GOAL_EXAMPLES.map((example) => example.label)} onPick={(label) => {
+          <ExampleChips label={say("Pour t'inspirer", "Pour vous inspirer")} examples={GOAL_EXAMPLES.map((example) => example.label)} onPick={(label) => {
             const example = GOAL_EXAMPLES.find((entry) => entry.label === label);
             if (!example) return;
             update({ title: example.title, ...(example.distanceKm ? { distanceKm: example.distanceKm } : {}) });
             if (example.time) setTime(example.time);
           }} />
-          <small className="muted">Une course, un temps, ou simplement une envie. Facultatif : sans objectif, le coach s&apos;appuie sur tes propres repères.</small>
+          <small className="muted">{say("Une course, un temps, ou simplement une envie. Facultatif : sans objectif, le coach s'appuie sur tes propres repères.", "Une course, un temps, ou simplement une envie. Facultatif : sans objectif, le coach s'appuie sur vos propres repères.")}</small>
         </label>
         <label className="field">
           <span>Date de la course</span>
@@ -96,7 +98,7 @@ export function GoalForm({ initial }: { initial: Goal }) {
           </div>
         </div>
         <div className="field wide">
-          <span>Jours où tu peux courir</span>
+          <span>{say("Jours où tu peux courir", "Jours où vous pouvez courir")}</span>
           <div className="chips">
             {WEEKDAY_LABELS.map((label, day) => (
               <button key={label} type="button" className={`chip${goal.preferredDays.includes(day) ? " selected" : ""}`} onClick={() => update({ preferredDays: goal.preferredDays.includes(day) ? goal.preferredDays.filter((value) => value !== day) : [...goal.preferredDays, day].sort() })}>{label.slice(0, 3)}</button>
@@ -118,13 +120,13 @@ export function GoalForm({ initial }: { initial: Goal }) {
               );
             })}
           </div>
-          <small className="muted">Le coach s&apos;en sert pour fixer les allures cibles des séances et te dire si l&apos;objectif est à portée.</small>
+          <small className="muted">{say("Le coach s'en sert pour fixer les allures cibles des séances et te dire si l'objectif est à portée.", "Le coach s'en sert pour fixer les allures cibles des séances et vous dire si l'objectif est à portée.")}</small>
         </div>
         <label className="field wide">
           <span>À savoir pour le coach</span>
           <textarea rows={2} maxLength={300} value={goal.note} placeholder="ex. sortie longue plutôt le dimanche, terrain vallonné" onChange={(event) => update({ note: event.target.value })} />
           <ExampleChips examples={CONTEXT_EXAMPLES} onPick={(example) => update({ note: appendExample(goal.note, example, 300) })} />
-          <small className="muted">Tes habitudes et contraintes : le coach s&apos;en sert pour placer et doser tes séances.</small>
+          <small className="muted">{say("Tes habitudes et contraintes : le coach s'en sert pour placer et doser tes séances.", "Vos habitudes et contraintes : le coach s'en sert pour placer et doser vos séances.")}</small>
         </label>
       </div>
       <div className="form-actions">

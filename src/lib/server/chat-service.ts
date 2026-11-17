@@ -110,7 +110,7 @@ export async function askCoach(question: string): Promise<AskResult> {
   } catch (error) {
     const kind: LlmFailureKind = error instanceof LlmError ? error.kind : "unavailable";
     console.warn(`[coach] chat en échec (${kind}) : ${error instanceof Error ? error.message.slice(0, 200) : String(error)}`);
-    repository.add("coach", { text: LLM_FAILURE_MESSAGES[kind].replace("l'analyse chiffrée reste affichée", "pose ta question à nouveau un peu plus tard"), error: true });
+    repository.add("coach", { text: LLM_FAILURE_MESSAGES[kind].replace("l'analyse chiffrée reste affichée", "la question pourra être reposée un peu plus tard"), error: true });
     return { messages: repository.list(), error: { kind, message: LLM_FAILURE_MESSAGES[kind] } };
   } finally {
     busyMembers.delete(memberId);

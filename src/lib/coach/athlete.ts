@@ -2,7 +2,8 @@
  * Les consignes du coach ont été écrites pour Bastien (1 à 2 sorties par semaine).
  * Pour un autre profil, on remplace la phrase de présentation par une phrase
  * neutre qui donne son rythme réel (sur 12 semaines). Pour Bastien, le texte
- * reste identique à l'octet près (aucune réponse en cache invalidée).
+ * reste identique à l'octet près (aucune réponse en cache invalidée). Un invité est
+ * vouvoyé, sur un ton professionnel.
  */
 
 export type AthleteForPrompt = { isAdmin: boolean; runsPerWeek12w: number | null };
@@ -23,7 +24,11 @@ export function systemPromptFor(base: string, athlete: AthleteForPrompt): string
   if (athlete.isAdmin) return base;
   const intro = INTRODUCTIONS.find((candidate) => base.includes(candidate));
   if (!intro) throw new Error("Consigne du coach : phrase de présentation introuvable, mettre à jour coach/athlete.ts.");
-  return base.replace(intro, `Tu es le coach de course à pied d'un coureur expérimenté ${rhythmPhrase(athlete.runsPerWeek12w)}. Tu le tutoies.`);
+  const guest = base
+    .replace(intro, `Tu es le coach de course à pied d'un coureur expérimenté ${rhythmPhrase(athlete.runsPerWeek12w)}. Tu le vouvoies, sur un ton professionnel et courtois.`)
+    .replace(/Tutoiement, ton de coach : concret, chaleureux/g, "Vouvoiement, ton de coach professionnel : concret, courtois")
+    .replace(/tutoiement/g, "vouvoiement, ton professionnel");
+  return guest;
 }
 
 /** Prénom utilisé dans le fil de questions (« Question de … »). */

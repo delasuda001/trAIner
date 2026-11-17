@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { generatedAtLabel, modelLabel } from "@/lib/coach/model-label";
 import { RateCoach } from "@/components/feedback/rate-coach";
 import type { ChatMessage } from "@/lib/db/repositories/chat-repository";
+import { useSay } from "@/components/ui/register";
 
 const SUGGESTIONS = [
   "Est-ce que je suis bien le plan cette semaine ?",
@@ -17,6 +18,7 @@ const SUGGESTIONS = [
 ]; 
 
 export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: string[] }) {
+  const say = useSay();
   const [messages, setMessages] = useState<ChatMessage[]>(initial);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
@@ -54,7 +56,7 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
       <div className="chat-log" aria-live="polite">
         {messages.length === 0 ? (
           <div className="chat-empty">
-            <p className="muted">Pose une question sur ton entraînement, ou préviens-le d&apos;une contrainte (fatigue, semaine chargée, voyage…). Des idées sont à droite.</p>
+            <p className="muted">{say("Pose une question sur ton entraînement, ou préviens-le d'une contrainte (fatigue, semaine chargée, voyage…). Des idées sont à droite.", "Posez une question sur votre entraînement, ou signalez-lui une contrainte (fatigue, semaine chargée, voyage…). Des idées sont à droite.")}</p>
           </div>
         ) : null}
         {messages.map((message) => (
@@ -65,16 +67,16 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
             {message.role === "coach" && message.model && !message.content.error ? <RateCoach subjectKind="chat" subjectId={message.id} label="Utile ?" /> : null}
           </div>
         ))}
-        {busy ? <div className="bubble coach"><span className="muted"><Sparkles size={13} className="spin" /> Le coach regarde tes données… (10 à 20 s)</span></div> : null}
+        {busy ? <div className="bubble coach"><span className="muted"><Sparkles size={13} className="spin" /> {say("Le coach regarde tes données… (10 à 20 s)", "Le coach examine vos données… (10 à 20 s)")}</span></div> : null}
         <div ref={end} />
       </div>
       <form className="chat-form" onSubmit={(event) => { event.preventDefault(); void ask(question); }}>
-        <textarea rows={2} maxLength={800} value={question} placeholder="Ta question au coach…" onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void ask(question); } }} />
+        <textarea rows={2} maxLength={800} value={question} placeholder={say("Ta question au coach…", "Votre question au coach…")} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void ask(question); } }} />
         <button type="submit" className="btn btn-primary icon-btn" disabled={busy || question.trim().length < 2} aria-label="Envoyer"><ArrowUp size={16} /></button>
       </form>
       <CoachGaugeLine reveal={asked} />
       <div className="row-between" style={{ marginTop: 8, alignItems: "center" }}>
-        <span className="muted small">Le coach voit les 6 derniers messages et un résumé de tes données, pas tes séries brutes.</span>
+        <span className="muted small">{say("Le coach voit les 6 derniers messages et un résumé de tes données, pas tes séries brutes.", "Le coach voit les 6 derniers messages et un résumé de vos données, pas vos séries brutes.")}</span>
         {messages.length ? <button type="button" className="btn btn-ghost" onClick={() => void clear()}><Trash2 size={13} /> Effacer</button> : null}
       </div>
     </section>
@@ -88,7 +90,7 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
       <section className="card">
         <h2 className="section-title">Ce que le coach a sous les yeux</h2>
         <ul className="seen-list">{seen.map((item) => <li key={item}>{item}</li>)}</ul>
-        <p className="muted small" style={{ marginTop: 8 }}>Ajoute ton ressenti sur une séance pour qu&apos;il en tienne compte.</p>
+        <p className="muted small" style={{ marginTop: 8 }}>{say("Ajoute ton ressenti sur une séance pour qu'il en tienne compte.", "Ajoutez votre ressenti sur une séance pour qu'il en tienne compte.")}</p>
       </section>
     </aside>
     </div>

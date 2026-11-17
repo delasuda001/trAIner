@@ -23,7 +23,7 @@ function relative(iso: string | null): string {
 function explain(error: string, guest: boolean): { title: string; action: React.ReactNode } {
   const lower = error.toLowerCase();
   if (guest && (lower.includes("clé") || lower.includes("401") || lower.includes("403") || lower.includes("garmin_api_key"))) {
-    return { title: "Ta clé Garmin n'est pas encore active dans l'application.", action: <>Préviens Bastien : il doit ajouter ou renouveler ta clé Garmin Connect (Personal API) de son côté.</> };
+    return { title: "Votre clé Garmin n'est pas encore active dans l'application.", action: <>Merci de prévenir Bastien : il doit ajouter ou renouveler votre clé Garmin Connect (Personal API) de son côté.</> };
   }
   if (lower.includes("clé") || lower.includes("401") || lower.includes("403") || lower.includes("garmin_api_key")) {
     return {
@@ -32,9 +32,9 @@ function explain(error: string, guest: boolean): { title: string; action: React.
     };
   }
   if (lower.includes("injoignable") || lower.includes("fetch") || lower.includes("network")) {
-    return { title: "Garmin est injoignable (pas de réseau ?).", action: <>Rien à faire : réessaie plus tard avec « Synchroniser ».</> };
+    return { title: "Garmin est injoignable (pas de réseau ?).", action: guest ? <>Rien à faire : nouvel essai possible plus tard avec « Synchroniser ».</> : <>Rien à faire : réessaie plus tard avec « Synchroniser ».</> };
   }
-  return { title: "La synchronisation Garmin a échoué.", action: <>Réessaie avec « Synchroniser » ; si ça persiste, le détail est : {error}</> };
+  return { title: "La synchronisation Garmin a échoué.", action: guest ? <>Nouvel essai possible avec « Synchroniser » ; si le problème persiste, merci de prévenir Bastien (détail : {error}).</> : <>Réessaie avec « Synchroniser » ; si ça persiste, le détail est : {error}</> };
 }
 
 /** Synchro incrémentale : au chargement (si la dernière date de plus de 15 min) et sur demande. */
@@ -67,7 +67,7 @@ export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = f
       router.refresh();
       // Seule une nouvelle course déclenche Claude, et seulement pour la plus récente.
       if (latestNewRunId) {
-        setStatus("Le coach analyse ta dernière séance…");
+        setStatus(guest ? "Le coach analyse votre dernière séance…" : "Le coach analyse ta dernière séance…");
         await Promise.allSettled([
           fetch(`/api/activities/${encodeURIComponent(latestNewRunId)}/coach`, { method: "POST" }),
           fetch("/api/coach/outlook", { method: "POST" }),
@@ -81,7 +81,7 @@ export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = f
     } finally {
       setBusy(false);
     }
-  }, [router]);
+  }, [router, guest]);
 
   useEffect(() => {
     if (!lastSuccessAt || Date.now() - Date.parse(lastSuccessAt) > AUTO_SYNC_AFTER_MS) {

@@ -6,6 +6,12 @@ import { getRegistry } from "@/lib/profiles/context";
 import { memberIdFromName } from "@/lib/profiles/types";
 
 export const PUBLIC_URL_KEY = "public_url";
+/** Bastien confirme avoir désactivé « Aider à améliorer Claude » sur son compte claude.ai. */
+export const TRAINING_OPT_OUT_KEY = "claude_training_opt_out";
+
+export function trainingOptOut(): boolean {
+  return getRegistry().getSetting(TRAINING_OPT_OUT_KEY, z.boolean()) === true;
+}
 
 /** Adresse publique (tunnel) pour les liens d'invitation ; à défaut, l'adresse vue par le navigateur. */
 export function publicUrl(fallbackOrigin: string): { url: string; configured: boolean } {

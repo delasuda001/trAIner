@@ -14,6 +14,8 @@ import { LogoutButton } from "@/components/profiles/logout-button";
 import { FeedbackButton } from "@/components/feedback/feedback-button";
 import { GaugeProvider } from "@/components/coach/coach-gauge";
 import { coachGauge } from "@/lib/server/quota";
+import { RegisterProvider } from "@/components/ui/register";
+import { registerForRole } from "@/lib/register";
 import "./globals.css";
 
 // Polices auto-hébergées par Next au build : aucune requête externe à l'usage.
@@ -51,6 +53,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
+        <RegisterProvider register={registerForRole(member?.role)}>
         <header className="topbar">
           <div className="topbar-inner">
             <Link href="/" className="brand" aria-label={`${BRAND.name}, tableau de bord`}><LogoMark /><Wordmark /></Link>
@@ -68,6 +71,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         </header>
         <main className="shell"><GaugeProvider gauge={gauge}>{children}</GaugeProvider></main>
         {member ? <FeedbackButton /> : null}
+        </RegisterProvider>
       </body>
     </html>
   );

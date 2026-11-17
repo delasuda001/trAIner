@@ -18,6 +18,7 @@ import { CONFIDENCE_LABELS, hrvCompare, hrvMeaning, loadMeaning, progressionSent
 import { SPORT_LABELS, VERDICT_TONES } from "@/lib/engine/labels";
 import { VERDICT_LABELS } from "@/lib/engine/verdict";
 import { formatDate, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
+import { Say } from "@/components/ui/register";
 import type { Dashboard } from "@/lib/server/analytics";
 import type { CoachResult } from "@/lib/server/coach-service";
 import type { Sport } from "@/lib/source/types";
@@ -98,7 +99,7 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
         {goal && (goal.title || goal.eventDate) ? (
           <span style={{ flex: 1 }}>{goal.title || "Course"}{goal.eventDate ? ` · dans ${daysBetween(today, goal.eventDate)} jours` : ""} · {goal.runsPerWeek} sortie{goal.runsPerWeek > 1 ? "s" : ""}/sem.</span>
         ) : (
-          <span style={{ flex: 1 }}>Pas d&apos;objectif renseigné : le coach vise ta progression aérobie, à {formatNumber(facts.runsPerWeek8w, 1)} sortie{facts.runsPerWeek8w >= 2 ? "s" : ""}/sem.</span>
+          <span style={{ flex: 1 }}><Say tu={`Pas d'objectif renseigné : le coach vise ta progression aérobie, à ${formatNumber(facts.runsPerWeek8w, 1)} sortie${facts.runsPerWeek8w >= 2 ? "s" : ""}/sem.`} /></span>
         )}
         <Link href="/objectif">{goal ? "Modifier" : "Définir"}</Link>
       </div>
@@ -118,7 +119,7 @@ export function MissingInfo({ dashboard }: { dashboard: Dashboard }) {
       <div className="card missing-info">
         <div className="card-eyebrow">Pour des conseils plus précis</div>
         <ul className="bullets">
-          {missing.map((item) => <li key={item.text}>{item.text}{item.href ? <> <Link href={item.href}>{item.link}</Link></> : null}</li>)}
+          {missing.map((item) => <li key={item.text}><Say tu={item.text} />{item.href ? <> <Link href={item.href}>{item.link}</Link></> : null}</li>)}
         </ul>
       </div>
     </section>
@@ -179,7 +180,7 @@ export function ProgressionCard({ dashboard, coach }: { dashboard: Dashboard; co
         {gain != null ? <><strong>{Math.abs(gain) < 1 ? "Même allure" : `${formatNumber(Math.abs(gain))} s/km plus ${gain > 0 ? "rapide" : "lent"}`}</strong> que les {progression.windowWeeks} semaines précédentes ({formatPace(progression.previous.speedAtReferenceHr)})</> : progression.caveats[0]}
         {progression.confidence ? <span className="muted"> · confiance {CONFIDENCE_LABELS[progression.confidence]}</span> : null}
       </p>
-      <p className="card-text">{coach.status === "ready" ? coach.output.progressionSentence : noise ?? progressionSentence(progression)}</p>
+      <p className="card-text">{coach.status === "ready" ? coach.output.progressionSentence : <Say tu={noise ?? progressionSentence(progression)} />}</p>
       {coach.status === "ready" ? <div style={{ marginTop: 4 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Lecture" /></div> : null}
       <ProgressionChart
         points={progression.points.map((point) => ({ date: point.date, secondsPerKm: 1000 / point.speedAtReferenceHr }))}
@@ -209,9 +210,9 @@ function Kpi({ icon, question, value, unit, compare, meaning, tone, chart, shado
     <div className="card kpi" style={{ ["--shadow-color" as string]: shadow }}>
       <div className="kpi-question">{icon}{question}</div>
       <div className="kpi-value">{value}{unit && value !== "—" ? <span className="unit">{unit}</span> : null}</div>
-      <div className="kpi-compare num">{compare}</div>
+      <div className="kpi-compare num"><Say tu={compare} /></div>
       {chart}
-      <div className="kpi-meaning"><ToneDot tone={tone} />{meaning}</div>
+      <div className="kpi-meaning"><ToneDot tone={tone} /><Say tu={meaning} /></div>
     </div>
   );
 }
@@ -255,7 +256,7 @@ export function LastSessionCard({ dashboard, coach }: { dashboard: Dashboard; co
             <h2 id="last-title" className="section-title" style={{ fontSize: 30, marginTop: 2 }}>{sessionTitle(metrics)}</h2>
           </div>
         </div>
-        <Badge tone={tone.tone} icon={tone.icon} label={`${VERDICT_LABELS[verdict.level]}${last.deltas.count ? ` · ${last.deltas.count} comparable${last.deltas.count > 1 ? "s" : ""}` : ""}`} />
+        <Badge tone={tone.tone} icon={tone.icon} label={<Say tu={`${VERDICT_LABELS[verdict.level]}${last.deltas.count ? ` · ${last.deltas.count} comparable${last.deltas.count > 1 ? "s" : ""}` : ""}`} />} />
       </div>
       <p className="verdict-line">{headline}</p>
       <div className="facts">

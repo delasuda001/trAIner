@@ -21,9 +21,9 @@ export function useCoachGauge(): CoachGauge | null {
 }
 
 const LEVELS = {
-  large: { label: "large", text: "Le coach tourne sur l'abonnement Claude de Bastien, partagé entre vous : il y a de la place, profites-en." },
-  menager: { label: "à ménager", text: "L'abonnement de Bastien se remplit : garde le coach pour les questions qui comptent." },
-  plein: { label: "presque plein", text: "Le coach fait une pause pour ménager l'abonnement de Bastien. Tes chiffres restent tous là." },
+  large: { label: "large", text: "Le coach fonctionne avec l'abonnement Claude de Bastien, partagé entre les testeurs : il reste de la marge, n'hésitez pas." },
+  menager: { label: "à ménager", text: "L'abonnement de Bastien se remplit : réservez le coach aux questions qui comptent." },
+  plein: { label: "presque plein", text: "Le coach fait une pause pour ménager l'abonnement de Bastien. Tous vos chiffres restent consultables." },
 } as const;
 
 /** Heure de remise à zéro, dans le fuseau de l'appareil (calculée après l'affichage pour éviter tout décalage). */
@@ -55,7 +55,7 @@ export function CoachGaugeLine({ reveal = false }: { reveal?: boolean }) {
   const shown = open || (reveal && (gauge.level !== "large" || (gauge.left != null && gauge.left <= 1)));
   return (
     <div className={`coach-gauge gauge-${gauge.level}`}>
-      <button type="button" className="gauge-head" aria-expanded={shown} onClick={() => setOpen((value) => !value)} title="L'abonnement Claude de Bastien, partagé entre vous">
+      <button type="button" className="gauge-head" aria-expanded={shown} onClick={() => setOpen((value) => !value)} title="L'abonnement Claude de Bastien, partagé entre les testeurs">
         <span className="gauge-bars" aria-hidden>{[1, 2, 3].map((index) => <span key={index} className={index <= filled ? "on" : ""} />)}</span>
         <span>Abonnement de Bastien : <strong>{level.label}</strong></span>
       </button>
@@ -63,8 +63,8 @@ export function CoachGaugeLine({ reveal = false }: { reveal?: boolean }) {
         <span className="gauge-text" role="status">
           {level.text}
           {gauge.level !== "large" && reset ? ` Remise à zéro ${reset}.` : ""}
-          {gauge.left === 1 ? " Il te reste une analyse aujourd'hui : choisis celle qui te tente le plus !" : ""}
-          {gauge.left === 0 ? " Tes analyses du jour sont faites : le coach revient pour toi demain, et tout ce qui est déjà analysé se relit librement." : ""}
+          {gauge.left === 1 ? " Il vous reste une analyse aujourd'hui : choisissez celle qui vous intéresse le plus." : ""}
+          {gauge.left === 0 ? " Vos analyses du jour sont faites : le coach sera de nouveau disponible demain, et tout ce qui est déjà analysé reste consultable." : ""}
         </span>
       ) : null}
     </div>

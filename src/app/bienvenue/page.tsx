@@ -1,5 +1,6 @@
 import { Check, MessageCircle, Route, ShieldCheck, Sparkles, X } from "lucide-react";
 import { CoachGaugeLine } from "@/components/coach/coach-gauge";
+import { PrivacyNotice } from "@/components/profiles/privacy-notice";
 import { InstallHint, PreparingNotice, WelcomeDone } from "@/components/profiles/welcome-steps";
 import { formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import { asMember } from "@/lib/profiles/request";
@@ -7,6 +8,7 @@ import type { Member } from "@/lib/profiles/types";
 import { getDashboard, loadContext } from "@/lib/server/analytics";
 import { readSessionCoach } from "@/lib/server/coach-service";
 import { readPrepareStatus } from "@/lib/server/prepare-service";
+import { trainingOptOut } from "@/lib/server/profiles-admin";
 import { welcomeHighlights } from "@/lib/welcome/highlights";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +31,7 @@ function renderWelcome(member: Member) {
     return (
       <div className="welcome rise">
         <p className="eyebrow">Bienvenue</p>
-        <h1 className="page-title">Bonjour {member.name} !</h1>
+        <h1 className="page-title">Bonjour {member.name}</h1>
         <PreparingNotice stage={status?.stage ?? null} activities={status?.activities ?? 0} />
       </div>
     );
@@ -46,10 +48,10 @@ function renderWelcome(member: Member) {
   return (
     <div className="welcome rise">
       <p className="eyebrow">Bienvenue dans Sillage</p>
-      <h1 className="page-title">Bonjour {member.name}, <mark>tout est prêt.</mark></h1>
-      <p className="page-sub">Tes 12 derniers mois Garmin sont déjà lus et calculés. Voici ce que ta montre raconte.</p>
+      <h1 className="page-title">Bonjour {member.name}, <mark>votre espace est prêt.</mark></h1>
+      <p className="page-sub">Vos 12 derniers mois Garmin sont déjà importés et analysés. Voici ce qu&apos;en retient Sillage.</p>
 
-      <section className="welcome-stats" aria-label="Tes chiffres marquants">
+      <section className="welcome-stats" aria-label="Vos chiffres marquants">
         <div className="welcome-stat">
           <div className="card-eyebrow">12 derniers mois</div>
           <div className="glance-big">{formatNumber(highlights.km)}<span className="unit">km</span></div>
@@ -65,7 +67,7 @@ function renderWelcome(member: Member) {
           ) : (
             <>
               <div className="glance-big">{highlights.longestKm != null ? formatNumber(highlights.longestKm, 1) : "—"}<span className="unit">km</span></div>
-              <p className="glance-line">ta plus longue sortie de l&apos;année ; la tendance à FC égale viendra avec quelques sorties faciles</p>
+              <p className="glance-line">votre plus longue sortie de l&apos;année ; la tendance à FC égale apparaîtra après quelques sorties faciles</p>
             </>
           )}
         </div>
@@ -74,49 +76,51 @@ function renderWelcome(member: Member) {
             <div className="card-eyebrow">Dernière séance · {formatDate(last.localDate, "short")}</div>
             <div className="welcome-stat-title">{last.title ?? last.name}</div>
             <p className="glance-line">{[formatDistance(last.distanceM), last.movingTimeS ? formatDuration(last.movingTimeS) : null, last.averageSpeedMps ? formatPace(last.averageSpeedMps) : null].filter(Boolean).join(" · ")}</p>
-            <p className="glance-line">{lastAnalyzed ? <><Sparkles size={13} /> Déjà commentée par le coach</> : "Ouvre-la : chiffres, comparaisons et points à travailler"}</p>
+            <p className="glance-line">{lastAnalyzed ? <><Sparkles size={13} /> Déjà commentée par le coach</> : "À ouvrir : chiffres, comparaisons et points à travailler"}</p>
           </a>
         ) : null}
       </section>
 
       <section className="card welcome-next">
-        <div className="card-eyebrow">Ta prochaine séance · {suggestion.when.label}</div>
+        <div className="card-eyebrow">Votre prochaine séance · {suggestion.when.label}</div>
         <div className="welcome-stat-title">{suggestion.primary.title}{suggestion.primary.durationMin ? ` · ${formatDuration(suggestion.primary.durationMin * 60)}` : ""}</div>
         <p className="small" style={{ margin: "4px 0 0" }}>{suggestion.reason}</p>
       </section>
 
       <div className="welcome-two">
         <section className="card welcome-card">
-          <h2 className="section-title">Tu peux</h2>
+          <h2 className="section-title">Vous pouvez</h2>
           <ul className="welcome-list">
             <li><Route size={15} /> Ouvrir chaque séance : ce qui a marché, ce qui est à travailler, chiffres à l&apos;appui.</li>
-            <li><Check size={15} /> Suivre la séance proposée et ta progression, comparée à toi-même.</li>
+            <li><Check size={15} /> Suivre la séance proposée et votre progression, comparée à vous-même.</li>
             <li><MessageCircle size={15} /> Poser une question au coach, ou lui signaler une contrainte.</li>
           </ul>
         </section>
         <section className="card welcome-card">
           <h2 className="section-title">Sillage ne fait pas</h2>
           <ul className="welcome-list muted-list">
-            <li><X size={15} /> D&apos;avis médical : une douleur, c&apos;est pour un médecin.</li>
-            <li><X size={15} /> De plan imposé : il propose, tu décides.</li>
-            <li><ShieldCheck size={15} /> Rien d&apos;autre que tes données Garmin, visibles par toi seul.</li>
+            <li><X size={15} /> D&apos;avis médical : une douleur relève d&apos;un médecin.</li>
+            <li><X size={15} /> De plan imposé : il propose, vous décidez.</li>
+            <li><ShieldCheck size={15} /> D&apos;usage d&apos;autres données que vos données Garmin.</li>
           </ul>
         </section>
       </div>
 
       <section className="card welcome-card">
         <h2 className="section-title">Le coach, une ressource partagée</h2>
-        <p className="small">Tes chiffres sont calculés pour chaque séance, sans limite. Les commentaires du coach passent par l&apos;abonnement Claude de Bastien : un coup d&apos;œil à la jauge avant d&apos;en demander.</p>
+        <p className="small">Vos chiffres sont calculés pour chaque séance, sans limite. Les commentaires du coach passent par l&apos;abonnement Claude de Bastien : la jauge indique la marge disponible avant d&apos;en demander.</p>
         <CoachGaugeLine />
       </section>
 
+      <PrivacyNotice trainingOptOut={trainingOptOut()} />
+
       <details className="card welcome-card welcome-install">
-        <summary><strong>L&apos;avoir sur ton téléphone comme une application</strong></summary>
+        <summary><strong>Installer Sillage sur votre téléphone comme une application</strong></summary>
         <InstallHint />
       </details>
 
       <WelcomeDone hasGoal={hasGoal} />
-      <p className="muted small" style={{ textAlign: "center" }}>Une idée, un bug, une envie ? Le petit bouton de retour, en bas à droite, à tout moment.</p>
+      <p className="muted small" style={{ textAlign: "center" }}>Une idée, un bug, une suggestion ? Le bouton « Un retour ? », en bas à droite, est disponible à tout moment.</p>
     </div>
   );
 }

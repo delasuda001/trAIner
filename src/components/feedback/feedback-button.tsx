@@ -3,6 +3,7 @@
 import { MessageSquarePlus, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useSay } from "@/components/ui/register";
 
 const CATEGORIES = [
   { value: "idee", label: "Une idée" },
@@ -15,6 +16,7 @@ const CATEGORIES = [
 
 /** Bouton « Un retour ? » présent sur toutes les pages : note libre, page jointe automatiquement. */
 export function FeedbackButton() {
+  const say = useSay();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]["value"]>("idee");
@@ -40,12 +42,12 @@ export function FeedbackButton() {
   return (
     <div className="feedback-panel card" role="dialog" aria-label="Faire un retour">
       <div className="row-between">
-        <strong>Ton avis sur cette page</strong>
+        <strong>{say("Ton avis sur cette page", "Votre avis sur cette page")}</strong>
         <button type="button" className="btn btn-ghost icon-btn" onClick={() => setOpen(false)} aria-label="Fermer"><X size={16} /></button>
       </div>
       {state === "sent" ? (
         <>
-          <p className="small">Merci ! Bastien le lira. Tu peux en écrire un autre quand tu veux.</p>
+          <p className="small">{say("Merci ! Bastien le lira. Tu peux en écrire un autre quand tu veux.", "Merci, Bastien le lira. Vous pouvez en écrire un autre à tout moment.")}</p>
           <button type="button" className="btn" onClick={() => setState("idle")}>Écrire un autre retour</button>
         </>
       ) : (
@@ -55,8 +57,8 @@ export function FeedbackButton() {
               <button key={entry.value} type="button" className={`chip chip-small${category === entry.value ? " selected" : ""}`} onClick={() => setCategory(entry.value)}>{entry.label}</button>
             ))}
           </div>
-          <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} maxLength={2000} placeholder="Ce qui t'aiderait, ce qui manque, ce qui est confus…" required />
-          {state === "error" ? <p className="form-error">Envoi impossible, réessaie.</p> : null}
+          <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} maxLength={2000} placeholder={say("Ce qui t'aiderait, ce qui manque, ce qui est confus…", "Ce qui vous aiderait, ce qui manque, ce qui est confus…")} required />
+          {state === "error" ? <p className="form-error">{say("Envoi impossible, réessaie.", "Envoi impossible, merci de réessayer.")}</p> : null}
           <button type="submit" className="btn btn-primary" disabled={state === "sending" || note.trim().length < 2}>{state === "sending" ? "Envoi…" : "Envoyer"}</button>
         </form>
       )}

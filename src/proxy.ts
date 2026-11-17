@@ -12,7 +12,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) return NextResponse.next();
   if (request.cookies.get(SESSION_COOKIE)?.value) return NextResponse.next();
-  if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Session expirée : reconnecte-toi." }, { status: 401 });
+  if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Session expirée : merci de vous reconnecter." }, { status: 401 });
   return NextResponse.redirect(new URL("/connexion", request.url));
 }
 

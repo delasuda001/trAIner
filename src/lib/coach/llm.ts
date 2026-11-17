@@ -51,9 +51,9 @@ export class LlmError extends Error {
 }
 
 export const LLM_FAILURE_MESSAGES: Record<LlmFailureKind, string> = {
-  rate_limited: "Quota Claude atteint pour le moment : l'analyse chiffrée reste affichée, réessaie plus tard.",
+  rate_limited: "Quota Claude atteint pour le moment : l'analyse chiffrée reste affichée ; nouvel essai possible plus tard.",
   unavailable: "Claude ne répond pas : l'analyse chiffrée reste affichée.",
-  auth: "Claude n'est pas connecté sur cette machine : lance `claude` une fois dans un terminal pour te connecter.",
+  auth: "Claude n'est pas connecté sur cette machine : lancer `claude` une fois dans un terminal du Mac pour le connecter.",
   invalid_output: "La réponse de Claude n'a pas passé les contrôles (format ou chiffres) : l'analyse chiffrée reste affichée.",
-  quota: "Limite d'analyses du test atteinte : les chiffres restent affichés, réessaie plus tard.",
+  quota: "Limite d'analyses du test atteinte : les chiffres restent affichés ; nouvel essai possible plus tard.",
 };

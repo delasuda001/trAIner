@@ -1,6 +1,6 @@
 # Ouvrir Sillage au test familial
 
-Ce guide liste ce que Bastien fait lui-même, une seule fois. Son père et son frère n'installent rien :
+Ce guide liste ce que Bastien fait lui-même, une seule fois. Les testeurs (Benoît, Charles, Marie…) n'installent rien :
 ils ouvrent un lien dans Safari et ajoutent le site à leur écran d'accueil.
 
 ## Principe
@@ -49,15 +49,16 @@ mots de passe). Les données de Bastien sont inchangées (sauvegarde :
 Pour Android (Bastien) : ouvrir dans Chrome un lien d'invitation créé pour son profil, puis
 menu ⋮ → « Ajouter à l'écran d'accueil ».
 
-## 3. Les clés Garmin du père et du frère
+## 3. Les clés Garmin des testeurs
 
 Chacun crée sa clé sur https://connect.garmin.com/app/settings/personalApiToken (Bastien les guide)
 et la lui transmet par un canal privé. Bastien l'ajoute à `.env.local` sous le nom indiqué dans
 Paramètres, par exemple :
 
 ```
-GARMIN_API_KEY_PAPA=...
-GARMIN_API_KEY_FRERE=...
+GARMIN_API_KEY_BENOIT=...
+GARMIN_API_KEY_CHARLES=...
+GARMIN_API_KEY_MARIE=...
 ```
 
 Puis « Vérifier la clé » dans Paramètres (aucune relance nécessaire). La clé n'est jamais affichée.

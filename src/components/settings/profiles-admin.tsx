@@ -252,7 +252,8 @@ export function ProfilesAdmin({ profiles, publicUrlConfigured, prepareEstimate }
       <form className="card create-guest" onSubmit={(event) => void create(event)}>
         <label className="field">
           <span>Ajouter une personne</span>
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Prénom affiché (ex. Papa)" maxLength={30} required />
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Prénom de la personne (ex. Jean)" maxLength={30} required />
+          <small className="muted">Son prénom, tel qu&apos;il s&apos;affichera dans son accueil (« Bonjour Jean »). L&apos;application le vouvoie.</small>
         </label>
         <button type="submit" className="btn btn-primary" disabled={name.trim().length < 2}><UserPlus size={14} /> Créer le profil</button>
         {error ? <p className="form-error">{error}</p> : null}

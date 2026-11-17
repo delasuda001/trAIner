@@ -4,7 +4,7 @@ import { Power } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function AccessPanel({ suspended, publicUrl, guestsWeeklyCap, guestsWeekUsed }: { suspended: boolean; publicUrl: string | null; guestsWeeklyCap: number; guestsWeekUsed: number }) {
+export function AccessPanel({ suspended, publicUrl, guestsWeeklyCap, guestsWeekUsed, trainingOptOut }: { suspended: boolean; publicUrl: string | null; guestsWeeklyCap: number; guestsWeekUsed: number; trainingOptOut: boolean }) {
   const router = useRouter();
   const [url, setUrl] = useState(publicUrl ?? "");
   const [cap, setCap] = useState(String(Math.round(guestsWeeklyCap / 1000)));
@@ -40,6 +40,13 @@ export function AccessPanel({ suspended, publicUrl, guestsWeeklyCap, guestsWeekU
         </label>
         <div className="form-actions"><button type="button" className="btn" onClick={() => void put({ guestsWeeklyCap: Math.max(0, Number(cap) || 0) * 1000 }, "Plafond enregistré.")}>Enregistrer</button> <span className="muted small">utilisé : {Math.round(guestsWeekUsed / 1000)} k</span></div>
       </div>
+      <label className="check-line">
+        <input type="checkbox" checked={trainingOptOut} onChange={(event) => void put({ trainingOptOut: event.target.checked }, event.target.checked ? "Noté : l'accueil des invités le mentionne." : "Noté : l'accueil renvoie aux règles d'Anthropic.")} />
+        <span>
+          J&apos;ai désactivé « Aider à améliorer Claude » sur mon compte claude.ai (Paramètres → Confidentialité).
+          <span className="muted small" style={{ display: "block" }}>Coché, l&apos;accueil des invités indique qu&apos;Anthropic n&apos;utilise pas ces échanges pour entraîner ses modèles. Décoché, il renvoie simplement aux règles d&apos;Anthropic pour les comptes personnels.</span>
+        </span>
+      </label>
       {message ? <p className="muted small">{message}</p> : null}
     </div>
   );

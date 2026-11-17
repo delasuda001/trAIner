@@ -5,7 +5,7 @@ import { z } from "zod";
  * Entrée compacte : les notes regroupées par thème, prénoms seulement, sans aucune
  * donnée d'entraînement. Sortie validée par Zod.
  */
-export const FEEDBACK_PROMPT_VERSION = "feedback-v1";
+export const FEEDBACK_PROMPT_VERSION = "feedback-v2";
 /** Au-delà, les notes les plus anciennes sont écartées (coût maîtrisé : ~5 à 8 k tokens). */
 export const FEEDBACK_MAX_CHARS = 9_000;
 
@@ -47,7 +47,7 @@ export const feedbackSynthesisJsonSchema = {
   },
 } as const;
 
-export const FEEDBACK_SYSTEM_PROMPT = `Tu aides Bastien, qui construit une application de coaching de course à pied, à exploiter les retours de son père et de son frère, qui la testent. Tu reçois leurs retours regroupés par thème et le bilan des pouces sur les analyses du coach.
+export const FEEDBACK_SYSTEM_PROMPT = `Tu aides Bastien, qui construit une application de coaching de course à pied, à exploiter les retours des personnes qui la testent (désignées par leur prénom). Tu reçois leurs retours regroupés par thème et le bilan des pouces sur les analyses du coach.
 
 - Dégage les besoins réels derrière les remarques, regroupés en quelques thèmes, du plus important au moins important.
 - Pour chaque thème : qui l'exprime, le besoin, une piste concrète pour l'application, une priorité.

@@ -54,7 +54,7 @@ export async function asAdmin<T>(render: (member: Member) => T | Promise<T>): Pr
 /** Point d'entrée d'une route d'API : 401 sans session, sinon exécution sous le profil. */
 export async function apiAsMember(handler: (member: Member) => Response | Promise<Response>): Promise<Response> {
   const member = await requestMember();
-  if (!member) return NextResponse.json({ error: "Session expirée : reconnecte-toi." }, { status: 401 });
+  if (!member) return NextResponse.json({ error: "Session expirée : merci de vous reconnecter." }, { status: 401 });
   return runAs(member, () => handler(member));
 }
 

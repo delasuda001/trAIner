@@ -10,7 +10,8 @@ import { ProfilesAdmin, type ProfileView } from "@/components/settings/profiles-
 import { getRegistry, toMember } from "@/lib/profiles/context";
 import { PREPARATION_ESTIMATE, preparationAllowed, readPrepareStatus } from "@/lib/server/prepare-service";
 import { guestsWeeklyCap, quotaStateOf, usageOf } from "@/lib/server/quota";
-import { publicUrl } from "@/lib/server/profiles-admin";
+import { publicUrl, trainingOptOut } from "@/lib/server/profiles-admin";
+import { PrivacyNotice } from "@/components/profiles/privacy-notice";
 import { reloadEnv } from "@/lib/server/sync-service";
 import { checkGarminKey } from "@/lib/source/garmin";
 import { Fact } from "@/components/ui/fact";
@@ -112,7 +113,7 @@ async function adminSections() {
       <section className="section grid grid-main-side" style={{ alignItems: "start" }}>
         <div className="card">
           <h2 className="section-title">Accès depuis l&apos;extérieur</h2>
-          <AccessPanel suspended={guestsSuspended()} publicUrl={url.configured ? url.url : null} guestsWeeklyCap={guestsWeeklyCap()} guestsWeekUsed={guestsWeekUsed} />
+          <AccessPanel suspended={guestsSuspended()} publicUrl={url.configured ? url.url : null} guestsWeeklyCap={guestsWeeklyCap()} guestsWeekUsed={guestsWeekUsed} trainingOptOut={trainingOptOut()} />
         </div>
         <div className="card">
           <h2 className="section-title">Journal des connexions</h2>
@@ -143,23 +144,24 @@ function renderGuest(member: Member) {
       <div className="page-head">
         <div>
           <p className="eyebrow">Paramètres</p>
-          <h1 className="page-title">Ton test</h1>
-          <p className="page-sub">Tes chiffres sont toujours calculés ; le coach, lui, partage l&apos;abonnement de Bastien.</p>
+          <h1 className="page-title">Votre test</h1>
+          <p className="page-sub">Vos chiffres sont toujours calculés ; le coach, lui, partage l&apos;abonnement de Bastien.</p>
         </div>
       </div>
       <AccountRow name={member.name} />
       <div className="grid grid-2" style={{ alignItems: "start" }}>
         <section className="card">
           <h2 className="section-title">Le coach</h2>
-          <p className="small" style={{ marginTop: 6 }}>Chaque commentaire du coach (analyse de séance, conseil, réponse) passe par l&apos;abonnement Claude de Bastien. Une analyse déjà faite se relit autant que tu veux.</p>
+          <p className="small" style={{ marginTop: 6 }}>Chaque commentaire du coach (analyse de séance, conseil, réponse) passe par l&apos;abonnement Claude de Bastien. Une analyse déjà faite se relit à volonté.</p>
           <CoachGaugeLine />
         </section>
         <section className="card">
-          <h2 className="section-title">Tes appareils connectés</h2>
+          <h2 className="section-title">Vos appareils connectés</h2>
           <MyDevices devices={devices} />
-          <p className="muted small" style={{ marginTop: 10 }}>Un appareil perdu ? Déconnecte-le ici, ou préviens Bastien. <Link href="/bienvenue">Revoir l&apos;accueil du test</Link></p>
+          <p className="muted small" style={{ marginTop: 10 }}>Un appareil perdu ? Déconnectez-le ici, ou prévenez Bastien. <Link href="/bienvenue">Revoir l&apos;accueil du test</Link></p>
         </section>
       </div>
+      <section className="section"><PrivacyNotice trainingOptOut={trainingOptOut()} /></section>
     </>
   );
 }

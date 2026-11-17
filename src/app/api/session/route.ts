@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   const locked = loginThrottle.lockedFor(address, now);
   if (locked) {
     registry.logLogin({ profileId: null, method: "code", outcome: "locked", address, device });
-    return NextResponse.json({ error: `Trop d'essais : réessaie dans ${Math.ceil(locked / 60_000)} min.` }, { status: 429 });
+    return NextResponse.json({ error: `Trop d'essais : merci de réessayer dans ${Math.ceil(locked / 60_000)} min.` }, { status: 429 });
   }
   const parsed = loginSchema.safeParse(await request.json().catch(() => null));
   const record = parsed.success && plausibleCode(parsed.data.code) ? registry.findByCode(parsed.data.code) : null;

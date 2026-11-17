@@ -2,6 +2,7 @@ import { Target } from "lucide-react";
 import { daysBetween } from "@/lib/dates";
 import { goalStatus, type GoalMarker } from "@/lib/engine/prescription";
 import type { Goal } from "@/lib/goal/goal";
+import { Say } from "@/components/ui/register";
 
 /**
  * Où en est chaque objectif chiffré : dit une seule fois, ici (page Objectif et
@@ -18,8 +19,8 @@ export function GoalStatusList({ markers, goal, today, compact = false }: { mark
         return (
           <div key={marker.race} className={`goal-status-row goal-${status.status}`}>
             <div className="goal-status-head"><Target size={13} /> <strong>{status.race} en {status.goal}</strong></div>
-            <div><strong>{status.verdict}</strong> Repère actuel : {status.current}.</div>
-            {compact ? null : <div className="muted small">{status.timing}</div>}
+            <div><strong><Say tu={status.verdict} /></strong> Repère actuel : {status.current}.</div>
+            {compact ? null : <div className="muted small"><Say tu={status.timing} /></div>}
           </div>
         );
       })}

@@ -17,6 +17,8 @@ import { goalMarker, prescribe, type GoalMarker, type Prescription, type RecentE
 import { suggestNextSession, type Suggestion } from "@/lib/engine/suggestion";
 import { classifyVerdict, type SessionVerdict } from "@/lib/engine/verdict";
 import { fallbackZones } from "@/lib/engine/zones";
+import { activeMember } from "@/lib/profiles/context";
+import { registerForRole, voiceDeep, type Register } from "@/lib/register";
 import type { ActivityStreams, HeartRateZones, Lap, WellnessDay } from "@/lib/source/types";
 import { EMPTY_GOAL, GOAL_KEY, goalSchema, targetPaceMps, type Goal } from "@/lib/goal/goal";
 import { athleteProfileSchema, PROFILE_KEY, SYNC_STATE_KEY, syncStateSchema, type SyncState } from "@/lib/sync/sync";
@@ -184,6 +186,11 @@ function recentEfforts(runs: AnalyzedRun[], date: string): RecentEffort[] {
     });
 }
 
+/** Registre du profil actif : les phrases du moteur sont vouvoyées pour un invité, inchangées pour Bastien. */
+function currentRegister(): Register {
+  return registerForRole(activeMember()?.role);
+}
+
 export function analyzeSession(activityId: string, context: Context = loadContext()): SessionAnalysis | null {
   const current = context.runs.find((run) => run.id === activityId);
   if (!current) return null;
@@ -210,12 +217,12 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     metrics: current.metrics,
     comparables: comparables.map((run) => ({ id: run.id, localDate: run.localDate, name: run.name, title: sessionTitle(run.metrics), ageDays: daysBetween(run.localDate, current.localDate), movingTimeS: run.movingTimeS, distanceM: run.distanceM, mainSpeedMps: run.metrics.mainSpeedMps, mainHeartRateBpm: run.metrics.mainHeartRateBpm, workSpeedMps: run.metrics.work?.averageSpeedMps ?? null, workHeartRateBpm: run.metrics.work?.averageHeartRateBpm ?? null, kind: run.metrics.kind, score: run.score })),
     deltas,
-    verdict: classifyVerdict(current.metrics, deltas),
+    verdict: voiceDeep(classifyVerdict(current.metrics, deltas), currentRegister()),
     profile: context.profile,
     goal: context.goal,
     feeling: createFeelingRepository().get(current.id),
-    context: sessionCtx,
-    prescription,
+    context: voiceDeep(sessionCtx, currentRegister()),
+    prescription: voiceDeep(prescription, currentRegister()),
   };
 }
 
@@ -338,7 +345,8 @@ function computeOutlook(context: Context): Outlook {
     efforts: recentEfforts(runs, addDays(today, 1)),
     goal: goal ? { eventDate: goal.eventDate, distanceKm: goal.distanceKm, targetPaceMps: targetPaceMps(goal), runsPerWeek: goal.runsPerWeek, preferredDays: goal.preferredDays } : null,
   });
-  return { load, loadAlert: alert, recovery, progression, suggestion, rhythm };
+  const register = currentRegister();
+  return { load, loadAlert: voiceDeep(alert, register), recovery, progression, suggestion: voiceDeep(suggestion, register), rhythm };
 }
 
 /** La suggestion que le moteur affichait juste avant une séance (données arrêtées à son départ). */

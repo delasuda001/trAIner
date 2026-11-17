@@ -19,6 +19,7 @@ import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, 
 import type { ActivityView as View, SessionAnalysis } from "@/lib/server/analytics";
 import type { CoachResult } from "@/lib/server/coach-service";
 import type { Sport } from "@/lib/source/types";
+import { Say } from "@/components/ui/register";
 
 function bpm(value: number | null | undefined) {
   return value == null ? "—" : String(Math.round(value));
@@ -40,12 +41,12 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
   return (
     <section className="card card-hero" style={{ ["--shadow-color" as string]: "var(--sl-pink)" }} aria-label="Verdict du coach">
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-        <Badge tone={tone.tone} icon={tone.icon} label={`${VERDICT_LABELS[verdict.level]}${deltas.count ? ` · ${deltas.count} séances comparables` : ""}`} />
+        <Badge tone={tone.tone} icon={tone.icon} label={<Say tu={`${VERDICT_LABELS[verdict.level]}${deltas.count ? ` · ${deltas.count} séances comparables` : ""}`} />} />
         {shown ? <CoachStamp model={shown.model} createdAt={shown.createdAt} /> : null}
       </div>
       {previous ? (
         <div className="stale-note">
-          <span style={{ flex: 1 }}>Tes données ont changé depuis cette analyse (ressenti, nouvelles séances ou réglages du coach).</span>
+          <span style={{ flex: 1 }}><Say tu="Tes données ont changé depuis cette analyse (ressenti, nouvelles séances ou réglages du coach)." /></span>
           <CoachRequest endpoint={endpoint} label="Mettre à jour l'analyse" />
         </div>
       ) : null}
@@ -64,7 +65,7 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
       {ready ? null : (
         <div style={{ marginTop: 16 }}>
           <CoachRequest endpoint={endpoint} label="Demander l'analyse du coach" initialError={coach?.status === "error" ? coach.message : null} />
-          <p className="muted small" style={{ marginTop: 6 }}>Verdict ci-dessus calculé à partir de tes données ; Claude le commente et l&apos;explique.</p>
+          <p className="muted small" style={{ marginTop: 6 }}><Say tu="Verdict ci-dessus calculé à partir de tes données ; Claude le commente et l'explique." /></p>
         </div>
       )}
     </section>
@@ -108,9 +109,9 @@ function DynamicsCard({ analysis }: { analysis: SessionAnalysis }) {
         </table>
       </div>
       {readDynamics(analysis.metrics, analysis.deltas).length ? (
-        <ul className="bullets" style={{ marginTop: 10 }}>{readDynamics(analysis.metrics, analysis.deltas).map((line) => <li key={line}>{line}</li>)}</ul>
+        <ul className="bullets" style={{ marginTop: 10 }}>{readDynamics(analysis.metrics, analysis.deltas).map((line) => <li key={line}><Say tu={line} /></li>)}</ul>
       ) : null}
-      <p className="muted small" style={{ marginTop: 8 }}>Comparé à tes propres valeurs uniquement, jamais à une norme.</p>
+      <p className="muted small" style={{ marginTop: 8 }}><Say tu="Comparé à tes propres valeurs uniquement, jamais à une norme." /></p>
     </section>
   );
 }
@@ -163,7 +164,7 @@ function ComparisonCard({ analysis }: { analysis: SessionAnalysis }) {
   return (
     <section className="card">
       <div className="section-head">
-        <h2 className="section-title">Face à tes séances comparables</h2>
+        <h2 className="section-title"><Say tu="Face à tes séances comparables" /></h2>
         <span className="section-note">{intervals ? "allure des répétitions" : "allure hors échauffement"}</span>
       </div>
       {analysis.verdict.fewComparables ? <p className="notice small" style={{ marginTop: 0, marginBottom: 10 }}>Seulement {deltas.count} séance{deltas.count > 1 ? "" : ""} vraiment comparable{deltas.count > 1 ? "s" : ""} (même format, moins d&apos;un an) : comparaison fragile.</p> : null}
@@ -243,7 +244,7 @@ function ZonesCard({ view }: { view: View }) {
     <section className="card">
       <div className="section-head">
         <h2 className="section-title">Temps par zone FC</h2>
-        <span className="section-note">{view.profile.zonesFromWatch ? "zones de ta montre" : "zones estimées"}</span>
+        <span className="section-note">{view.profile.zonesFromWatch ? <Say tu="zones de ta montre" /> : "zones estimées"}</span>
       </div>
       <div className="zones">
         {([1, 2, 3, 4, 5] as const).map((zone) => {

@@ -524,3 +524,10 @@ a.welcome-stat:hover { transform: translate(-1px, -1px); }
 /* Jauge : une ligne, le détail au toucher */
 .coach-gauge .gauge-head { font: inherit; font-size: 12.5px; background: none; border: 0; padding: 2px 0; cursor: pointer; color: var(--sl-ink-muted); text-align: left; }
 .coach-gauge .gauge-head strong { color: var(--sl-ink); }
+
+/* Case à cocher suivie d'un texte sur plusieurs lignes (réglages). */
+.check-line { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; font-size: 14px; margin-top: 14px; cursor: pointer; }
+.check-line input { margin-top: 3px; }
+
+/* Confidentialité dans l'accueil des invités. */
+.welcome-privacy .welcome-list svg { color: var(--sl-ink-muted); }
