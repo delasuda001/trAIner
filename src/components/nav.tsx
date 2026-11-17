@@ -1,6 +1,6 @@
 "use client";
 
-import { Gauge, MessageCircle, MessagesSquare, NotebookPen, Target } from "lucide-react";
+import { Gauge, MessageCircle, MessagesSquare, Target } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,8 +8,7 @@ const LINKS = [
   { href: "/", label: "Tableau de bord", short: "Accueil", icon: Gauge, admin: false },
   { href: "/coach", label: "Demander au coach", short: "Coach", icon: MessageCircle, admin: false },
   { href: "/objectif", label: "Objectif", short: "Objectif", icon: Target, admin: false },
-  // Bilan hebdomadaire (Opus) et retours des testeurs : réservés à Bastien.
-  { href: "/bilan", label: "Bilan", short: "Bilan", icon: NotebookPen, admin: true },
+  // Retours des testeurs : réservés à Bastien. Le bilan hebdomadaire (outil de réglage) est dans Paramètres.
   { href: "/retours", label: "Retours", short: "Retours", icon: MessagesSquare, admin: true },
 ];
 

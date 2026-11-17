@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getDbFor } from "@/lib/db/client";
 import { createUsageRepository } from "@/lib/db/repositories/usage-repository";
 import { getRegistry, requireActiveMember } from "@/lib/profiles/context";
-import { decideQuota, quotaState, type QuotaDecision, type QuotaState } from "@/lib/profiles/quota";
+import { analysesLeft, decideQuota, quotaState, subscriptionGauge, type QuotaDecision, type QuotaState, type SubscriptionGauge } from "@/lib/profiles/quota";
 import { DEFAULT_GUESTS_WEEKLY_CAP, type MemberRecord } from "@/lib/profiles/types";
 import { readRateLimits } from "./usage";
 
@@ -28,7 +28,7 @@ export function usageOf(record: Pick<MemberRecord, "id" | "role">, sinceIso: str
 }
 
 /** Contrôle avant tout appel à Claude (après le cache : une réponse en cache ne coûte rien). */
-export function checkQuota(estimate?: number): QuotaDecision {
+export function checkQuota(estimate?: number, options: { preparation?: boolean } = {}): QuotaDecision {
   const member = requireActiveMember();
   const registry = getRegistry();
   const record = registry.find(member.id);
@@ -42,11 +42,33 @@ export function checkQuota(estimate?: number): QuotaDecision {
     own: createUsageRepository().since(since),
     allGuests: member.role === "guest" ? guests.flatMap((guest) => usageOf(guest, since)) : [],
     guestsWeeklyCap: guestsWeeklyCap(),
-    windows: Object.values(readRateLimits()).map((window) => ({ window: window.window ?? "inconnue", utilization: window.utilization, resetsAt: window.resetsAt, status: window.status })),
+    windows: windows(),
     now,
     startOfTodayIso: startOfToday(now),
     estimate,
+    preparation: options.preparation,
   });
+}
+
+function windows() {
+  return Object.values(readRateLimits()).map((window) => ({ window: window.window ?? "inconnue", utilization: window.utilization, resetsAt: window.resetsAt, status: window.status }));
+}
+
+export type CoachGauge = SubscriptionGauge & {
+  /** Analyses encore possibles aujourd'hui pour un invité ; montré seulement à 1 ou 0. */
+  left: number | null;
+  /** Retour des analyses de l'invité (minuit local) quand il n'en reste plus. */
+  guest: boolean;
+};
+
+/** État de l'abonnement de Bastien et du plafond de l'invité, pour la jauge près des boutons du coach. */
+export function coachGauge(now = new Date()): CoachGauge {
+  const member = requireActiveMember();
+  const gauge = subscriptionGauge(windows(), now);
+  if (member.role !== "guest") return { ...gauge, left: null, guest: false };
+  const record = getRegistry().find(member.id);
+  const state = quotaState({ own: createUsageRepository().since(weekAgo(now)), dailyCap: record?.dailyTokenCap ?? null, weeklyCap: record?.weeklyTokenCap ?? null, now, startOfTodayIso: startOfToday(now) });
+  return { ...gauge, left: analysesLeft(state), guest: true };
 }
 
 /** État du quota d'un profil (affichage Paramètres). */

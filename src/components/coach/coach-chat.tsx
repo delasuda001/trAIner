@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { CoachGaugeLine } from "./coach-gauge";
 import { ArrowUp, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { generatedAtLabel, modelLabel } from "@/lib/coach/model-label";
@@ -18,6 +20,7 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
   const [messages, setMessages] = useState<ChatMessage[]>(initial);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
   const end = useRef<HTMLDivElement>(null);
 
   useEffect(() => end.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [messages, busy]);
@@ -32,6 +35,7 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
       const response = await fetch("/api/coach/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: value }) });
       const body = (await response.json()) as { messages?: ChatMessage[]; error?: string };
       if (body.messages) setMessages(body.messages);
+      router.refresh();
     } finally {
       setBusy(false);
     }
@@ -66,6 +70,7 @@ export function CoachChat({ initial, seen }: { initial: ChatMessage[]; seen: str
         <textarea rows={2} maxLength={800} value={question} placeholder="Ta question au coach…" onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void ask(question); } }} />
         <button type="submit" className="btn btn-primary icon-btn" disabled={busy || question.trim().length < 2} aria-label="Envoyer"><ArrowUp size={16} /></button>
       </form>
+      <CoachGaugeLine />
       <div className="row-between" style={{ marginTop: 8, alignItems: "center" }}>
         <span className="muted small">Le coach voit les 6 derniers messages et un résumé de tes données, pas tes séries brutes.</span>
         {messages.length ? <button type="button" className="btn btn-ghost" onClick={() => void clear()}><Trash2 size={13} /> Effacer</button> : null}

@@ -444,3 +444,70 @@ table.data td.bar-cell { width: 35%; min-width: 120px; }
 .welcome .page-title { font-size: 38px; }
 .welcome-card .section-title { font-size: 19px; margin-bottom: 6px; }
 .welcome-steps { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; }
+
+/* Accueil du testeur : ses chiffres d'abord, puis ce qu'il peut faire */
+.welcome { max-width: 760px; }
+.welcome .page-title mark { white-space: nowrap; }
+.welcome-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.welcome-stat { display: block; text-decoration: none; color: var(--sl-ink); border: var(--sl-stroke) solid var(--sl-border); border-radius: var(--sl-radius); padding: 14px 16px; background: var(--sl-surface); box-shadow: 4px 4px 0 var(--sl-blue); }
+.welcome-stat:first-child { background: var(--sl-yellow); color: var(--fixed-ink); border-color: var(--fixed-ink); box-shadow: 4px 4px 0 var(--fixed-ink); }
+.welcome-stat:first-child .unit, .welcome-stat:first-child .glance-line { color: var(--fixed-ink); }
+.welcome-stat .glance-big { font-family: var(--font-display); font-weight: 800; font-size: 40px; line-height: 1; margin-top: 8px; letter-spacing: -0.03em; }
+.welcome-stat .glance-line { font-size: 13.5px; margin: 6px 0 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.welcome-stat-title { font-family: var(--font-display); font-weight: 800; font-size: 21px; line-height: 1.15; margin: 6px 0 2px; }
+a.welcome-stat:hover { transform: translate(-1px, -1px); }
+.welcome-next { border-left: 6px solid var(--sl-pink); }
+.welcome-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.welcome-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; font-size: 14px; }
+.welcome-list li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; }
+.welcome-list svg { margin-top: 2px; color: var(--sl-green); }
+.welcome-list.muted-list svg { color: var(--sl-ink-muted); }
+.welcome-install summary { cursor: pointer; list-style: none; }
+.welcome-install summary::after { content: " ＋"; color: var(--sl-ink-muted); }
+.welcome-install[open] summary::after { content: " −"; }
+.welcome-install[open] summary { margin-bottom: 8px; }
+.welcome-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; margin-top: 4px; }
+.btn-lg { padding: 12px 22px; font-size: 15.5px; }
+.prepare-steps { margin: 10px 0 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; }
+.prepare-steps li { color: var(--sl-ink-muted); }
+.prepare-steps li.current { color: var(--sl-ink); font-weight: 700; }
+.prepare-steps li.done { color: var(--sl-ink); }
+.prepare-steps li.done::marker { content: "✓  "; }
+@media (max-width: 820px) {
+  .welcome { margin-top: 8px; }
+  .welcome .page-title { font-size: 30px; }
+  .welcome-stats, .welcome-two { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .welcome-stat .glance-big { font-size: 34px; }
+}
+
+/* Jauge de l'abonnement de Bastien, près des boutons du coach (invités) */
+.coach-gauge { display: grid; gap: 4px; margin-top: 8px; font-size: 12.5px; color: var(--sl-ink-muted); max-width: 520px; }
+.gauge-head { display: inline-flex; align-items: center; gap: 8px; color: var(--sl-ink); }
+.gauge-bars { display: inline-flex; gap: 3px; }
+.gauge-bars span { width: 14px; height: 8px; border-radius: 2px; border: 1.5px solid var(--sl-border); background: transparent; }
+.gauge-large .gauge-bars span.on { background: var(--sl-green); }
+.gauge-menager .gauge-bars span.on { background: var(--sl-orange); }
+.gauge-plein .gauge-bars span.on { background: var(--sl-pink); }
+.gauge-text { line-height: 1.4; }
+
+/* Exemples cliquables sous les champs libres */
+.example-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.chip.chip-example { width: auto; padding: 3px 10px; font-size: 12.5px; font-weight: 500; display: inline-flex; align-items: center; gap: 3px; border-style: dashed; }
+.chip.chip-example:hover { border-style: solid; }
+
+/* Préparation d'un invité (Paramètres, Bastien) */
+.prepare-panel { margin-top: 12px; padding-top: 12px; border-top: 1.5px solid var(--sl-grid); }
+
+/* Bouton de retour : présent, mais discret */
+.feedback-fab { padding: 6px 11px; font-size: 12.5px; font-weight: 600; box-shadow: none; opacity: 0.82; border-width: 1.5px; }
+.feedback-fab:hover { opacity: 1; box-shadow: 2px 2px 0 var(--sl-pink); }
+@media (max-width: 820px) { .feedback-fab { padding: 7px 8px; opacity: 0.7; } }
+
+/* Pastille rose : un texte long (« c'est aujourd'hui ») reste dans le cercle, clair comme sombre */
+.sticker-long { font-size: 11px; padding: 6px; }
+@media (max-width: 820px) {
+  .sticker { width: 72px; height: 72px; }
+  .sticker-long { font-size: 10px; padding: 4px; }
+}
+.welcome-stat:first-child .card-eyebrow { color: var(--fixed-ink); opacity: 0.75; }
+.glance-tile.next .card-eyebrow { color: var(--fixed-ink); opacity: 0.75; }

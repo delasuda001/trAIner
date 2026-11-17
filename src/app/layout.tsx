@@ -12,6 +12,8 @@ import { requestMember } from "@/lib/profiles/request";
 import { readSyncState } from "@/lib/server/analytics";
 import { LogoutButton } from "@/components/profiles/logout-button";
 import { FeedbackButton } from "@/components/feedback/feedback-button";
+import { GaugeProvider } from "@/components/coach/coach-gauge";
+import { coachGauge } from "@/lib/server/quota";
 import "./globals.css";
 
 // Polices auto-hébergées par Next au build : aucune requête externe à l'usage.
@@ -41,6 +43,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // Sans session (page de connexion) : en-tête réduit, aucune donnée lue.
   const member = await requestMember();
   const sync = member ? runAs(member, () => readSyncState()) : null;
+  // Jauge de l'abonnement de Bastien, montrée aux invités près des boutons du coach.
+  const gauge = member?.role === "guest" ? runAs(member, () => coachGauge()) : null;
   return (
     <html lang="fr" className={`${display.variable} ${text.variable}`} suppressHydrationWarning>
       <head>
@@ -62,7 +66,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             {member ? <span className="desktop-only"><LogoutButton name={member.name} /></span> : null}
           </div>
         </header>
-        <main className="shell">{children}</main>
+        <main className="shell"><GaugeProvider gauge={gauge}>{children}</GaugeProvider></main>
         {member ? <FeedbackButton /> : null}
       </body>
     </html>

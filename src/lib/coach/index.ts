@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
 import { activeMember } from "@/lib/profiles/context";
 import { createClaudeAgentClient } from "./claude-agent-client";
+import { createFakeClient } from "./fake-client";
 import type { LlmClient } from "./llm";
 
 export const COACH_MODELS = ["sonnet", "opus", "haiku"] as const;
@@ -31,7 +32,8 @@ export function getLlmClient(): LlmClient {
   const model = currentCoachModel();
   let client = clients.get(model);
   if (!client) {
-    client = createClaudeAgentClient(model);
+    // Serveur d'essai uniquement : aucune requête à Claude.
+    client = process.env.SILLAGE_FAKE_COACH === "1" ? createFakeClient(model) : createClaudeAgentClient(model);
     clients.set(model, client);
   }
   return client;

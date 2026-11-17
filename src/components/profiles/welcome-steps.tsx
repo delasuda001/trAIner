@@ -45,9 +45,36 @@ export function WelcomeDone({ hasGoal }: { hasGoal: boolean }) {
     router.refresh();
   }
   return (
-    <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
-      <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void finish(hasGoal ? "/" : "/objectif")}>{hasGoal ? "C'est parti" : "Renseigner mon objectif"}</button>
-      {!hasGoal ? <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void finish("/")}>Plus tard</button> : null}
+    <div className="welcome-actions">
+      <button type="button" className="btn btn-primary btn-lg" disabled={busy} onClick={() => void finish("/")}>Voir mon tableau de bord</button>
+      {!hasGoal ? <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void finish("/objectif")}>Ajouter un objectif (facultatif)</button> : null}
     </div>
+  );
+}
+
+const STAGES: Array<{ stage: string; label: string }> = [
+  { stage: "sync", label: "Lecture de tes séances Garmin" },
+  { stage: "metrics", label: "Calcul de tes chiffres" },
+  { stage: "coach", label: "Premiers commentaires du coach" },
+];
+
+/** Espace en cours de préparation : on montre l'avancement et la page se met à jour seule. */
+export function PreparingNotice({ stage, activities }: { stage: string | null; activities: number }) {
+  const router = useRouter();
+  useEffect(() => {
+    const timer = setInterval(() => router.refresh(), 5000);
+    return () => clearInterval(timer);
+  }, [router]);
+  const current = STAGES.findIndex((entry) => entry.stage === stage);
+  return (
+    <section className="card welcome-card">
+      <h2 className="section-title">Bastien prépare ton espace</h2>
+      <p className="small">Sillage lit tes 12 derniers mois Garmin et calcule tout pour toi. Cela prend quelques minutes, une seule fois ; cette page se met à jour toute seule.</p>
+      <ol className="prepare-steps">
+        {STAGES.map((entry, index) => (
+          <li key={entry.stage} className={index < current ? "done" : index === current ? "current" : ""}>{entry.label}{index === 0 && activities ? ` · ${activities} activités` : ""}</li>
+        ))}
+      </ol>
+    </section>
   );
 }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { asAdmin } from "@/lib/profiles/request";
 import type { Member } from "@/lib/profiles/types";
 import { CoachRequest } from "@/components/coach-request";
@@ -54,7 +55,8 @@ function renderWeeklyReviewPage(member: Member) {
         <div>
           <p className="eyebrow">Bilan hebdomadaire</p>
           <h1 className="page-title">Le coach relit ses conseils</h1>
-          <p className="page-sub">Chaque semaine, un modèle plus robuste confronte les analyses et consignes à ce que tu as couru et ressenti. Il propose des règles ; aucune n&apos;est appliquée sans validation.</p>
+          <p className="page-sub">Outil interne de réglage (invisible des testeurs). Chaque semaine, un modèle plus robuste confronte les analyses et consignes à ce que tu as couru et ressenti. Il propose des règles ; aucune n&apos;est appliquée sans validation.</p>
+          <p className="small" style={{ marginTop: 6 }}><a href="/api/weekly-review/export" download>Exporter en Markdown</a> · <Link href="/parametres">Retour aux paramètres</Link></p>
         </div>
         {hasCurrent ? null : <CoachRequest endpoint="/api/weekly-review" label={`Bilan de la semaine du ${formatDate(week, "short")} au ${formatDate(addDays(week, 6), "short")}`} />}
       </div>

@@ -5,8 +5,10 @@ import { AccessPanel } from "@/components/settings/access-panel";
 import { LogoutButton } from "@/components/profiles/logout-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MyDevices } from "@/components/settings/my-devices";
+import { CoachGaugeLine } from "@/components/coach/coach-gauge";
 import { ProfilesAdmin, type ProfileView } from "@/components/settings/profiles-admin";
-import { getRegistry } from "@/lib/profiles/context";
+import { getRegistry, toMember } from "@/lib/profiles/context";
+import { PREPARATION_ESTIMATE, preparationAllowed, readPrepareStatus } from "@/lib/server/prepare-service";
 import { guestsWeeklyCap, quotaStateOf, usageOf } from "@/lib/server/quota";
 import { publicUrl } from "@/lib/server/profiles-admin";
 import { reloadEnv } from "@/lib/server/sync-service";
@@ -26,7 +28,7 @@ import { readReportIndex, readReportMarkdown } from "@/lib/bench/store";
 
 export const dynamic = "force-dynamic";
 
-const KIND_LABELS: Record<string, string> = { session: "Analyse de séance", outlook: "Conseil du jour", chat: "Question au coach", weekly: "Bilan hebdomadaire", bench: "Banc de tests", feedback: "Synthèse des retours" };
+const KIND_LABELS: Record<string, string> = { session: "Analyse de séance", outlook: "Conseil du jour", chat: "Question au coach", weekly: "Bilan hebdomadaire", bench: "Banc de tests", feedback: "Synthèse des retours", prepare: "Préparation d'un invité" };
 /** Travail automatique (bilan, banc), compté à part de l'usage de Bastien. */
 const AUTOMATIC_KINDS = new Set(["weekly", "bench"]);
 const OUTCOME_LABELS: Record<string, string> = { ok: "ok", rejected: "refusée", error: "échec" };
@@ -89,6 +91,8 @@ async function adminSections() {
       invitationUntil: registry.pendingInvitation(record.id)?.expiresAt ?? null,
       onboarded: record.onboardedAt != null,
       hasCode: record.hasCode,
+      prepare: record.role === "guest" ? readPrepareStatus(record.id) : null,
+      prepareGuard: record.role === "guest" ? preparationAllowed(toMember(record)) : null,
     };
   }));
   const names = new Map(records.map((record) => [record.id, record.name]));
@@ -103,7 +107,7 @@ async function adminSections() {
           <h2 className="section-title">Profils du test</h2>
           <span className="section-note">chacun a sa base, sa clé Garmin et son coach ; tu ne vois que leur consommation</span>
         </div>
-        <ProfilesAdmin profiles={profiles} publicUrlConfigured={url.configured} />
+        <ProfilesAdmin profiles={profiles} publicUrlConfigured={url.configured} prepareEstimate={PREPARATION_ESTIMATE} />
       </section>
       <section className="section grid grid-main-side" style={{ alignItems: "start" }}>
         <div className="card">
@@ -133,30 +137,22 @@ async function adminSections() {
 /** Vue d'un invité : sa consommation et ses appareils, rien sur les autres profils. */
 function renderGuest(member: Member) {
   const registry = getRegistry();
-  const record = registry.find(member.id);
-  const quota = record ? quotaStateOf(record) : null;
   const devices = registry.listSessions(member.id).map((session) => ({ id: session.id, device: session.device, lastSeenAt: session.lastSeenAt }));
-  const k = (value: number) => `${Math.round(value / 1000)} k`;
   return (
     <>
       <div className="page-head">
         <div>
           <p className="eyebrow">Paramètres</p>
           <h1 className="page-title">Ton test</h1>
-          <p className="page-sub">Les analyses du coach sont limitées pendant le test : tes chiffres restent toujours affichés.</p>
+          <p className="page-sub">Tes chiffres sont toujours calculés ; le coach, lui, partage l&apos;abonnement de Bastien.</p>
         </div>
       </div>
       <AccountRow name={member.name} />
       <div className="grid grid-2" style={{ alignItems: "start" }}>
         <section className="card">
-          <h2 className="section-title">Analyses du coach</h2>
-          {quota && record ? (
-            <div className="facts" style={{ marginTop: 10 }}>
-              <Fact label="Aujourd'hui" value={`${record.dailyTokenCap ? Math.min(100, Math.round((quota.usedToday / record.dailyTokenCap) * 100)) : 0} % utilisé`} sub={record.dailyTokenCap ? `${k(quota.usedToday)} sur ${k(record.dailyTokenCap)} tokens` : undefined} />
-              <Fact label="7 derniers jours" value={`${record.weeklyTokenCap ? Math.min(100, Math.round((quota.usedWeek / record.weeklyTokenCap) * 100)) : 0} % utilisé`} sub={record.weeklyTokenCap ? `${k(quota.usedWeek)} sur ${k(record.weeklyTokenCap)} tokens` : undefined} />
-            </div>
-          ) : null}
-          <p className="muted small" style={{ marginTop: 10 }}>Une analyse de séance ou une question coûte environ 10 k. Une analyse déjà faite se relit gratuitement.</p>
+          <h2 className="section-title">Le coach</h2>
+          <p className="small" style={{ marginTop: 6 }}>Chaque commentaire du coach (analyse de séance, conseil, réponse) passe par l&apos;abonnement Claude de Bastien. Une analyse déjà faite se relit autant que tu veux.</p>
+          <CoachGaugeLine />
         </section>
         <section className="card">
           <h2 className="section-title">Tes appareils connectés</h2>
@@ -246,6 +242,11 @@ async function renderAdmin(member: Member) {
             <div className="kpi-compare">{tokens(weekBudgetUsed)} sur {tokens(budget.weekTokens)} (entrée + sortie + écriture du cache)</div>
             <div className="kpi-meaning">Part de l&apos;automatique sur 30 jours : {summary.last30Days.totalTokens + automaticSummary.last30Days.totalTokens ? Math.round((automaticSummary.last30Days.totalTokens / (summary.last30Days.totalTokens + automaticSummary.last30Days.totalTokens)) * 100) : 0} % de tous les tokens de l&apos;application.</div>
           </div>
+        </div>
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3 className="section-title" style={{ fontSize: 18 }}>Le coach relit sa semaine</h3>
+          <p className="small" style={{ marginTop: 4 }}>Outil de réglage, retiré du tableau de bord : un bilan Opus confronte chaque semaine les analyses et consignes à ce qui a été couru, et propose des règles à tester.</p>
+          <p className="small" style={{ marginTop: 8 }}><Link href="/bilan" className="btn">Ouvrir les bilans</Link> <a href="/api/weekly-review/export" className="btn" download>Exporter en Markdown</a></p>
         </div>
         <div className="card" style={{ marginTop: 16 }}>
           <h3 className="section-title" style={{ fontSize: 18 }}>Banc de tests</h3>

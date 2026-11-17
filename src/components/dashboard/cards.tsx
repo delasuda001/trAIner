@@ -65,7 +65,11 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
   const paceCenter = target?.paceFastMps && target.paceSlowMps ? (target.paceFastMps + target.paceSlowMps) / 2 : null;
   return (
     <section className="card card-hero card-next" aria-labelledby="next-title">
-      <span className="sticker" aria-hidden>{primary.type === "rest" ? "repos" : stickerText(suggestion.when.label)}</span>
+      {(() => {
+        const sticker = primary.type === "rest" ? "repos" : stickerText(suggestion.when.label);
+        // Mot long (« aujourd'hui ») : corps réduit pour rester dans le cercle.
+        return <span className={`sticker${sticker.length > 10 ? " sticker-long" : ""}`} aria-hidden>{sticker}</span>;
+      })()}
       <div className="card-eyebrow">Prochaine séance · {suggestion.when.label}</div>
       <h2 id="next-title" className="card-title">{primary.title}</h2>
       <div className="target">

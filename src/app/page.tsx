@@ -4,9 +4,9 @@ import { CoachRequest } from "@/components/coach-request";
 import { IntensityCard, LastSessionCard, MissingInfo, MobileGlance, ProgressionCard, RecentList, RecoveryRow, SuggestionCard, VolumeCard } from "@/components/dashboard/cards";
 import { formatDate } from "@/lib/formatters";
 import { getDashboard } from "@/lib/server/analytics";
-import { listWeeklyReviews, readOutlookCoach, readSessionCoach } from "@/lib/server/coach-service";
-import { WeeklyReviewCard } from "@/components/weekly/weekly-card";
-import { addDays } from "@/lib/dates";
+import { readPrepareStatus } from "@/lib/server/prepare-service";
+import { PreparingNotice } from "@/components/profiles/welcome-steps";
+import { readOutlookCoach, readSessionCoach } from "@/lib/server/coach-service";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +15,11 @@ export default async function Home() {
 }
 
 function renderHome(member: Member) {
-  void member;
   const dashboard = getDashboard();
+  if (dashboard.activityCount === 0 && member.role === "guest") {
+    const status = readPrepareStatus(member.id);
+    return <div className="welcome rise"><PreparingNotice stage={status?.stage ?? null} activities={status?.activities ?? 0} /></div>;
+  }
   if (dashboard.activityCount === 0) {
     return (
       <div className="card state rise" style={{ marginTop: 32 }}>
@@ -28,8 +31,6 @@ function renderHome(member: Member) {
   const outlook = readOutlookCoach(dashboard);
   const lastCoach = dashboard.lastRun ? readSessionCoach(dashboard.lastRun) : null;
   const weekday = formatDate(dashboard.today, "long");
-  // Le bilan de la semaine passée reste affiché une semaine (lu en base, jamais généré ici).
-  const weekly = listWeeklyReviews(1).find((review) => review.weekStart >= addDays(dashboard.today, -14));
   return (
     <>
       <div className="page-head home-head">
@@ -54,12 +55,6 @@ function renderHome(member: Member) {
         </div>
         <RecoveryRow dashboard={dashboard} />
       </section>
-
-      {weekly ? (
-        <section className="section">
-          <WeeklyReviewCard review={weekly} />
-        </section>
-      ) : null}
 
       <MissingInfo dashboard={dashboard} />
 

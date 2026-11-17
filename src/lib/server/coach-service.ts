@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
 import type { z } from "zod";
 import { getLlmClient } from "@/lib/coach";
 import { createClaudeAgentClient } from "@/lib/coach/claude-agent-client";
@@ -15,9 +14,10 @@ import { buildSessionPayload, buildSessionPrompt, normalizeSessionOutput, SESSIO
 import { createCoachOutputRepository } from "@/lib/db/repositories/coach-output-repository";
 import { requireActiveMember } from "@/lib/profiles/context";
 import { systemPromptFor } from "@/lib/coach/athlete";
+import { fingerprintIsCurrent, hashPayload, storedFingerprint } from "@/lib/coach/fingerprint";
 import { checkQuota } from "./quota";
 import { recordFailure, recordUsage } from "./usage";
-import type { Dashboard, SessionAnalysis } from "./analytics";
+import { analyzeSession, loadContext, type Dashboard, type SessionAnalysis } from "./analytics";
 
 export type CoachResult<T> =
   | { status: "ready"; output: T; model: string; createdAt: string }
@@ -39,12 +39,22 @@ type Job<T> = {
   normalize?: (value: unknown) => T | null;
   /** Zone FC d'une valeur, pour rejeter une zone mal attribuée dans le texte. */
   zoneOf: (heartRate: number) => number;
+  /**
+   * Charge utile recalculée SANS objectif. Son empreinte est gardée à côté de l'empreinte
+   * complète (« complète~sans-objectif ») : saisir ou changer l'objectif ne périme pas une
+   * analyse passée. Les sorties enregistrées avant (une seule empreinte) se lisent comme avant.
+   */
+  goalFreePayload?: () => unknown;
 };
 
 const inFlight = new Map<string, Promise<CoachResult<unknown>>>();
 
 function hashOf(job: Job<unknown>): string {
-  return createHash("sha256").update(job.promptVersion).update(JSON.stringify(job.payload)).digest("hex").slice(0, 32);
+  return hashPayload(job.promptVersion, job.payload);
+}
+
+function storedHash(job: Job<unknown>): string {
+  return storedFingerprint(job.promptVersion, job.payload, job.goalFreePayload?.() ?? null);
 }
 
 function cached<T>(job: Job<T>): CoachResult<T> {
@@ -54,11 +64,12 @@ function cached<T>(job: Job<T>): CoachResult<T> {
   const output = job.normalize ? job.normalize(raw) : (raw as T);
   if (output == null) return { status: "missing" };
   // Données modifiées depuis (ressenti, nouvelles séances…) : on garde l'ancienne analyse sous la main pour l'afficher comme « à mettre à jour ».
-  if (latest.inputHash !== hashOf(job as Job<unknown>)) return { status: "missing", previous: { output, model: latest.model, createdAt: latest.createdAt, promptVersion: latest.promptVersion } };
+  if (!fingerprintIsCurrent(latest.inputHash, job.promptVersion, job.payload, job.goalFreePayload)) return { status: "missing", previous: { output, model: latest.model, createdAt: latest.createdAt, promptVersion: latest.promptVersion } };
   return { status: "ready", output, model: latest.model, createdAt: latest.createdAt };
 }
 
-async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
+/** `preparation` : appel lancé par Bastien pour préparer un invité (compté à part, hors plafonds personnels). */
+async function generate<T>(job: Job<T>, options: { preparation?: boolean } = {}): Promise<CoachResult<T>> {
   const hit = cached(job);
   if (hit.status === "ready") return hit;
   const inputHash = hashOf(job as Job<unknown>);
@@ -66,7 +77,8 @@ async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
   const running = inFlight.get(key);
   if (running) return running as Promise<CoachResult<T>>;
   // Plafonds du test familial : vérifiés seulement quand un appel serait réellement fait.
-  const quota = checkQuota();
+  const quota = checkQuota(undefined, options);
+  const usageKind = options.preparation ? "prepare" : job.kind;
   if (!quota.allowed) return { status: "error", kind: "quota", message: quota.message };
 
   const task = (async (): Promise<CoachResult<T>> => {
@@ -79,7 +91,7 @@ async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
         try {
           response = await (job.client ?? getLlmClient()).generateStructured({ system: job.system, prompt, schema: job.schema, jsonSchema: job.jsonSchema });
         } catch (error) {
-          recordFailure(job.kind, job.subject, (job.client ?? getLlmClient()).name, error);
+          recordFailure(usageKind, job.subject, (job.client ?? getLlmClient()).name, error);
           if (attempt === 1 && error instanceof LlmError && error.kind === "invalid_output") {
             console.warn(`[coach] ${job.kind} : format refusé (essai 1), nouvel essai`);
             prompt = `${job.prompt}\n\nATTENTION : ta réponse précédente ne respectait pas le format (longueurs maximales). Fais plus court.`;
@@ -89,9 +101,9 @@ async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
         }
         const text = collectText(response.data);
         const unsupported = [...findUnsupportedNumbers(text, allowed), ...findZoneContradictions(text, job.zoneOf), ...findUnsupportedMultiples(text, job.payload)];
-        recordUsage(job.kind, job.subject, response.model, unsupported.length ? "rejected" : "ok", response.usage);
+        recordUsage(usageKind, job.subject, response.model, unsupported.length ? "rejected" : "ok", response.usage);
         if (unsupported.length === 0) {
-          const row = createCoachOutputRepository().save({ kind: job.kind, subject: job.subject, inputHash, model: response.model, promptVersion: job.promptVersion, output: response.data });
+          const row = createCoachOutputRepository().save({ kind: job.kind, subject: job.subject, inputHash: storedHash(job as Job<unknown>), model: response.model, promptVersion: job.promptVersion, output: response.data });
           return { status: "ready", output: response.data, model: response.model, createdAt: row.createdAt };
         }
         console.warn(`[coach] ${job.kind} : chiffres ou zones non sourcés (essai ${attempt}) : ${unsupported.map((token) => excerpt(text, token.split(" ")[0])).join(" | ")}`);
@@ -110,8 +122,8 @@ async function generate<T>(job: Job<T>): Promise<CoachResult<T>> {
   return task;
 }
 
-function sessionJob(analysis: SessionAnalysis): Job<SessionCoachOutput> {
-  const payload = buildSessionPayload({
+function sessionPayload(analysis: SessionAnalysis) {
+  return buildSessionPayload({
     session: analysis.activity,
     metrics: analysis.metrics,
     deltas: analysis.deltas,
@@ -124,7 +136,18 @@ function sessionJob(analysis: SessionAnalysis): Job<SessionCoachOutput> {
     feeling: analysis.feeling,
     prescription: analysis.prescription,
   });
-  return { normalize: normalizeSessionOutput, zoneOf: (hr: number) => zoneOf(hr, analysis.profile.zones), kind: "session", subject: analysis.activity.id, promptVersion: SESSION_PROMPT_VERSION, payload, system: systemPromptFor(SESSION_SYSTEM_PROMPT, { isAdmin: requireActiveMember().role === "admin", runsPerWeek12w: analysis.context.rhythm.runsPerWeek12w }), prompt: buildSessionPrompt(payload), schema: sessionCoachSchema, jsonSchema: sessionCoachJsonSchema as unknown as Record<string, unknown> };
+}
+
+/** La même séance analysée comme si aucun objectif n'était renseigné. */
+function goalFreeSessionPayload(activityId: string): unknown {
+  const context = loadContext();
+  const analysis = analyzeSession(activityId, { ...context, goal: null });
+  return analysis ? sessionPayload(analysis) : null;
+}
+
+function sessionJob(analysis: SessionAnalysis): Job<SessionCoachOutput> {
+  const payload = sessionPayload(analysis);
+  return { goalFreePayload: () => goalFreeSessionPayload(analysis.activity.id), normalize: normalizeSessionOutput, zoneOf: (hr: number) => zoneOf(hr, analysis.profile.zones), kind: "session", subject: analysis.activity.id, promptVersion: SESSION_PROMPT_VERSION, payload, system: systemPromptFor(SESSION_SYSTEM_PROMPT, { isAdmin: requireActiveMember().role === "admin", runsPerWeek12w: analysis.context.rhythm.runsPerWeek12w }), prompt: buildSessionPrompt(payload), schema: sessionCoachSchema, jsonSchema: sessionCoachJsonSchema as unknown as Record<string, unknown> };
 }
 
 function outlookJob(dashboard: Dashboard): Job<OutlookCoachOutput> {
@@ -139,6 +162,15 @@ export function readSessionCoach(analysis: SessionAnalysis): CoachResult<Session
 
 export function generateSessionCoach(analysis: SessionAnalysis): Promise<CoachResult<SessionCoachOutput>> {
   return generate(sessionJob(analysis));
+}
+
+/** Préparation d'un invité par Bastien : mêmes analyses, comptées « préparation ». */
+export function prepareSessionCoach(analysis: SessionAnalysis): Promise<CoachResult<SessionCoachOutput>> {
+  return generate(sessionJob(analysis), { preparation: true });
+}
+
+export function prepareOutlookCoach(dashboard: Dashboard): Promise<CoachResult<OutlookCoachOutput>> {
+  return generate(outlookJob(dashboard), { preparation: true });
 }
 
 export function readOutlookCoach(dashboard: Dashboard): CoachResult<OutlookCoachOutput> {

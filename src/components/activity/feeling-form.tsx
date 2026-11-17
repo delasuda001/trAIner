@@ -3,6 +3,8 @@
 import { Check, MessageSquareText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { appendExample, SESSION_NOTE_EXAMPLES } from "@/lib/goal/examples";
+import { ExampleChips } from "@/components/ui/example-chips";
 
 type Feeling = { perceivedEffort: number | null; note: string } | null;
 
@@ -37,7 +39,9 @@ export function FeelingForm({ activityId, initial }: { activityId: string; initi
       </div>
       <label className="field" style={{ marginTop: 12 }}>
         <span>Contexte</span>
-        <textarea rows={3} maxLength={600} value={note} placeholder="Fatigue, sommeil, météo, terrain, douleur, objectif de la séance…" onChange={(event) => { setNote(event.target.value); setState("idle"); }} />
+        <textarea rows={3} maxLength={600} value={note} placeholder="Sommeil, météo, terrain, ce que tu voulais tester…" onChange={(event) => { setNote(event.target.value); setState("idle"); }} />
+        <ExampleChips examples={SESSION_NOTE_EXAMPLES} onPick={(example) => { setNote((current) => appendExample(current, example, 600)); setState("idle"); }} />
+        <small className="muted">Ce que les chiffres ne disent pas : le coach en tient compte pour expliquer la séance.</small>
       </label>
       <div className="form-actions" style={{ marginTop: 12 }}>
         {state === "saved" ? <span className="saved"><Check size={14} /> Enregistré : régénère l&apos;analyse pour que le coach en tienne compte.</span> : null}

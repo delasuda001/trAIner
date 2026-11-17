@@ -1,8 +1,9 @@
 "use client";
 
-import { Copy, KeyRound, Link2, ShieldOff, Smartphone, UserPlus } from "lucide-react";
+import { Copy, KeyRound, Link2, ShieldOff, Smartphone, Sparkles, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { PrepareStatus } from "@/lib/server/prepare-service";
 
 export type DeviceView = { id: string; device: string; lastSeenAt: string };
 
@@ -22,7 +23,71 @@ export type ProfileView = {
   invitationUntil: string | null;
   onboarded: boolean;
   hasCode: boolean;
+  /** Préparation avant la première ouverture (invités). */
+  prepare: PrepareStatus | null;
+  prepareGuard: { allowed: boolean; message: string | null } | null;
 };
+
+const STAGE_LABELS: Record<PrepareStatus["stage"], string> = {
+  sync: "Import des séances Garmin",
+  metrics: "Calcul des métriques",
+  coach: "Analyses du coach",
+  ready: "Prêt",
+  error: "Interrompu",
+};
+
+/** Préparer un invité avant de lui envoyer son lien : tout est calculé, 2 séances déjà analysées. */
+function PreparePanel({ profile, estimate }: { profile: ProfileView; estimate: number }) {
+  const router = useRouter();
+  const [status, setStatus] = useState<PrepareStatus | null>(profile.prepare);
+  const [error, setError] = useState<string | null>(null);
+  const isRunning = status?.running === true;
+
+  useEffect(() => {
+    if (!isRunning) return;
+    const timer = setInterval(() => {
+      void fetch(`/api/profiles/${profile.id}`).then(async (response) => {
+        const json = (await response.json().catch(() => null)) as { status?: PrepareStatus | null } | null;
+        if (json?.status) setStatus(json.status);
+        if (json?.status && !json.status.running) router.refresh();
+      });
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [isRunning, profile.id, router]);
+
+  async function start() {
+    setError(null);
+    try {
+      await post(`/api/profiles/${profile.id}`, { action: "prepare" });
+      setStatus({ stage: "sync", startedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), activities: 0, runs: 0, pendingDetails: 0, analyses: 0, note: null, running: true });
+    } catch (failure) {
+      setError((failure as Error).message);
+    }
+  }
+
+  const blocked = !profile.garminPresent ? "Ajoute d'abord sa clé Garmin." : profile.prepareGuard && !profile.prepareGuard.allowed ? profile.prepareGuard.message : null;
+  return (
+    <div className="prepare-panel">
+      <div className="fact-label">Préparer son espace (avant d&apos;envoyer le lien)</div>
+      {status ? (
+        <p className="small" style={{ margin: "4px 0" }}>
+          <strong>{STAGE_LABELS[status.stage]}</strong>
+          {status.stage === "sync" ? ` · ${status.activities} activités${status.pendingDetails ? `, ${status.pendingDetails} séries détaillées restantes` : ""}` : ""}
+          {status.stage === "ready" ? ` · ${status.runs} courses calculées, ${status.analyses} analyse${status.analyses > 1 ? "s" : ""} du coach prête${status.analyses > 1 ? "s" : ""}. Tu peux envoyer le lien.` : ""}
+          {status.note ? <span className="muted"> {status.note}</span> : null}
+        </p>
+      ) : <p className="small" style={{ margin: "4px 0" }}>Importe ses 12 mois Garmin et calcule tout (sans token), puis fait analyser par le coach ses 2 dernières séances et le conseil du jour.</p>}
+      {!isRunning ? (
+        <>
+          <p className="muted small" style={{ margin: "4px 0" }}>Coût estimé : environ {tokens(estimate)} tokens sur ton abonnement (3 appels Sonnet), comptés à part de son plafond personnel.</p>
+          <button type="button" className="btn btn-primary" disabled={blocked != null} onClick={() => void start()}><Sparkles size={14} /> {status?.stage === "ready" ? "Préparer de nouveau" : "Préparer le profil"}</button>
+          {blocked ? <p className="muted small" style={{ marginTop: 4 }}>{blocked}</p> : null}
+        </>
+      ) : null}
+      {error ? <p className="form-error">{error}</p> : null}
+    </div>
+  );
+}
 
 type Secret = { title: string; lines: Array<{ label: string; value: string }>; note: string };
 
@@ -83,7 +148,7 @@ function CapsEditor({ profile, onSaved }: { profile: ProfileView; onSaved: () =>
   );
 }
 
-function ProfileCard({ profile, onSecret }: { profile: ProfileView; onSecret: (secret: Secret) => void }) {
+function ProfileCard({ profile, onSecret, prepareEstimate }: { profile: ProfileView; onSecret: (secret: Secret) => void; prepareEstimate: number }) {
   const router = useRouter();
   const [garmin, setGarmin] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,6 +208,8 @@ function ProfileCard({ profile, onSecret }: { profile: ProfileView; onSecret: (s
         </div>
       </div>
 
+      {guest ? <PreparePanel profile={profile} estimate={prepareEstimate} /> : null}
+
       <div className="profile-actions">
         <button type="button" className="btn" onClick={() => void act({ action: "invitation" }, (json) => onSecret({ title: `Lien d'invitation de ${profile.name}`, lines: [{ label: "Lien", value: String(json?.link ?? "") }], note: "À usage unique, valable 7 jours : il ouvre la session sur l'appareil où il est ouvert (à ouvrir dans Safari sur iPhone). Il remplace le lien précédent. Il ne sera plus affiché." }))}><Link2 size={14} /> Nouveau lien d&apos;invitation</button>
         <button type="button" className="btn btn-ghost" onClick={() => void act({ action: "code" }, (json) => onSecret({ title: `Code de secours de ${profile.name}`, lines: [{ label: "Code", value: String(json?.code ?? "") }], note: "Sert si l'application installée sur l'écran d'accueil redemande la connexion. Les appareils déjà connectés le restent. Il ne sera plus affiché." }))}><KeyRound size={14} /> {profile.hasCode ? "Nouveau code" : "Créer un code"}</button>
@@ -154,7 +221,7 @@ function ProfileCard({ profile, onSecret }: { profile: ProfileView; onSecret: (s
   );
 }
 
-export function ProfilesAdmin({ profiles, publicUrlConfigured }: { profiles: ProfileView[]; publicUrlConfigured: boolean }) {
+export function ProfilesAdmin({ profiles, publicUrlConfigured, prepareEstimate }: { profiles: ProfileView[]; publicUrlConfigured: boolean; prepareEstimate: number }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [secret, setSecret] = useState<Secret | null>(null);
@@ -168,7 +235,7 @@ export function ProfilesAdmin({ profiles, publicUrlConfigured }: { profiles: Pro
       setSecret({
         title: `Profil « ${String(json?.name ?? name)} » créé`,
         lines: [{ label: "Lien d'invitation", value: String(json?.link ?? "") }, { label: "Code de secours", value: String(json?.code ?? "") }],
-        note: `Envoie-lui le lien (usage unique, 7 jours) et garde le code pour le cas où l'application installée redemande la connexion. Sa clé Garmin : ajoute ${String(json?.garminEnvVar ?? "")}=… dans .env.local. Ni le lien ni le code ne seront réaffichés.`,
+        note: `Ajoute sa clé Garmin (${String(json?.garminEnvVar ?? "")}=… dans .env.local), clique sur « Préparer le profil », puis envoie-lui le lien quand c'est prêt (usage unique, 7 jours). Garde le code pour le cas où l'application installée redemande la connexion. Ni le lien ni le code ne seront réaffichés.`,
       });
       setName("");
       router.refresh();
@@ -181,7 +248,7 @@ export function ProfilesAdmin({ profiles, publicUrlConfigured }: { profiles: Pro
     <div className="stack">
       {secret ? <SecretBox secret={secret} onClose={() => setSecret(null)} /> : null}
       {!publicUrlConfigured ? <p className="notice">Adresse publique non renseignée (plus bas) : les liens d&apos;invitation utiliseront l&apos;adresse de ce navigateur. Renseigne d&apos;abord l&apos;adresse du tunnel.</p> : null}
-      {profiles.map((profile) => <ProfileCard key={profile.id} profile={profile} onSecret={setSecret} />)}
+      {profiles.map((profile) => <ProfileCard key={profile.id} profile={profile} onSecret={setSecret} prepareEstimate={prepareEstimate} />)}
       <form className="card create-guest" onSubmit={(event) => void create(event)}>
         <label className="field">
           <span>Ajouter une personne</span>

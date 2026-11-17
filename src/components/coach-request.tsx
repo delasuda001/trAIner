@@ -3,6 +3,7 @@
 import { Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CoachGaugeLine, useCoachGauge } from "@/components/coach/coach-gauge";
 
 type CoachResponse = { status: "ready" | "missing" | "error"; message?: string };
 
@@ -11,6 +12,9 @@ export function CoachRequest({ endpoint, label, initialError }: { endpoint: stri
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
+  const gauge = useCoachGauge();
+  // Coach en pause (abonnement presque plein ou analyses du jour faites) : le bouton attend, sans erreur à lire.
+  const paused = gauge?.guest === true && (gauge.level === "plein" || gauge.left === 0);
 
   async function request() {
     setBusy(true);
@@ -30,11 +34,12 @@ export function CoachRequest({ endpoint, label, initialError }: { endpoint: stri
 
   return (
     <div>
-      <button type="button" className="btn" onClick={() => void request()} disabled={busy}>
+      <button type="button" className="btn" onClick={() => void request()} disabled={busy || paused}>
         <Sparkles size={14} className={busy ? "spin" : undefined} />
         {busy ? "Le coach réfléchit… (10 à 20 s)" : label}
       </button>
-      {error ? <p className="notice notice-error">{error}</p> : null}
+      <CoachGaugeLine compact />
+      {error && !paused ? <p className="notice notice-error">{error}</p> : null}
     </div>
   );
 }

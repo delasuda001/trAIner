@@ -1,54 +1,122 @@
-import { MessageSquarePlus, ThumbsUp } from "lucide-react";
-import { InstallHint, WelcomeDone } from "@/components/profiles/welcome-steps";
-import { DEFAULT_GUEST_DAILY_CAP } from "@/lib/profiles/types";
-import { getRegistry } from "@/lib/profiles/context";
+import { Check, MessageCircle, Route, ShieldCheck, Sparkles, X } from "lucide-react";
+import { CoachGaugeLine } from "@/components/coach/coach-gauge";
+import { InstallHint, PreparingNotice, WelcomeDone } from "@/components/profiles/welcome-steps";
+import { formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import { asMember } from "@/lib/profiles/request";
-import { readGoal } from "@/lib/server/analytics";
+import type { Member } from "@/lib/profiles/types";
+import { getDashboard, loadContext } from "@/lib/server/analytics";
+import { readSessionCoach } from "@/lib/server/coach-service";
+import { readPrepareStatus } from "@/lib/server/prepare-service";
+import { welcomeHighlights } from "@/lib/welcome/highlights";
 
 export const dynamic = "force-dynamic";
 
-/** Accueil d'un testeur : ce qu'est le test, ses limites, comment faire un retour, l'écran d'accueil, puis l'objectif. */
+const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+/**
+ * Accueil d'un testeur à sa première ouverture : son espace est déjà prêt (préparé
+ * par Bastien), on lui montre ses propres chiffres, ce qu'il peut faire et ce que
+ * Sillage ne fait pas, puis il part sur son tableau de bord. Rien sur la connexion.
+ */
 export default async function WelcomePage() {
-  return asMember((member) => {
-    const record = getRegistry().find(member.id);
-    const perDay = Math.max(1, Math.floor((record?.dailyTokenCap ?? DEFAULT_GUEST_DAILY_CAP) / 10_000));
-    const hasGoal = readGoal() != null;
+  return asMember((member) => renderWelcome(member));
+}
+
+function renderWelcome(member: Member) {
+  const dashboard = getDashboard();
+  if (dashboard.activityCount === 0) {
+    const status = readPrepareStatus(member.id);
     return (
       <div className="welcome rise">
         <p className="eyebrow">Bienvenue</p>
         <h1 className="page-title">Bonjour {member.name} !</h1>
-        <p className="page-sub">Bastien construit Sillage, un coach de course à pied qui lit les données de ta montre Garmin. Tu fais partie des premiers testeurs : ton avis compte vraiment.</p>
-
-        <section className="card welcome-card">
-          <h2 className="section-title">Ce que fait l&apos;application</h2>
-          <ul className="bullets">
-            <li>Elle récupère tes séances Garmin des 12 derniers mois et calcule, pour chacune, ce qui s&apos;est bien passé et ce qui est à travailler.</li>
-            <li>Elle te propose ta prochaine séance et suit ta progression à fréquence cardiaque égale.</li>
-            <li>Tes données ne sont visibles que par toi. Bastien voit seulement si tu utilises le coach, et tes retours.</li>
-          </ul>
-        </section>
-
-        <section className="card welcome-card">
-          <h2 className="section-title">Le coach, avec modération</h2>
-          <p className="small">Les chiffres sont toujours affichés. Le commentaire du coach (Claude) se demande d&apos;un bouton et compte dans une limite du test : environ {perDay} analyses ou questions par jour. Une analyse déjà faite se relit sans limite.</p>
-        </section>
-
-        <section className="card welcome-card">
-          <h2 className="section-title">Ton avis, en un geste</h2>
-          <p className="small"><MessageSquarePlus size={14} /> Le bouton <strong>« Un retour ? »</strong>, en bas à droite de chaque page : écris ce qui te manque, ce qui est confus, ce qui t&apos;aiderait. <ThumbsUp size={14} /> Sous chaque analyse du coach, un pouce pour dire si elle t&apos;a servi.</p>
-        </section>
-
-        <section className="card welcome-card">
-          <h2 className="section-title">L&apos;avoir sur ton téléphone</h2>
-          <InstallHint />
-        </section>
-
-        <section className="card welcome-card">
-          <h2 className="section-title">Pour finir : ton objectif</h2>
-          <p className="small">{hasGoal ? "Ton objectif est déjà renseigné." : "Indique ta prochaine course ou ce que tu vises : le coach s'en sert pour choisir tes séances. Tout est facultatif, et l'application fonctionne sans."}</p>
-          <WelcomeDone hasGoal={hasGoal} />
-        </section>
+        <PreparingNotice stage={status?.stage ?? null} activities={status?.activities ?? 0} />
       </div>
     );
-  });
+  }
+  const context = loadContext();
+  const highlights = welcomeHighlights(context.runs, dashboard.today);
+  const last = dashboard.recent.find((run) => run.id === dashboard.lastRun?.activity.id) ?? null;
+  const lastAnalyzed = dashboard.lastRun ? readSessionCoach(dashboard.lastRun).status === "ready" : false;
+  const { progression, suggestion } = dashboard;
+  const gain = progression.paceGainSPerKm;
+  const hasGoal = dashboard.goal != null;
+  const bestMonth = highlights.bestMonth ? `${MONTHS[Number(highlights.bestMonth.month.slice(5, 7)) - 1]} : ${highlights.bestMonth.km} km` : null;
+
+  return (
+    <div className="welcome rise">
+      <p className="eyebrow">Bienvenue dans Sillage</p>
+      <h1 className="page-title">Bonjour {member.name}, <mark>tout est prêt.</mark></h1>
+      <p className="page-sub">Tes 12 derniers mois Garmin sont déjà lus et calculés. Voici ce que ta montre raconte.</p>
+
+      <section className="welcome-stats" aria-label="Tes chiffres marquants">
+        <div className="welcome-stat">
+          <div className="card-eyebrow">12 derniers mois</div>
+          <div className="glance-big">{formatNumber(highlights.km)}<span className="unit">km</span></div>
+          <p className="glance-line">{highlights.runs} courses, {highlights.hours} h de course, {highlights.activeWeeks} semaines sur 52{bestMonth ? ` · meilleur mois, ${bestMonth}` : ""}</p>
+        </div>
+        <div className="welcome-stat">
+          <div className="card-eyebrow">À fréquence cardiaque égale</div>
+          {progression.state !== "insufficient" && progression.recent.speedAtReferenceHr ? (
+            <>
+              <div className="glance-big">{formatPace(progression.recent.speedAtReferenceHr).replace("/km", "")}<span className="unit">/km à {progression.referenceHeartRateBpm} bpm</span></div>
+              <p className="glance-line">{gain == null || Math.abs(gain) < 1 ? "Même allure" : `${formatNumber(Math.abs(gain))} s/km plus ${gain > 0 ? "rapide" : "lent"}`} que les {progression.windowWeeks} semaines d&apos;avant</p>
+            </>
+          ) : (
+            <>
+              <div className="glance-big">{highlights.longestKm != null ? formatNumber(highlights.longestKm, 1) : "—"}<span className="unit">km</span></div>
+              <p className="glance-line">ta plus longue sortie de l&apos;année ; la tendance à FC égale viendra avec quelques sorties faciles</p>
+            </>
+          )}
+        </div>
+        {last ? (
+          <a className="welcome-stat" href={`/activities/${encodeURIComponent(last.id)}`}>
+            <div className="card-eyebrow">Dernière séance · {formatDate(last.localDate, "short")}</div>
+            <div className="welcome-stat-title">{last.title ?? last.name}</div>
+            <p className="glance-line">{[formatDistance(last.distanceM), last.movingTimeS ? formatDuration(last.movingTimeS) : null, last.averageSpeedMps ? formatPace(last.averageSpeedMps) : null].filter(Boolean).join(" · ")}</p>
+            <p className="glance-line">{lastAnalyzed ? <><Sparkles size={13} /> Déjà commentée par le coach</> : "Ouvre-la : chiffres, comparaisons et points à travailler"}</p>
+          </a>
+        ) : null}
+      </section>
+
+      <section className="card welcome-next">
+        <div className="card-eyebrow">Ta prochaine séance · {suggestion.when.label}</div>
+        <div className="welcome-stat-title">{suggestion.primary.title}{suggestion.primary.durationMin ? ` · ${formatDuration(suggestion.primary.durationMin * 60)}` : ""}</div>
+        <p className="small" style={{ margin: "4px 0 0" }}>{suggestion.reason}</p>
+      </section>
+
+      <div className="welcome-two">
+        <section className="card welcome-card">
+          <h2 className="section-title">Tu peux</h2>
+          <ul className="welcome-list">
+            <li><Route size={15} /> Ouvrir chaque séance : ce qui a marché, ce qui est à travailler, chiffres à l&apos;appui.</li>
+            <li><Check size={15} /> Suivre la séance proposée et ta progression, comparée à toi-même.</li>
+            <li><MessageCircle size={15} /> Poser une question au coach, ou lui signaler une contrainte.</li>
+          </ul>
+        </section>
+        <section className="card welcome-card">
+          <h2 className="section-title">Sillage ne fait pas</h2>
+          <ul className="welcome-list muted-list">
+            <li><X size={15} /> D&apos;avis médical : une douleur, c&apos;est pour un médecin.</li>
+            <li><X size={15} /> De plan imposé : il propose, tu décides.</li>
+            <li><ShieldCheck size={15} /> Rien d&apos;autre que tes données Garmin, visibles par toi seul.</li>
+          </ul>
+        </section>
+      </div>
+
+      <section className="card welcome-card">
+        <h2 className="section-title">Le coach, une ressource partagée</h2>
+        <p className="small">Tous tes chiffres sont calculés pour chaque séance, sans compter. Les commentaires du coach (Claude) passent par l&apos;abonnement de Bastien, que vous partagez : {lastAnalyzed ? "tes dernières séances sont déjà commentées, " : ""}demande les autres quand elles t&apos;intéressent, et regarde ce petit indicateur avant.</p>
+        <CoachGaugeLine />
+      </section>
+
+      <details className="card welcome-card welcome-install">
+        <summary><strong>L&apos;avoir sur ton téléphone comme une application</strong></summary>
+        <InstallHint />
+      </details>
+
+      <WelcomeDone hasGoal={hasGoal} />
+      <p className="muted small" style={{ textAlign: "center" }}>Une idée, un bug, une envie ? Le petit bouton de retour, en bas à droite, à tout moment.</p>
+    </div>
+  );
 }

@@ -4,6 +4,8 @@ import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { RACE_DISTANCES, WEEKDAY_LABELS, type Goal } from "@/lib/goal/goal";
+import { appendExample, CONTEXT_EXAMPLES, GOAL_EXAMPLES } from "@/lib/goal/examples";
+import { ExampleChips } from "@/components/ui/example-chips";
 
 const DISTANCES = RACE_DISTANCES;
 
@@ -58,7 +60,14 @@ export function GoalForm({ initial }: { initial: Goal }) {
       <div className="form-grid">
         <label className="field wide">
           <span>Objectif</span>
-          <input value={goal.title} maxLength={100} placeholder="ex. 10 km de Paris sous 43 min, ou « courir plus facilement »" onChange={(event) => update({ title: event.target.value })} />
+          <input value={goal.title} maxLength={100} placeholder="ex. Marathon de Paris sous 3:30, ou « courir plus facilement »" onChange={(event) => update({ title: event.target.value })} />
+          <ExampleChips label="Pour t'inspirer" examples={GOAL_EXAMPLES.map((example) => example.label)} onPick={(label) => {
+            const example = GOAL_EXAMPLES.find((entry) => entry.label === label);
+            if (!example) return;
+            update({ title: example.title, ...(example.distanceKm ? { distanceKm: example.distanceKm } : {}) });
+            if (example.time) setTime(example.time);
+          }} />
+          <small className="muted">Une course, un temps, ou simplement une envie. Facultatif : sans objectif, le coach s&apos;appuie sur tes propres repères.</small>
         </label>
         <label className="field">
           <span>Date de la course</span>
@@ -114,6 +123,8 @@ export function GoalForm({ initial }: { initial: Goal }) {
         <label className="field wide">
           <span>À savoir pour le coach</span>
           <textarea rows={2} maxLength={300} value={goal.note} placeholder="ex. sortie longue plutôt le dimanche, terrain vallonné" onChange={(event) => update({ note: event.target.value })} />
+          <ExampleChips examples={CONTEXT_EXAMPLES} onPick={(example) => update({ note: appendExample(goal.note, example, 300) })} />
+          <small className="muted">Tes habitudes et contraintes : le coach s&apos;en sert pour placer et doser tes séances.</small>
         </label>
       </div>
       <div className="form-actions">

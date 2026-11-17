@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 16 novembre 2026.
+Dernière mise à jour : 17 novembre 2026.
 
 ## En deux phrases
 
@@ -183,6 +183,51 @@ abonnement Claude le temps du test, et récolter leurs retours.
   encore à vérifier (≈ 10 k Sonnet + 6 k pour la synthèse des retours).
 - Essais sans toucher à l'app de Bastien : `source data/test/env.sh` (base copiée, registre et
   build `.next-test` séparés, port 3100).
+
+## Accueil invité, consommation, première synchro (fil du 17 nov.)
+
+Plan validé par le coordinateur (2 séances pré-analysées, préparation comptée à part, jauge sans compte permanent).
+
+- Première synchro : rien n'est plus lancé à l'aveugle chez l'invité. Bastien clique « Préparer le profil »
+  (Paramètres, carte de l'invité, une fois la clé Garmin présente) : `server/prepare-service.ts` importe
+  les 12 mois (tours de `syncNow` jusqu'à 0 série en attente), calcule toutes les métriques (`loadContext`,
+  `getDashboard`, aucun token), puis analyse les 2 dernières séances et le conseil du jour (≈ 27 k,
+  `PREPARATION_ESTIMATE`). Usage tracé kind `prepare` : hors plafonds personnels de l'invité, dans le
+  plafond commun, sous la garde de l'abonnement. Coût affiché avant le clic, bouton bloqué si la garde
+  refuserait (message pour Bastien avec l'heure de remise à zéro). État dans le registre
+  (`prepare_<id>`), suivi toutes les 3 s ; si l'invité ouvre avant la fin : « Bastien prépare ton
+  espace » avec l'avancement. Jamais d'analyse en masse ; ensuite à la demande, et la nouvelle séance
+  automatiquement après une synchro (comportement antérieur), dans la limite du plafond.
+- Objectif non bloquant : les sorties du coach portent « empreinte complète~empreinte sans objectif »
+  (`coach/fingerprint.ts`). Saisir ou changer l'objectif ne périme plus une analyse de séance passée ;
+  le conseil du jour (suggestion) reste périmé. Les anciennes sorties (une seule empreinte, dont toutes
+  celles de Bastien) se lisent comme avant. Vérifié : photographie du moteur identique avant/après.
+- Jauge de l'abonnement (invités) : `subscriptionGauge` (profiles/quota.ts) = fenêtre la plus chargée
+  rapportée au seuil d'arrêt invités (60 % 5 h, 70 % 7 j) : large < 75 %, à ménager, presque plein ≥ 100 %
+  (coach en pause, bouton désactivé). Fournie par le layout (`GaugeProvider`), affichée sous chaque
+  `CoachRequest`, dans « Demander au coach », sur l'accueil et dans Paramètres de l'invité (plus aucun
+  chiffre de tokens chez eux). Analyses restantes montrées seulement à 1 ou 0. Messages de refus
+  réécrits sur un ton positif.
+- Accueil `/bienvenue` refait : « Bonjour {prénom}, tout est prêt », 3 chiffres marquants
+  (`lib/welcome/highlights.ts` : km, courses, heures, semaines actives, meilleur mois ; allure à FC égale ;
+  dernière séance et si elle est déjà commentée), prochaine séance, « Tu peux / Sillage ne fait pas »,
+  le coach comme ressource partagée avec la jauge, installation repliée, un seul bouton « Voir mon
+  tableau de bord » (objectif facultatif). Rien sur la connexion. Bouton « Un retour ? » plus discret.
+- Exemples cliquables (`lib/goal/examples.ts`, `ui/example-chips.tsx`) : objectif (dont marathon,
+  record sur semi, trail, gros volume), « À savoir pour le coach », note de séance. « Douleur » retiré
+  du texte d'aide de la note (frontière médicale).
+- « Le coach relit sa semaine » : retiré du tableau de bord et de la navigation ; /bilan reste (Bastien),
+  lien et export Markdown depuis Paramètres (`GET /api/weekly-review/export`, `lib/weekly/markdown.ts`).
+  Calcul inchangé.
+- Rond rose : `.sticker-long` (texte > 10 caractères) et pastille de 72 px sur téléphone ; mesuré dans
+  le cercle avec marge (−4,8 px téléphone, −8,9 px écran large, clair et sombre).
+- Essais sans Claude : `SILLAGE_FAKE_COACH=1` remplace le client par `coach/fake-client.ts` (sortie
+  conforme, sans chiffre, consommation fictive). Jamais en production. Sur le serveur d'essai, l'invité
+  `papa` a la base synthétique `grosvolume` (939 courses) et a été préparé avec le client simulé.
+  Captures : `data/test/cdp-shots.mjs` (Chrome headless, sans dépendance), mesure du rond :
+  `data/test/cdp-eval.mjs`.
+- Aucun appel réel à Claude dans ce fil. Le chemin réel de la préparation reste à vérifier au premier
+  vrai invité (≈ 27 k Sonnet).
 
 ## État
 
