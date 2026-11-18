@@ -557,3 +557,61 @@ a.welcome-stat:hover { transform: translate(-1px, -1px); }
 
 /* Tours regroupés (échauffement, récupérations, retour au calme) d'un fractionné. */
 .data tr.lap-group td { color: var(--sl-ink-muted, inherit); font-style: italic; }
+
+/* ---------- Tableau de bord : hauteurs naturelles en tête ---------- */
+.home-hero { align-items: start; }
+
+/* ---------- Carte forme aérobie : verdict d'abord ---------- */
+.verdict-title { font-family: var(--font-display); font-size: 40px; font-weight: 800; line-height: 1.02; letter-spacing: -0.04em; margin-top: 10px; display: flex; align-items: center; gap: 12px; font-variation-settings: "opsz" 96; }
+.verdict-mark { display: inline-grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 50%; border: var(--sl-stroke) solid var(--sl-border); font-size: 22px; line-height: 1; color: var(--fixed-ink); background: var(--sl-surface-2); transform: rotate(-6deg); }
+.verdict-mark.progressing { background: var(--sl-ok); }
+.verdict-mark.regressing { background: var(--sl-warn); }
+.verdict-mark.stable { background: var(--sl-yellow); }
+.verdict-reason { margin-top: 10px; font-size: 15px; }
+.aerobic-figure { margin-top: 18px; padding-top: 14px; border-top: 1.5px solid var(--sl-grid); }
+.aerobic-label { font-size: 13.5px; font-weight: 700; margin-bottom: 6px; }
+.big-number-md { font-size: 56px; text-shadow: 3px 2px 0 var(--sl-figure-echo); }
+.how-to { margin-top: 12px; }
+.how-steps { list-style: decimal; margin: 8px 0 8px 18px; display: grid; gap: 6px; }
+.how-steps li { padding-left: 2px; }
+.how-to .more-body p + p, .how-to .more-body ol + p { margin-top: 6px; }
+.glance-title .verdict-mark { width: 26px; height: 26px; font-size: 15px; margin-right: 8px; vertical-align: 2px; border-width: 1.5px; }
+
+/* ---------- Calendrier des séances ---------- */
+.cal-card { --shadow-color: var(--sl-green); }
+.cal-card > .row-between { flex-wrap: wrap; row-gap: 4px; }
+.cal-target { font-family: var(--font-data); font-size: 11.5px; color: var(--sl-ink-muted); white-space: nowrap; }
+.cal-grid { margin-top: 14px; display: grid; gap: 5px; }
+.cal-row { display: grid; grid-template-columns: 64px repeat(7, minmax(0, 1fr)) 74px; gap: 5px; align-items: center; }
+.cal-head { margin-bottom: 1px; }
+.cal-letter, .cal-count-head { font-family: var(--font-data); font-size: 11px; color: var(--sl-ink-muted); text-align: center; }
+.cal-count-head { text-align: left; padding-left: 4px; }
+.cal-week-label { font-family: var(--font-data); font-size: 11px; color: var(--sl-ink-muted); white-space: nowrap; }
+.cal-row.current .cal-week-label { color: var(--sl-ink); font-weight: 600; }
+.cal-day { position: relative; display: block; width: 100%; max-width: 34px; aspect-ratio: 1; justify-self: center; border-radius: 7px; background: var(--sl-surface-2); border: 1.5px solid transparent; }
+.cal-day.run { background: var(--cal); border-color: var(--sl-border); }
+.cal-day.run:hover, .cal-day.run:focus-visible { transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--sl-border); }
+.cal-day.other::after, .cal-other-dot { content: ""; position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--zone-other); left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.cal-other-dot { left: auto; top: auto; right: 2px; bottom: 2px; transform: none; width: 7px; height: 7px; border: 1px solid var(--sl-surface); }
+.cal-day.planned { background: transparent; border: 2px dashed var(--sl-pink); }
+.cal-day.planned::before { content: ""; position: absolute; inset: 30%; border-radius: 50%; background: var(--cal); opacity: 0.85; }
+.cal-day.planned-alt { border-color: color-mix(in srgb, var(--sl-pink) 55%, transparent); }
+.cal-day.planned-alt::before { opacity: 0.35; }
+.cal-day.future:not(.planned) { background: transparent; border: 1.5px dotted var(--sl-grid); }
+.cal-day.today { outline: 2px solid var(--sl-ink); outline-offset: 2px; }
+.cal-multi { position: absolute; right: 3px; top: 1px; font-family: var(--font-data); font-size: 10px; font-weight: 700; color: var(--fixed-ink); }
+.cal-count { display: flex; flex-direction: column; gap: 2px; padding-left: 4px; }
+.cal-pips { display: flex; gap: 3px; }
+.cal-pip { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--sl-grid); }
+.cal-pip.on { background: var(--sl-ink); border-color: var(--sl-ink); }
+.cal-pip.extra { background: var(--sl-pink); border-color: var(--sl-ink); }
+.cal-km { font-family: var(--font-data); font-size: 10.5px; color: var(--sl-ink-muted); }
+.cal-summary { margin-top: 14px; padding-top: 10px; border-top: 1.5px solid var(--sl-grid); font-size: 13.5px; }
+.cal-legend { margin-top: 10px; gap: 6px 12px; }
+.cal-swatch-other { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--zone-other); margin-right: 5px; }
+.cal-swatch-planned { display: inline-block; width: 10px; height: 10px; border-radius: 3px; border: 1.5px dashed var(--sl-pink); margin-right: 5px; vertical-align: -1px; }
+@media (max-width: 820px) {
+  .cal-row { grid-template-columns: 50px repeat(7, minmax(0, 1fr)) 56px; gap: 4px; }
+  .verdict-title { font-size: 32px; }
+  .big-number-md { font-size: 46px; }
+}

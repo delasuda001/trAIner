@@ -19,6 +19,45 @@ export const PROGRESSION_LABELS: Record<Progression["state"], { label: string; t
 
 export const CONFIDENCE_LABELS = { low: "faible", moderate: "moyenne", high: "bonne" } as const;
 
+export type ProgressionVerdict = { headline: string; tone: Tone; reason: string; caution: string | null };
+
+const VERDICT_HEADLINES: Record<Progression["state"], string> = {
+  progressing: "Ça progresse",
+  stable: "C'est stable",
+  regressing: "Ça recule",
+  insufficient: "Pas encore de tendance",
+};
+
+/**
+ * Verdict de la carte aérobie, en clair : l'état d'abord, puis une seule raison chiffrée en s/km.
+ * Le terme technique (« allure à FC égale ») n'apparaît pas : on parle de « ton allure à N bpm ».
+ */
+export function progressionVerdict(progression: Progression): ProgressionVerdict {
+  const { state, windowWeeks, referenceHeartRateBpm: hr } = progression;
+  const headline = VERDICT_HEADLINES[state];
+  if (state === "insufficient") {
+    const missing = Math.max(0, 3 - Math.min(progression.recent.runs, progression.previous.runs));
+    return { headline, tone: "neutral", reason: `Il faut 3 sorties faciles par période de ${windowWeeks} semaines pour comparer ; il en manque ${missing}.`, caution: null };
+  }
+  const gain = progression.paceGainSPerKm ?? 0;
+  const amount = formatNumber(Math.abs(gain));
+  const caution = progression.confidence === "low" || progression.caveats.length ? "À confirmer : peu de sorties comparées." : null;
+  if (state === "stable") {
+    const spread = progression.runToRunSpreadSPerKm;
+    const reason = Math.abs(gain) < 1
+      ? `Même allure à ${hr} bpm qu'il y a ${windowWeeks} semaines.`
+      : `${amount} s/km d'écart à ${hr} bpm en ${windowWeeks} semaines${spread != null && Math.abs(gain) <= spread ? `, moins que ta variation normale d'une sortie à l'autre (±${spread} s/km)` : ", trop peu pour parler d'un changement"}.`;
+    return { headline, tone: "neutral", reason, caution: null };
+  }
+  const faster = gain > 0;
+  return {
+    headline,
+    tone: faster ? "good" : "warning",
+    reason: `À ${hr} bpm, tu cours ${amount} s/km plus ${faster ? "vite" : "lentement"} qu'il y a ${windowWeeks} semaines.`,
+    caution,
+  };
+}
+
 export function progressionSentence(progression: Progression): string {
   if (progression.state === "insufficient") return progression.caveats[0] ?? "Pas assez de sorties faciles comparables pour dégager une tendance.";
   const gain = progression.paceGainSPerKm ?? 0;

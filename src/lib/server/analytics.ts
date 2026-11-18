@@ -9,6 +9,7 @@ import type { ActivityRow, WellnessRow } from "@/lib/db/types";
 import { computeActivityMetrics, METRICS_VERSION, sessionTitle, type ActivityMetrics } from "@/lib/engine/activity-metrics";
 import { computeDeltas, selectComparables, type ComparisonDeltas, type RunForComparison } from "@/lib/engine/comparable";
 import { isRun, loadAlert, loadFigure, summarizeLoad, type LoadAlert, type LoadFigure, type LoadSummary } from "@/lib/engine/load";
+import { trainingCalendar, type TrainingCalendar } from "@/lib/engine/calendar";
 import { computeProgression, referenceHeartRate, type Progression } from "@/lib/engine/progression";
 import { assessRecovery, type RecoverySignals } from "@/lib/engine/recovery";
 import { runningRhythm, type Rhythm } from "@/lib/engine/rhythm";
@@ -335,7 +336,19 @@ export type Dashboard = {
   lastSameType: { id: string; localDate: string; title: string; prescription: Prescription } | null;
   /** Semaine en cours, lundi → dimanche : séances faites et séances proposées. */
   week: Array<{ date: string; done: Array<{ kind: string | null; sport: string }>; planned: string | null }>;
+  /** Calendrier des 8 dernières semaines (séances, cible de sorties par semaine). */
+  calendar: TrainingCalendar;
 };
+
+const CALENDAR_WEEKS = 8;
+
+/** Zone FC dominante (1 à 5) d'une répartition de temps par zone. */
+function dominantZoneOf(shares: number[] | null | undefined): number | null {
+  if (!shares || !shares.some((value) => value > 0)) return null;
+  let best = 0;
+  shares.forEach((value, index) => { if (value > shares[best]) best = index; });
+  return best + 1;
+}
 
 /** Types de séance réalisés qui correspondent à une suggestion (pour reprendre la consigne de la dernière fois). */
 const SAME_TYPE_KINDS: Partial<Record<Suggestion["primary"]["type"], string[]>> = {
@@ -434,6 +447,19 @@ export function getDashboard(): Dashboard {
     activityCount: rows.length,
     sync: readSyncState(),
     goal,
+    calendar: trainingCalendar({
+      today,
+      weeks: CALENDAR_WEEKS,
+      target: weekPlanFor(goal, goalGapsFor(goal, runs, today, profile.lactateThresholdSpeedMps), runs, today)?.runsPerWeek ?? goal?.runsPerWeek ?? null,
+      activities: rows.filter((row) => row.localDate >= addDays(startOfIsoWeek(today), -7 * (CALENDAR_WEEKS - 1))).map((row) => {
+        const run = runById.get(row.id);
+        return { id: row.id, date: row.localDate, run: isRun(row.sport), zone: dominantZoneOf(run?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null)), family: run?.metrics.family ?? "other", title: run ? sessionTitle(run.metrics) : row.name, distanceM: row.distanceM };
+      }),
+      planned: [
+        ...suggestion.when.dates.map((date, index) => ({ date, type: suggestion.primary.type, alternative: index > 0 })),
+        ...(suggestion.then ? [{ date: suggestion.then.when.date, type: suggestion.then.type, alternative: false }] : []),
+      ].filter((entry) => entry.type !== "rest"),
+    }),
     week: Array.from({ length: 7 }, (_, index) => {
       const date = addDays(startOfIsoWeek(today), index);
       const planned = suggestion.when.dates.includes(date) ? suggestion.primary.type : suggestion.then?.when.date === date ? suggestion.then.type : null;

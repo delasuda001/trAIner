@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 18 novembre 2026 (nuit).
+Dernière mise à jour : 18 novembre 2026 (nuit, carte aérobie et calendrier).
 
 ## En deux phrases
 
@@ -391,6 +391,20 @@ aux autres outils ; analyses jugées ; priorités). Points 1 à 4 validés par l
   « cause probable », « trop rapide pour tenir »… refusés quand la liste est « aucune ») : `session-v15` ;
   `ecart_objectif` dans le conseil du jour (`outlook-v4`), régénéré le 18 nov. (1 appel, ≈ 6,7 k). Les analyses
   du 13 et du 17 nov. sont de nouveau « à mettre à jour » (v15), à régénérer d'un clic.
+
+## Carte forme aérobie et calendrier des séances (18 nov., nuit)
+
+- Carte « Forme aérobie » (`ProgressionCard`) : verdict en clair d'abord (`progressionVerdict` dans
+  `engine/explain.ts` : « Ça progresse » / « C'est stable » / « Ça recule » / « Pas encore de tendance »),
+  une raison chiffrée en s/km, puis « Ton allure si tu courais à N bpm » (N = `referenceHeartRateBpm`,
+  le même partout : carte, tuile mobile, explication). « Comment c'est calculé ? » en `<details>`
+  (toucher et clavier). Plus de pilule « stable ≈ » inclinée ni de « à FC égale » dans le texte visible.
+- Tableau de bord : la grille de tête a `align-items: start` (`.home-hero`) ; colonne gauche = carte
+  jaune + calendrier (`components/dashboard/session-calendar.tsx`), colonne droite = forme aérobie.
+- Calendrier : `engine/calendar.ts` (`trainingCalendar`, pur, testé), `Dashboard.calendar`. 8 semaines,
+  case colorée par zone dominante (code Sillage), autre sport = point gris, séance proposée en
+  pointillé rose (jour de repli plus pâle), pastilles de courses face à la cible (`weekPlan.runsPerWeek`,
+  sinon `goal.runsPerWeek`), jamais de rouge ; la semaine en cours n'est pas jugée (« encore 2 possibles »).
 
 ## État
 

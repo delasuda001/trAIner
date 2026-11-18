@@ -1,4 +1,4 @@
-import { ArrowRight, Gauge, HeartPulse, Moon, Target, Waves } from "lucide-react";
+import { ArrowRight, ChevronRight, Gauge, HeartPulse, Moon, Target, Waves } from "lucide-react";
 import Link from "next/link";
 import { SessionPoints } from "@/components/activity/session-points";
 import { GoalStatusList } from "@/components/goal/goal-status";
@@ -14,11 +14,12 @@ import type { OutlookCoachOutput } from "@/lib/coach/outlook-coach";
 import type { SessionCoachOutput } from "@/lib/coach/session-coach";
 import { daysBetween } from "@/lib/dates";
 import { sessionTitle } from "@/lib/engine/activity-metrics";
-import { CONFIDENCE_LABELS, hrvCompare, hrvMeaning, loadMeaning, progressionSentence, restingHrCompare, restingHrMeaning, sleepCompare, sleepMeaning, type Tone } from "@/lib/engine/explain";
+import { hrvCompare, hrvMeaning, loadMeaning, progressionVerdict, restingHrCompare, restingHrMeaning, sleepCompare, sleepMeaning, type Tone } from "@/lib/engine/explain";
 import { SPORT_LABELS, VERDICT_TONES } from "@/lib/engine/labels";
 import { VERDICT_LABELS } from "@/lib/engine/verdict";
 import { formatDate, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import { Say } from "@/components/ui/register";
+import type { Progression } from "@/lib/engine/progression";
 import type { Dashboard } from "@/lib/server/analytics";
 import type { CoachResult } from "@/lib/server/coach-service";
 import type { Sport } from "@/lib/source/types";
@@ -144,7 +145,7 @@ export function MobileGlance({ dashboard }: { dashboard: Dashboard }) {
   const { primary } = suggestion;
   const target = primary.target;
   const paceCenter = target?.paceFastMps && target.paceSlowMps ? (target.paceFastMps + target.paceSlowMps) / 2 : null;
-  const gain = progression.paceGainSPerKm;
+  const verdict = progressionVerdict(progression);
   return (
     <div className="glance" aria-label="En bref">
       <GlanceTile panel="next" anchor="next-title" className="next">
@@ -156,55 +157,52 @@ export function MobileGlance({ dashboard }: { dashboard: Dashboard }) {
         <p className="glance-line">{suggestion.reason}</p>
       </GlanceTile>
       <GlanceTile panel="progress" anchor="progress-title">
-        <div className="card-eyebrow"><Gauge size={13} /> Progression aérobie · {STATE_BADGE[progression.state]}</div>
-        {progression.state !== "insufficient" ? (
-          <>
-            <div className="glance-big" style={{ marginTop: 6 }}>{formatPace(progression.recent.speedAtReferenceHr).replace("/km", "")}<span className="unit">/km à {progression.referenceHeartRateBpm} bpm</span></div>
-            {gain != null ? <p className="glance-line">{Math.abs(gain) < 1 ? "Même allure" : `${formatNumber(Math.abs(gain))} s/km plus ${gain > 0 ? "rapide" : "lent"}`} que les {progression.windowWeeks} semaines précédentes</p> : null}
-          </>
-        ) : <p className="glance-line">Pas encore de tendance : il faut quelques sorties faciles de plus.</p>}
+        <div className="card-eyebrow"><Gauge size={13} /> Forme aérobie</div>
+        <div className="glance-title"><VerdictMark state={progression.state} />{verdict.headline}</div>
+        <p className="glance-line"><Say tu={verdict.reason} /></p>
+        {progression.state !== "insufficient" ? <p className="glance-line muted"><Say tu={`Ton allure à ${progression.referenceHeartRateBpm} bpm : ${formatPace(progression.recent.speedAtReferenceHr)}`} /></p> : null}
       </GlanceTile>
     </div>
   );
 }
 
 /* ---------- Progression ---------- */
-const STATE_BADGE: Record<string, string> = { progressing: "en progrès ↗", stable: "stable ≈", regressing: "en recul ↘", insufficient: "à suivre ?" };
 
 export function ProgressionCard({ dashboard, coach }: { dashboard: Dashboard; coach: CoachResult<OutlookCoachOutput> }) {
   const { progression } = dashboard;
-  const gain = progression.paceGainSPerKm;
+  const verdict = progressionVerdict(progression);
+  const hr = progression.referenceHeartRateBpm;
   const toPace = (speed: number | null) => (speed ? 1000 / speed : null);
-  const noise = progression.state === "stable" && progression.runToRunSpreadSPerKm != null
-    ? `Écart dans la variation normale : tes sorties faciles varient de ±${progression.runToRunSpreadSPerKm} s/km d'une fois à l'autre.`
-    : null;
   return (
     <section className="card card-hero card-progress" aria-labelledby="progress-title">
-      <span className="state-badge">{STATE_BADGE[progression.state]}</span>
-      <div className="card-eyebrow"><Gauge size={13} /> Progression aérobie</div>
-      <h2 id="progress-title" style={{ position: "absolute", left: -9999 }}>Progression : {STATE_BADGE[progression.state]}</h2>
+      <div className="card-eyebrow"><Gauge size={13} /> Forme aérobie</div>
+      <h2 id="progress-title" className="verdict-title"><VerdictMark state={progression.state} />{verdict.headline}</h2>
+      <p className="verdict-reason"><Say tu={verdict.reason} />{verdict.caution ? <span className="muted"> {verdict.caution}</span> : null}</p>
       {progression.state !== "insufficient" ? (
-        <div className="big-number" style={{ marginTop: 14 }}>{formatPace(progression.recent.speedAtReferenceHr).replace("/km", "")}<span className="unit">/km à {progression.referenceHeartRateBpm} bpm</span></div>
-      ) : (
-        <div className="card-title" style={{ fontSize: 30 }}>Pas encore de tendance</div>
-      )}
-      <p className="state-sub">
-        {gain != null ? <><strong>{Math.abs(gain) < 1 ? "Même allure" : `${formatNumber(Math.abs(gain))} s/km plus ${gain > 0 ? "rapide" : "lent"}`}</strong> que les {progression.windowWeeks} semaines précédentes ({formatPace(progression.previous.speedAtReferenceHr)})</> : progression.caveats[0]}
-        {progression.confidence ? <span className="muted"> · confiance {CONFIDENCE_LABELS[progression.confidence]}</span> : null}
-      </p>
-      <p className="card-text">{coach.status === "ready" ? coach.output.progressionSentence : <Say tu={noise ?? progressionSentence(progression)} />}</p>
-      {coach.status === "ready" ? <div style={{ marginTop: 4 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Lecture" /></div> : null}
+        <div className="aerobic-figure">
+          <div className="aerobic-label"><Say tu={`Ton allure si tu courais à ${hr} bpm`} /></div>
+          <div className="big-number big-number-md">{formatPace(progression.recent.speedAtReferenceHr).replace("/km", "")}<span className="unit">/km</span></div>
+          <div className="muted small">{progression.windowWeeks} semaines avant : {formatPace(progression.previous.speedAtReferenceHr)}</div>
+        </div>
+      ) : null}
+      <AerobicHowTo progression={progression} />
+      {coach.status === "ready" ? (
+        <>
+          <p className="card-text">{coach.output.progressionSentence}</p>
+          <div style={{ marginTop: 4 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Lecture" /></div>
+        </>
+      ) : null}
       <ProgressionChart
         points={progression.points.map((point) => ({ date: point.date, secondsPerKm: 1000 / point.speedAtReferenceHr }))}
         recentStart={progression.recent.start}
         recentLevel={toPace(progression.recent.speedAtReferenceHr)}
         previousLevel={toPace(progression.previous.speedAtReferenceHr)}
-        referenceHr={progression.referenceHeartRateBpm}
+        referenceHr={hr}
       />
       <div className="legend" style={{ marginTop: 4 }}>
         <span><span className="legend-swatch" style={{ background: "var(--sl-highlight)" }} />{progression.windowWeeks} dernières semaines</span>
         <span><span className="legend-swatch" style={{ background: "var(--sl-past)", borderColor: "transparent" }} />avant</span>
-        <span>1 point = 1 sortie facile</span>
+        <span>1 point = 1 sortie facile, plus haut = plus rapide</span>
       </div>
       <div className="facts" style={{ marginTop: 12 }}>
         <Fact label="VO2max (montre)" value={formatNumber(progression.vo2max.latest, 1)} sub={progression.vo2max.delta != null ? `${progression.vo2max.delta >= 0 ? "+" : "−"}${formatNumber(Math.abs(progression.vo2max.delta), 1)} en ${progression.windowWeeks} sem.` : undefined} />
@@ -216,7 +214,33 @@ export function ProgressionCard({ dashboard, coach }: { dashboard: Dashboard; co
   );
 }
 
-/* ---------- Forme et récupération : la couleur d'ombre identifie la métrique ---------- */
+const VERDICT_MARK: Record<Progression["state"], string> = { progressing: "↗", stable: "≈", regressing: "↘", insufficient: "?" };
+
+function VerdictMark({ state }: { state: Progression["state"] }) {
+  return <span className={`verdict-mark ${state}`} aria-hidden>{VERDICT_MARK[state]}</span>;
+}
+
+/** « Comment c'est calculé » : dépliable au toucher comme au clavier (pas de survol seul). */
+function AerobicHowTo({ progression }: { progression: Progression }) {
+  const hr = progression.referenceHeartRateBpm;
+  const weeks = progression.windowWeeks;
+  return (
+    <details className="more how-to">
+      <summary><ChevronRight size={14} className="chev" /> Comment c&apos;est calculé ?</summary>
+      <div className="more-body small">
+        <p><Say tu={`L'idée : à ${hr} bpm, ta FC habituelle en footing, quelle allure tiens-tu ? Si elle devient plus rapide, ton endurance progresse : même cœur, plus de vitesse.`} /></p>
+        <ol className="how-steps">
+          <li><Say tu="Seules tes sorties faciles et longues en extérieur comptent, et dans chacune les minutes régulières, sur le plat (pente < 3 %), en Z2–Z3, après les 8 premières minutes." /></li>
+          <li><Say tu="Pour chaque minute, ta vitesse est divisée par tes battements au-dessus de ta FC de repos : des mètres par battement. On garde la valeur médiane de la sortie." /></li>
+          <li><Say tu={`On la ramène à ${hr} bpm (ta FC médiane en sortie facile sur 16 semaines, arrondie à 5) et on la convertit en min/km.`} /></li>
+          <li><Say tu={`On compare la médiane des ${weeks} dernières semaines à celle des ${weeks} précédentes (au moins 3 sorties de chaque côté). Moins de 1,2 % d'écart, ou un écart dans ta variation normale d'une sortie à l'autre : c'est stable.`} /></li>
+        </ol>
+        <p className="muted">Chaleur, vent, fatigue ou terrain bougent ce chiffre d&apos;une sortie à l&apos;autre : c&apos;est la tendance sur plusieurs semaines qui compte.</p>
+      </div>
+    </details>
+  );
+}
+
 function Kpi({ icon, question, value, unit, compare, meaning, tone, chart, shadow }: { icon: React.ReactNode; question: string; value: string; unit?: string; compare: string; meaning: string; tone: Tone; chart: React.ReactNode; shadow: string }) {
   return (
     <div className="card kpi" style={{ ["--shadow-color" as string]: shadow }}>

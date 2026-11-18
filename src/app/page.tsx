@@ -2,6 +2,7 @@ import { asMember } from "@/lib/profiles/request";
 import type { Member } from "@/lib/profiles/types";
 import { CoachRequest } from "@/components/coach-request";
 import { IntensityCard, LastSessionCard, MissingInfo, MobileGlance, ProgressionCard, RecentList, RecoveryRow, SuggestionCard, VolumeCard } from "@/components/dashboard/cards";
+import { SessionCalendar } from "@/components/dashboard/session-calendar";
 import { formatDate } from "@/lib/formatters";
 import { getDashboard } from "@/lib/server/analytics";
 import { readPrepareStatus } from "@/lib/server/prepare-service";
@@ -45,8 +46,12 @@ function renderHome(member: Member) {
 
       <MobileGlance dashboard={dashboard} />
 
-      <div className="grid grid-2">
-        <SuggestionCard dashboard={dashboard} coach={outlook} />
+      {/* Hauteurs naturelles : la carte jaune ne s'étire plus, le calendrier remplit sa colonne. */}
+      <div className="grid grid-2 home-hero">
+        <div className="stack">
+          <SuggestionCard dashboard={dashboard} coach={outlook} />
+          <SessionCalendar calendar={dashboard.calendar} />
+        </div>
         <ProgressionCard dashboard={dashboard} coach={outlook} />
       </div>
 
