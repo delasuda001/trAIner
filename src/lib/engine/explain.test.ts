@@ -17,22 +17,26 @@ describe("progressionVerdict", () => {
     const verdict = progressionVerdict(progression({}));
     expect(verdict.headline).toBe("C'est stable");
     expect(verdict.tone).toBe("neutral");
-    expect(verdict.reason).toBe("3 s/km d'écart à 140 bpm en 6 semaines, moins que ta variation normale d'une sortie à l'autre (±8 s/km).");
+    expect(verdict.reason).toBe("3 s/km d'écart avec les 6 semaines d'avant, bien moins que ta variation habituelle d'une sortie à l'autre.");
+  });
+
+  it("stable mais écart au-dessus de la variation : pas de « moins que »", () => {
+    expect(progressionVerdict(progression({ paceGainSPerKm: 5, runToRunSpreadSPerKm: 4 })).reason).toBe("5 s/km d'écart avec les 6 semaines d'avant, trop peu pour parler d'un changement.");
   });
 
   it("stable sans écart mesurable", () => {
-    expect(progressionVerdict(progression({ paceGainSPerKm: 0 })).reason).toBe("Même allure à 140 bpm qu'il y a 6 semaines.");
+    expect(progressionVerdict(progression({ paceGainSPerKm: 0 })).reason).toBe("Même allure qu'il y a 6 semaines.");
   });
 
   it("progression : plus vite à la même FC, en s/km", () => {
     const verdict = progressionVerdict(progression({ state: "progressing", paceGainSPerKm: 12, confidence: "high" }));
-    expect(verdict).toEqual({ headline: "Ça progresse", tone: "good", reason: "À 140 bpm, tu cours 12 s/km plus vite qu'il y a 6 semaines.", caution: null });
+    expect(verdict).toEqual({ headline: "Ça progresse", tone: "good", reason: "12 s/km plus vite qu'il y a 6 semaines, à cœur égal.", caution: null });
   });
 
   it("recul : plus lent, signalé à confirmer si peu de sorties", () => {
     const verdict = progressionVerdict(progression({ state: "regressing", paceGainSPerKm: -9, confidence: "low" }));
     expect(verdict.headline).toBe("Ça recule");
-    expect(verdict.reason).toBe("À 140 bpm, tu cours 9 s/km plus lentement qu'il y a 6 semaines.");
+    expect(verdict.reason).toBe("9 s/km plus lent qu'il y a 6 semaines, à cœur égal.");
     expect(verdict.caution).not.toBeNull();
   });
 

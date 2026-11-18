@@ -33,7 +33,7 @@ const VERDICT_HEADLINES: Record<Progression["state"], string> = {
  * Le terme technique (« allure à FC égale ») n'apparaît pas : on parle de « ton allure à N bpm ».
  */
 export function progressionVerdict(progression: Progression): ProgressionVerdict {
-  const { state, windowWeeks, referenceHeartRateBpm: hr } = progression;
+  const { state, windowWeeks } = progression;
   const headline = VERDICT_HEADLINES[state];
   if (state === "insufficient") {
     const missing = Math.max(0, 3 - Math.min(progression.recent.runs, progression.previous.runs));
@@ -45,15 +45,17 @@ export function progressionVerdict(progression: Progression): ProgressionVerdict
   if (state === "stable") {
     const spread = progression.runToRunSpreadSPerKm;
     const reason = Math.abs(gain) < 1
-      ? `Même allure à ${hr} bpm qu'il y a ${windowWeeks} semaines.`
-      : `${amount} s/km d'écart à ${hr} bpm en ${windowWeeks} semaines${spread != null && Math.abs(gain) <= spread ? `, moins que ta variation normale d'une sortie à l'autre (±${spread} s/km)` : ", trop peu pour parler d'un changement"}.`;
+      ? `Même allure qu'il y a ${windowWeeks} semaines.`
+      : spread != null && Math.abs(gain) > spread
+        ? `${amount} s/km d'écart avec les ${windowWeeks} semaines d'avant, trop peu pour parler d'un changement.`
+        : `${amount} s/km d'écart avec les ${windowWeeks} semaines d'avant, ${spread != null && Math.abs(gain) <= spread / 2 ? "bien moins" : "moins"} que ta variation habituelle d'une sortie à l'autre.`;
     return { headline, tone: "neutral", reason, caution: null };
   }
   const faster = gain > 0;
   return {
     headline,
     tone: faster ? "good" : "warning",
-    reason: `À ${hr} bpm, tu cours ${amount} s/km plus ${faster ? "vite" : "lentement"} qu'il y a ${windowWeeks} semaines.`,
+    reason: `${amount} s/km plus ${faster ? "vite" : "lent"} qu'il y a ${windowWeeks} semaines, à cœur égal.`,
     caution,
   };
 }

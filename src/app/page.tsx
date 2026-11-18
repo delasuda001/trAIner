@@ -1,9 +1,10 @@
 import { asMember } from "@/lib/profiles/request";
 import type { Member } from "@/lib/profiles/types";
 import { CoachRequest } from "@/components/coach-request";
-import { IntensityCard, LastSessionCard, MissingInfo, MobileGlance, ProgressionCard, RecentList, RecoveryRow, SuggestionCard, VolumeCard } from "@/components/dashboard/cards";
+import { IntensityCard, LastSessionCard, MissingInfo, ProgressionCard, RecentList, RecoveryRow, SuggestionCard, VolumeCard } from "@/components/dashboard/cards";
 import { SessionCalendar } from "@/components/dashboard/session-calendar";
 import { formatDate } from "@/lib/formatters";
+import { zonesSourceSentence } from "@/lib/engine/zones";
 import { getDashboard } from "@/lib/server/analytics";
 import { readPrepareStatus } from "@/lib/server/prepare-service";
 import { PreparingNotice } from "@/components/profiles/welcome-steps";
@@ -44,15 +45,13 @@ function renderHome(member: Member) {
         {outlook.status !== "ready" ? <CoachRequest endpoint="/api/coach/outlook" label="Demander l'avis du coach" queueLabel="Conseil du jour du coach" initialError={outlook.status === "error" ? outlook.message : null} /> : null}
       </div>
 
-      <MobileGlance dashboard={dashboard} />
-
       {/* Hauteurs naturelles : la carte jaune ne s'étire plus, le calendrier remplit sa colonne. */}
       <div className="grid grid-2 home-hero">
         <div className="stack">
           <SuggestionCard dashboard={dashboard} coach={outlook} />
-          <SessionCalendar calendar={dashboard.calendar} />
+          <SessionCalendar calendar={dashboard.calendar} zonesNote={zonesSourceSentence(dashboard.profile.zones, dashboard.profile.zonesSource)} />
         </div>
-        <ProgressionCard dashboard={dashboard} coach={outlook} />
+        <ProgressionCard dashboard={dashboard} />
       </div>
 
       <section className="section">

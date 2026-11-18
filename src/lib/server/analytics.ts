@@ -19,7 +19,7 @@ import { suggestNextSession, type Suggestion, type WeekPlan } from "@/lib/engine
 import { estimateThreshold, type ThresholdEstimate } from "@/lib/engine/threshold";
 import { goalGap, longRunBenchmarkKm, nextLongRunKm, structuralLever, type GoalGap } from "@/lib/engine/goal-gap";
 import { classifyVerdict, type SessionVerdict } from "@/lib/engine/verdict";
-import { fallbackZones } from "@/lib/engine/zones";
+import { fallbackZones, zonesFromHistory, type ZonesSource } from "@/lib/engine/zones";
 import { activeMember } from "@/lib/profiles/context";
 import { registerForRole, voiceDeep, type Register } from "@/lib/register";
 import type { ActivityStreams, HeartRateZones, Lap, WellnessDay } from "@/lib/source/types";
@@ -27,7 +27,7 @@ import { EMPTY_GOAL, GOAL_KEY, goalSchema, targetPaceMps, type Goal } from "@/li
 import { athleteProfileSchema, PROFILE_KEY, SYNC_STATE_KEY, syncStateSchema, type SyncState } from "@/lib/sync/sync";
 
 /** `lactateThresholdSpeedMps` : seuil retenu (observé en séance s'il est nettement plus rapide que la montre, sinon montre) ; détail dans `threshold`. */
-export type Profile = { zones: HeartRateZones; zonesFromWatch: boolean; lactateThresholdSpeedMps: number | null; restingHeartRateBpm: number; threshold?: ThresholdEstimate };
+export type Profile = { zones: HeartRateZones; zonesFromWatch: boolean; zonesSource: ZonesSource; lactateThresholdSpeedMps: number | null; restingHeartRateBpm: number; threshold?: ThresholdEstimate };
 
 function toWellnessDay(row: WellnessRow): WellnessDay {
   return { date: row.date, hrvLastNightMs: row.hrvLastNightMs, hrvWeeklyAvgMs: row.hrvWeeklyAvgMs, hrvBaselineLowMs: row.hrvBaselineLowMs, hrvBaselineHighMs: row.hrvBaselineHighMs, hrvStatus: row.hrvStatus, sleepDurationS: row.sleepDurationS, sleepScore: row.sleepScore, restingHeartRateBpm: row.restingHeartRateBpm, vo2max: row.vo2max };
@@ -39,13 +39,16 @@ function parseZones(row: ActivityRow): number[] | null {
 
 export function loadProfile(wellness: WellnessDay[], runs: ActivityRow[]): Profile {
   const stored = createAppStateRepository().get(PROFILE_KEY, athleteProfileSchema);
-  const observedMax = Math.max(0, ...present(runs.map((run) => run.maxHeartRateBpm)));
-  const zones = stored?.heartRateZones ?? fallbackZones(observedMax > 120 ? observedMax : 190);
+  // Zones de la montre d'abord ; sinon déduites des courses du profil ; valeurs provisoires seulement sans aucune FC.
+  const fromHistory = stored?.heartRateZones ? null : zonesFromHistory(runs.map((run) => ({ localDate: run.localDate, maxHeartRateBpm: run.maxHeartRateBpm })), localDate());
+  const zones = stored?.heartRateZones ?? fromHistory ?? fallbackZones(190);
+  const zonesSource: ZonesSource = stored?.heartRateZones ? "watch" : fromHistory ? "history" : "default";
   // FC de repos stable (médiane sur l'historique de bien-être) : elle sert de constante aux calculs d'efficacité.
   const resting = present(wellness.map((day) => day.restingHeartRateBpm));
   return {
     zones,
     zonesFromWatch: stored?.heartRateZones != null,
+    zonesSource,
     lactateThresholdSpeedMps: stored?.lactateThresholdSpeedMps ?? null,
     restingHeartRateBpm: resting.length >= 7 ? Math.round(median(resting) as number) : 50,
   };

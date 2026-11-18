@@ -3,13 +3,13 @@ import Link from "next/link";
 import { SessionPoints } from "@/components/activity/session-points";
 import { GoalStatusList } from "@/components/goal/goal-status";
 import { CoachRequest } from "@/components/coach-request";
-import { GlanceTile } from "./glance-tile";
+import { ExpandToggle } from "./expand-toggle";
 import { RateCoach } from "@/components/feedback/rate-coach";
 import { IntensityChart, ProgressionChart, Sparkline, WeeklyVolumeChart } from "@/components/charts";
 import { Badge } from "@/components/ui/badge";
 import { CoachStamp } from "@/components/ui/coach-stamp";
 import { Fact } from "@/components/ui/fact";
-import { dominantZone, familyOfKind, FAMILY_STYLE, SessionGlyph, SUGGESTION_ZONE, ZONE_NAMES, ZoneDot, zoneColor, type Zone } from "@/components/ui/session-type";
+import { dominantZone, familyOfKind, SessionGlyph, SUGGESTION_ZONE, ZONE_NAMES, ZoneDot, zoneColor, type Zone } from "@/components/ui/session-type";
 import type { OutlookCoachOutput } from "@/lib/coach/outlook-coach";
 import type { SessionCoachOutput } from "@/lib/coach/session-coach";
 import { daysBetween } from "@/lib/dates";
@@ -30,29 +30,8 @@ function ToneDot({ tone }: { tone: Tone }) {
   return <span aria-hidden className="dot" style={{ ["--glyph" as string]: TONE_COLOR[tone], marginTop: 4 }} />;
 }
 
-const DAY_LETTERS = ["L", "M", "M", "J", "V", "S", "D"];
 
 /** La semaine en un coup d'œil : disque plein = fait, rose = proposé, vide = rien. */
-function WeekStrip({ dashboard }: { dashboard: Dashboard }) {
-  return (
-    <div className="week-strip" aria-label="Semaine en cours">
-      {dashboard.week.map((day, index) => {
-        const isToday = day.date === dashboard.today;
-        // Fenêtre de 2 jours : une seule séance, le second jour est un repli (pastille en pointillé).
-        const fallback = day.planned && dashboard.suggestion.when.dates.length === 2 && day.date === dashboard.suggestion.when.dates[1];
-        const state = day.done.length ? "done" : day.planned ? `planned${fallback ? " planned-alt" : ""}` : "";
-        const title = day.done.length ? `${formatDate(day.date, "short")} : ${day.done.map((item) => (item.kind ? FAMILY_STYLE[familyOfKind(item.kind)].label : SPORT_LABELS[item.sport as Sport] ?? "activité")).join(", ")}` : day.planned ? (fallback ? "Ou ce jour-là (une seule séance)" : "Séance proposée") : undefined;
-        return (
-          <div key={day.date} className={`week-day${isToday ? " today" : ""}`} title={title}>
-            <span className="week-letter">{DAY_LETTERS[index]}</span>
-            <span className={`week-dot ${state}`} />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 const WEEKDAY_SHORT = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."];
 
 /** Texte du rond rose : le jour conseillé, ou la fenêtre de 2 jours en abrégé (doit tenir dans le cercle). */
@@ -79,7 +58,7 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
   const ready = coach.status === "ready" ? coach.output : null;
   const paceCenter = target?.paceFastMps && target.paceSlowMps ? (target.paceFastMps + target.paceSlowMps) / 2 : null;
   return (
-    <section className="card card-hero card-next" aria-labelledby="next-title">
+    <section className="card card-hero card-next card-collapsible" aria-labelledby="next-title">
       {(() => {
         const sticker = primary.type === "rest" ? "repos" : stickerText(suggestion.when.dates, suggestion.when.label, today);
         // Mot long (« aujourd'hui ») : corps réduit pour rester dans le cercle.
@@ -95,10 +74,12 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
       {primary.type !== "endurance" && primary.type !== "long" ? <p className="structure">{primary.structure}</p> : null}
       <div className="coach-lines">
         <p className="coach-line"><span className="coach-tag">Pourquoi</span><span>{ready ? ready.suggestionWhy : suggestion.reason}</span></p>
-        <p className="coach-line"><span className="coach-tag">Comment</span><span>{ready ? ready.executionTip : primary.structure}</span></p>
+        <p className="coach-line card-more"><span className="coach-tag">Comment</span><span>{ready ? ready.executionTip : primary.structure}</span></p>
       </div>
-      {coach.status === "ready" ? <div style={{ marginTop: 6 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Avis" /><RateCoach subjectKind="outlook" subjectId={coach.createdAt} label="Ce conseil t'est utile ?" /></div> : null}
-      {suggestion.alternative ? <p className="alt"><strong>Plan B · {suggestion.alternative.title}</strong> ({formatDuration(suggestion.alternative.durationMin * 60)}). {suggestion.alternative.reason}</p> : null}
+      <div className="card-more">
+        {coach.status === "ready" ? <div style={{ marginTop: 6 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Avis" /><RateCoach subjectKind="outlook" subjectId={coach.createdAt} label="Ce conseil t'est utile ?" /></div> : null}
+        {suggestion.alternative ? <p className="alt"><strong>Plan B · {suggestion.alternative.title}</strong> ({formatDuration(suggestion.alternative.durationMin * 60)}). {suggestion.alternative.reason}</p> : null}
+      </div>
       {suggestion.then ? (
         <div className="next-after">
           <span className="pill" style={{ padding: "2px 10px" }}><ZoneDot zone={SUGGESTION_ZONE[suggestion.then.type]} />Ensuite</span>
@@ -106,8 +87,7 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
           <span className="muted small">{suggestion.then.when.label}</span>
         </div>
       ) : null}
-      <WeekStrip dashboard={dashboard} />
-      <div className="card-foot goal-strip">
+      <div className="card-foot goal-strip card-more">
         <Target size={13} />
         {goal && (goal.title || goal.eventDate) ? (
           <span style={{ flex: 1 }}>{goal.title || "Course"}{goal.eventDate ? ` · dans ${daysBetween(today, goal.eventDate)} jours` : ""} · {goal.runsPerWeek} sortie{goal.runsPerWeek > 1 ? "s" : ""}/sem.</span>
@@ -116,6 +96,7 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
         )}
         <Link href="/objectif">{goal ? "Modifier" : "Définir"}</Link>
       </div>
+      <ExpandToggle />
     </section>
   );
 }
@@ -123,7 +104,7 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
 /* ---------- Ce qui manque pour des conseils précis (dit simplement, l'application reste utilisable) ---------- */
 export function MissingInfo({ dashboard }: { dashboard: Dashboard }) {
   const missing: Array<{ text: string; href?: string; link?: string }> = [];
-  if (!dashboard.profile.zonesFromWatch) missing.push({ text: "Zones cardiaques : celles de ta montre ne sont pas encore lues, on utilise des zones estimées à partir de ta FC max. Elles se mettent à jour à la prochaine synchronisation si ta montre les connaît." });
+  if (!dashboard.profile.zonesFromWatch) missing.push({ text: dashboard.profile.zonesSource === "history" ? `Zones cardiaques : ta montre ne les a pas fournies, elles sont déduites de tes courses (FC max observée ${dashboard.profile.zones.maxHeartRateBpm} bpm). Elles passeront à celles de ta montre dès qu'elle les donne.` : "Zones cardiaques : pas encore assez de courses avec fréquence cardiaque pour les déduire ; celles de ta montre seront reprises dès qu'elle les donne." });
   if (dashboard.profile.lactateThresholdSpeedMps == null) missing.push({ text: "Seuil lactique : ta montre ne l'a pas encore estimé ; les allures cibles s'appuient alors sur tes séances récentes." });
   if (!dashboard.goal) missing.push({ text: "Objectif : pas encore renseigné, le coach vise ta progression générale.", href: "/objectif", link: "Le renseigner" });
   if (!missing.length) return null;
@@ -140,76 +121,51 @@ export function MissingInfo({ dashboard }: { dashboard: Dashboard }) {
 }
 
 /* ---------- Téléphone : prochaine séance et progression d'un coup d'œil ---------- */
-export function MobileGlance({ dashboard }: { dashboard: Dashboard }) {
-  const { suggestion, progression } = dashboard;
-  const { primary } = suggestion;
-  const target = primary.target;
-  const paceCenter = target?.paceFastMps && target.paceSlowMps ? (target.paceFastMps + target.paceSlowMps) / 2 : null;
-  const verdict = progressionVerdict(progression);
-  return (
-    <div className="glance" aria-label="En bref">
-      <GlanceTile panel="next" anchor="next-title" className="next">
-        <div className="card-eyebrow">Prochaine séance · {suggestion.when.label}</div>
-        <div className="glance-title">{primary.title}</div>
-        <p className="glance-line">
-          {[primary.durationMin ? formatDuration(primary.durationMin * 60) : null, target ? `${target.zone} · ${target.heartRateLow}–${target.heartRateHigh} bpm` : null, paceCenter ? `≈ ${formatPace(paceCenter)}` : null].filter(Boolean).join(" · ")}
-        </p>
-        <p className="glance-line">{suggestion.reason}</p>
-      </GlanceTile>
-      <GlanceTile panel="progress" anchor="progress-title">
-        <div className="card-eyebrow"><Gauge size={13} /> Forme aérobie</div>
-        <div className="glance-title"><VerdictMark state={progression.state} />{verdict.headline}</div>
-        <p className="glance-line"><Say tu={verdict.reason} /></p>
-        {progression.state !== "insufficient" ? <p className="glance-line muted"><Say tu={`Ton allure à ${progression.referenceHeartRateBpm} bpm : ${formatPace(progression.recent.speedAtReferenceHr)}`} /></p> : null}
-      </GlanceTile>
-    </div>
-  );
-}
-
 /* ---------- Progression ---------- */
 
-export function ProgressionCard({ dashboard, coach }: { dashboard: Dashboard; coach: CoachResult<OutlookCoachOutput> }) {
+/** Le verdict est déterministe et suffit : la phrase du coach sur la progression n'est plus affichée ici (redite). */
+export function ProgressionCard({ dashboard }: { dashboard: Dashboard }) {
   const { progression } = dashboard;
   const verdict = progressionVerdict(progression);
   const hr = progression.referenceHeartRateBpm;
   const toPace = (speed: number | null) => (speed ? 1000 / speed : null);
   return (
-    <section className="card card-hero card-progress" aria-labelledby="progress-title">
+    <section className="card card-hero card-progress card-collapsible" aria-labelledby="progress-title">
+      <span className={`state-badge ${progression.state}`}><VerdictMark state={progression.state} />{verdict.headline}</span>
       <div className="card-eyebrow"><Gauge size={13} /> Forme aérobie</div>
-      <h2 id="progress-title" className="verdict-title"><VerdictMark state={progression.state} />{verdict.headline}</h2>
-      <p className="verdict-reason"><Say tu={verdict.reason} />{verdict.caution ? <span className="muted"> {verdict.caution}</span> : null}</p>
+      <h2 id="progress-title" className="sr-only">Forme aérobie : {verdict.headline}</h2>
       {progression.state !== "insufficient" ? (
-        <div className="aerobic-figure">
-          <div className="aerobic-label"><Say tu={`Ton allure si tu courais à ${hr} bpm`} /></div>
-          <div className="big-number big-number-md">{formatPace(progression.recent.speedAtReferenceHr).replace("/km", "")}<span className="unit">/km</span></div>
-          <div className="muted small">{progression.windowWeeks} semaines avant : {formatPace(progression.previous.speedAtReferenceHr)}</div>
-        </div>
-      ) : null}
-      <AerobicHowTo progression={progression} />
-      {coach.status === "ready" ? (
         <>
-          <p className="card-text">{coach.output.progressionSentence}</p>
-          <div style={{ marginTop: 4 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Lecture" /></div>
+          <div className="big-number" style={{ marginTop: 14 }}>{formatPace(progression.recent.speedAtReferenceHr).replace("/km", "")}<span className="unit">/km</span></div>
+          <div className="aerobic-label"><Say tu={`ton allure quand tu cours à ${hr} bpm`} /></div>
         </>
       ) : null}
-      <ProgressionChart
-        points={progression.points.map((point) => ({ date: point.date, secondsPerKm: 1000 / point.speedAtReferenceHr }))}
-        recentStart={progression.recent.start}
-        recentLevel={toPace(progression.recent.speedAtReferenceHr)}
-        previousLevel={toPace(progression.previous.speedAtReferenceHr)}
-        referenceHr={hr}
-      />
-      <div className="legend" style={{ marginTop: 4 }}>
-        <span><span className="legend-swatch" style={{ background: "var(--sl-highlight)" }} />{progression.windowWeeks} dernières semaines</span>
-        <span><span className="legend-swatch" style={{ background: "var(--sl-past)", borderColor: "transparent" }} />avant</span>
-        <span>1 point = 1 sortie facile, plus haut = plus rapide</span>
+      <p className="verdict-reason"><Say tu={verdict.reason} />{verdict.caution ? <span className="muted"> {verdict.caution}</span> : null}</p>
+      <div className="card-more">
+        <details className="more how-to">
+          <summary><ChevronRight size={14} className="chev" /> Comment c&apos;est calculé ?</summary>
+          <p className="more-body small"><Say tu={`Sur tes sorties faciles, on mesure l'allure que tu tiens par battement de cœur, ramenée à ${hr} bpm (ta FC habituelle en footing), puis on compare tes ${progression.windowWeeks} dernières semaines aux ${progression.windowWeeks} précédentes.`} /></p>
+        </details>
+        <ProgressionChart
+          points={progression.points.map((point) => ({ date: point.date, secondsPerKm: 1000 / point.speedAtReferenceHr }))}
+          recentStart={progression.recent.start}
+          recentLevel={toPace(progression.recent.speedAtReferenceHr)}
+          previousLevel={toPace(progression.previous.speedAtReferenceHr)}
+          referenceHr={hr}
+        />
+        <div className="legend" style={{ marginTop: 4 }}>
+          <span><span className="legend-swatch" style={{ background: "var(--sl-highlight)" }} />{progression.windowWeeks} dernières semaines</span>
+          <span><span className="legend-swatch" style={{ background: "var(--sl-past)", borderColor: "transparent" }} />avant</span>
+          <span>1 point = 1 sortie facile, plus haut = plus rapide</span>
+        </div>
+        <div className="facts" style={{ marginTop: 12 }}>
+          <Fact label="VO2max (montre)" value={formatNumber(progression.vo2max.latest, 1)} sub={progression.vo2max.delta != null ? `${progression.vo2max.delta >= 0 ? "+" : "−"}${formatNumber(Math.abs(progression.vo2max.delta), 1)} en ${progression.windowWeeks} sem.` : undefined} />
+          <Fact label="Volume course" value={formatNumber(progression.recent.runKmPerWeek, 1)} unit="km/sem" sub={`avant : ${formatNumber(progression.previous.runKmPerWeek, 1)}`} />
+          <Fact label="Sorties faciles mesurées" value={String(progression.recent.runs)} sub={`contre ${progression.previous.runs} avant`} />
+        </div>
+        <GoalStatusList markers={dashboard.goalMarkers} gaps={dashboard.goalGaps} goal={dashboard.goal} today={dashboard.today} compact />
       </div>
-      <div className="facts" style={{ marginTop: 12 }}>
-        <Fact label="VO2max (montre)" value={formatNumber(progression.vo2max.latest, 1)} sub={progression.vo2max.delta != null ? `${progression.vo2max.delta >= 0 ? "+" : "−"}${formatNumber(Math.abs(progression.vo2max.delta), 1)} en ${progression.windowWeeks} sem.` : undefined} />
-        <Fact label="Volume course" value={formatNumber(progression.recent.runKmPerWeek, 1)} unit="km/sem" sub={`avant : ${formatNumber(progression.previous.runKmPerWeek, 1)}`} />
-        <Fact label="Sorties faciles mesurées" value={String(progression.recent.runs)} sub={`contre ${progression.previous.runs} avant`} />
-      </div>
-      <GoalStatusList markers={dashboard.goalMarkers} gaps={dashboard.goalGaps} goal={dashboard.goal} today={dashboard.today} compact />
+      <ExpandToggle />
     </section>
   );
 }
@@ -218,27 +174,6 @@ const VERDICT_MARK: Record<Progression["state"], string> = { progressing: "↗",
 
 function VerdictMark({ state }: { state: Progression["state"] }) {
   return <span className={`verdict-mark ${state}`} aria-hidden>{VERDICT_MARK[state]}</span>;
-}
-
-/** « Comment c'est calculé » : dépliable au toucher comme au clavier (pas de survol seul). */
-function AerobicHowTo({ progression }: { progression: Progression }) {
-  const hr = progression.referenceHeartRateBpm;
-  const weeks = progression.windowWeeks;
-  return (
-    <details className="more how-to">
-      <summary><ChevronRight size={14} className="chev" /> Comment c&apos;est calculé ?</summary>
-      <div className="more-body small">
-        <p><Say tu={`L'idée : à ${hr} bpm, ta FC habituelle en footing, quelle allure tiens-tu ? Si elle devient plus rapide, ton endurance progresse : même cœur, plus de vitesse.`} /></p>
-        <ol className="how-steps">
-          <li><Say tu="Seules tes sorties faciles et longues en extérieur comptent, et dans chacune les minutes régulières, sur le plat (pente < 3 %), en Z2–Z3, après les 8 premières minutes." /></li>
-          <li><Say tu="Pour chaque minute, ta vitesse est divisée par tes battements au-dessus de ta FC de repos : des mètres par battement. On garde la valeur médiane de la sortie." /></li>
-          <li><Say tu={`On la ramène à ${hr} bpm (ta FC médiane en sortie facile sur 16 semaines, arrondie à 5) et on la convertit en min/km.`} /></li>
-          <li><Say tu={`On compare la médiane des ${weeks} dernières semaines à celle des ${weeks} précédentes (au moins 3 sorties de chaque côté). Moins de 1,2 % d'écart, ou un écart dans ta variation normale d'une sortie à l'autre : c'est stable.`} /></li>
-        </ol>
-        <p className="muted">Chaleur, vent, fatigue ou terrain bougent ce chiffre d&apos;une sortie à l&apos;autre : c&apos;est la tendance sur plusieurs semaines qui compte.</p>
-      </div>
-    </details>
-  );
 }
 
 function Kpi({ icon, question, value, unit, compare, meaning, tone, chart, shadow }: { icon: React.ReactNode; question: string; value: string; unit?: string; compare: string; meaning: string; tone: Tone; chart: React.ReactNode; shadow: string }) {

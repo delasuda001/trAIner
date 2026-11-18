@@ -289,7 +289,7 @@ function ZonesCard({ view }: { view: View }) {
     <section className="card">
       <div className="section-head">
         <h2 className="section-title">Temps par zone FC</h2>
-        <span className="section-note">{view.profile.zonesFromWatch ? <Say tu="zones de ta montre" /> : "zones estimées"}</span>
+        <span className="section-note">{view.profile.zonesSource === "watch" ? <Say tu="zones de ta montre" /> : view.profile.zonesSource === "history" ? <Say tu="zones déduites de tes courses" /> : "zones provisoires"}</span>
       </div>
       <div className="zones">
         {([1, 2, 3, 4, 5] as const).map((zone) => {

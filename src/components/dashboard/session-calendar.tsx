@@ -13,7 +13,7 @@ const DAY_LETTERS = ["L", "M", "M", "J", "V", "S", "D"];
  * (même code que partout), séance proposée en pointillé rose. À droite, les sorties de
  * la semaine face à la cible : des pastilles pleines pour ce qui est fait, jamais de rouge.
  */
-export function SessionCalendar({ calendar }: { calendar: TrainingCalendar }) {
+export function SessionCalendar({ calendar, zonesNote }: { calendar: TrainingCalendar; zonesNote: string }) {
   const { target } = calendar;
   return (
     <section className="card cal-card" aria-labelledby="cal-title">
@@ -37,6 +37,7 @@ export function SessionCalendar({ calendar }: { calendar: TrainingCalendar }) {
         <span><span className="cal-swatch-other" />autre sport</span>
         <span><span className="cal-swatch-planned" />proposée</span>
       </div>
+      <p className="cal-zones"><Say tu={`Couleur = zone FC dominante. ${zonesNote}`} /></p>
     </section>
   );
 }

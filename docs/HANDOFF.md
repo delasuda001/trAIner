@@ -406,6 +406,19 @@ aux autres outils ; analyses jugées ; priorités). Points 1 à 4 validés par l
   pointillé rose (jour de repli plus pâle), pastilles de courses face à la cible (`weekPlan.runsPerWeek`,
   sinon `goal.runsPerWeek`), jamais de rouge ; la semaine en cours n'est pas jugée (« encore 2 possibles »).
 
+- Retours du 18 nov. (2e passe) : carte aérobie = allure en gros en haut (« ton allure quand tu cours à
+  N bpm »), verdict en badge incliné à droite, une phrase (« bien moins que ta variation habituelle »,
+  sans le ±), calcul en une ligne dépliable ; la phrase du coach sur la progression n'est plus affichée
+  sur la carte (redite). Bande « semaine » retirée de la carte jaune (le calendrier la montre).
+- Téléphone : plus de tuiles de coup d'œil (`glance-tile.tsx` supprimé). Les vraies cartes s'affichent
+  en version courte et se déplient sur place (`.card-collapsible`, `.card-more`, `dashboard/expand-toggle.tsx`) ;
+  ordre : prochaine séance, forme aérobie, calendrier.
+- Zones FC par profil : montre d'abord ; sinon `zonesFromHistory` (3e FC max la plus haute sur 2 ans,
+  ≥ 5 courses, puis % de FC max) ; valeurs provisoires seulement sans aucune FC. `Profile.zonesSource`,
+  phrase `zonesSourceSentence` affichée sous le calendrier. Bastien : zones montre (seuil 169, Z5 dès
+  167 = convention Garmin, présentée « seuil à la limite Z4/Z5 »). Non changé : la charge utile du coach
+  écrit encore le seuil « 169 bpm (Z5) » (le changer invaliderait le cache des analyses).
+
 ## État
 
 - Branche `claude/project-thread-1m6x8x`, tout commité, rien poussé (push GitHub bloqué).
