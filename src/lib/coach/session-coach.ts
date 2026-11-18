@@ -4,7 +4,7 @@ import type { ComparisonDeltas } from "@/lib/engine/comparable";
 import { readDynamics } from "@/lib/engine/dynamics-reading";
 import { paceReferenceSentence, SHORT_REP_S, type Prescription, type PrescriptionTarget } from "@/lib/engine/prescription";
 import { VERDICT_LABELS, type SessionVerdict } from "@/lib/engine/verdict";
-import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
+import { thresholdAtZ4Z5Boundary, ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 
@@ -296,7 +296,7 @@ export function buildSessionPayload(input: {
     consignes_moteur: describePrescription(input.prescription ?? null),
     reperes_athlete: {
       zones_fc: Object.fromEntries(([1, 2, 3, 4, 5] as const).map((zone) => [ZONE_LABELS[zone], `${zoneRange(zone, zones)[0]}–${zoneRange(zone, zones)[1]} bpm`])),
-      seuil: input.lactateThresholdSpeedMps && zones.lactateThresholdHeartRateBpm ? `${formatPace(input.lactateThresholdSpeedMps)} à ${bpm(zones.lactateThresholdHeartRateBpm)}${input.thresholdBasis ? ` (${input.thresholdBasis})` : ""}` : "—",
+      seuil: input.lactateThresholdSpeedMps && zones.lactateThresholdHeartRateBpm ? `${formatPace(input.lactateThresholdSpeedMps)} à ${thresholdAtZ4Z5Boundary(zones) ? `${zones.lactateThresholdHeartRateBpm} bpm (limite Z4–Z5)` : bpm(zones.lactateThresholdHeartRateBpm)}${input.thresholdBasis ? ` (${input.thresholdBasis})` : ""}` : "—",
     },
   };
 }

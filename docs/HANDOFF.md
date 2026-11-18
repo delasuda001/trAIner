@@ -416,8 +416,9 @@ aux autres outils ; analyses jugées ; priorités). Points 1 à 4 validés par l
 - Zones FC par profil : montre d'abord ; sinon `zonesFromHistory` (3e FC max la plus haute sur 2 ans,
   ≥ 5 courses, puis % de FC max) ; valeurs provisoires seulement sans aucune FC. `Profile.zonesSource`,
   phrase `zonesSourceSentence` affichée sous le calendrier. Bastien : zones montre (seuil 169, Z5 dès
-  167 = convention Garmin, présentée « seuil à la limite Z4/Z5 »). Non changé : la charge utile du coach
-  écrit encore le seuil « 169 bpm (Z5) » (le changer invaliderait le cache des analyses).
+  167 = convention Garmin, présentée « seuil à la limite Z4/Z5 »). La charge utile séance écrit aussi
+  « 169 bpm (limite Z4–Z5) » (`thresholdAtZ4Z5Boundary`, accepté par le garde-fou de zones) ; les
+  analyses en cache passent « à mettre à jour », sans appel automatique.
 
 ## État
 

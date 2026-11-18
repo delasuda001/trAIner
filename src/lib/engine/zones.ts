@@ -50,7 +50,7 @@ export type ZonesSource = "watch" | "history" | "default";
 export function zonesSourceSentence(zones: HeartRateZones, source: ZonesSource): string {
   if (source === "watch") {
     const lthr = zones.lactateThresholdHeartRateBpm;
-    const parts = [lthr ? `seuil ${lthr} bpm${lthr >= zones.floors[4] && lthr - zones.floors[4] <= 5 ? ", à la limite Z4/Z5" : ""}` : null, zones.maxHeartRateBpm ? `FC max ${zones.maxHeartRateBpm} bpm` : null].filter(Boolean);
+    const parts = [lthr ? `seuil ${lthr} bpm${thresholdAtZ4Z5Boundary(zones) ? ", à la limite Z4/Z5" : ""}` : null, zones.maxHeartRateBpm ? `FC max ${zones.maxHeartRateBpm} bpm` : null].filter(Boolean);
     return `Zones de ta montre${parts.length ? ` (${parts.join(", ")})` : ""}.`;
   }
   if (source === "history") return `Zones déduites de tes courses : FC max observée ${zones.maxHeartRateBpm} bpm, en % de FC max.`;
@@ -72,4 +72,10 @@ export function zoneRange(zone: ZoneIndex, zones: HeartRateZones): [number, numb
   const low = zones.floors[zone - 1];
   const high = zone === 5 ? (zones.maxHeartRateBpm ?? low + 15) : zones.floors[zone] - 1;
   return [low, high];
+}
+
+/** Le seuil est-il à la frontière Z4/Z5 (Z5 commençant au plus 5 bpm sous lui, convention Garmin) ? */
+export function thresholdAtZ4Z5Boundary(zones: HeartRateZones): boolean {
+  const lthr = zones.lactateThresholdHeartRateBpm;
+  return lthr != null && lthr >= zones.floors[4] && lthr - zones.floors[4] <= 5;
 }

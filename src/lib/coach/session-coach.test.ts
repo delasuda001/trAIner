@@ -3,7 +3,8 @@ import type { ActivityMetrics } from "@/lib/engine/activity-metrics";
 import type { ComparisonDeltas } from "@/lib/engine/comparable";
 import { classifyVerdict } from "@/lib/engine/verdict";
 import type { HeartRateZones } from "@/lib/source/types";
-import { allowedNumbers, findUnsupportedCauses, findUnsupportedNumbers } from "./number-guard";
+import { allowedNumbers, findUnsupportedCauses, findUnsupportedNumbers, findZoneContradictions } from "./number-guard";
+import { zoneOf } from "@/lib/engine/zones";
 import { buildSessionPayload, buildSessionPrompt, SESSION_SYSTEM_PROMPT } from "./session-coach";
 
 const zones: HeartRateZones = { floors: [110, 128, 149, 159, 167], maxHeartRateBpm: 189, lactateThresholdHeartRateBpm: 169, method: "LACTATE_THRESHOLD" };
@@ -117,6 +118,9 @@ describe("session-v13 : répétitions courtes, foulée, écart à l'objectif, se
     const payload = buildSessionPayload({ session, metrics, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 4, thresholdBasis: "seuil observé 4:10/km (3 × 2 km du 13 nov. à 4:10/km pour 168 bpm), la montre l'estime à 4:21/km", context, goal: {}, goalGaps: [gap] });
     expect(payload).toMatchObject({ ecart_objectif: [gap] });
     expect(payload.reperes_athlete.seuil).toContain("seuil observé 4:10/km");
+    // Z5 de la montre dès 167 et seuil à 169 : le seuil est présenté à la limite Z4–Z5, pas « en Z5 », et le garde-fou l'accepte.
+    expect(payload.reperes_athlete.seuil).toContain("169 bpm (limite Z4–Z5)");
+    expect(findZoneContradictions("Ton seuil, 169 bpm (limite Z4–Z5), n'a pas été atteint.", (hr) => zoneOf(hr, zones))).toEqual([]);
     expect(findUnsupportedNumbers("Cette séance ne travaille pas ton levier principal : passe à 3 sorties par semaine avec un footing de 30 à 40 min.", allowedNumbers(payload))).toEqual([]);
     // Sans objectif chiffré, pas de clé.
     expect(buildSessionPayload({ session, metrics, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 3.833, context, goal: {} })).not.toHaveProperty("ecart_objectif");
