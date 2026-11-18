@@ -117,3 +117,16 @@ export function findUnsupportedMultiples(text: string, payload: unknown): string
   }
   return [...new Set(issues)];
 }
+
+const CAUSE_PATTERN = /\b(cause probable|à cause d[eu']|parce qu|en raison d[eu']|s'explique par|est dûe? à|est due à|trop (?:rapide|vite) pour tenir)/gi;
+
+/**
+ * Causes non fournies : quand la charge utile dit « causes_possibles: aucune », toute
+ * tournure causale absente de la charge utile est refusée (Claude n'invente pas d'explication).
+ */
+export function findUnsupportedCauses(text: string, payload: unknown): string[] {
+  if (typeof payload !== "object" || payload == null || (payload as Record<string, unknown>).causes_possibles !== "aucune") return [];
+  const source = collectText(payload).toLowerCase();
+  const issues = [...text.matchAll(CAUSE_PATTERN)].map((match) => match[1]).filter((phrase) => !source.includes(phrase.toLowerCase()));
+  return [...new Set(issues)].map((phrase) => `« ${phrase} » (aucune cause fournie)`);
+}

@@ -37,8 +37,8 @@ export const VERDICT_LABELS: Record<VerdictLevel, string> = {
   no_reference: "Pas encore de repère",
 };
 
-/** Seuils (s/km à FC égale) : au-delà, l'écart dépasse le bruit d'une séance à l'autre. */
-const INTERVAL_GAIN_THRESHOLD_S = 4;
+/** Seuils (s/km à FC égale) : au-delà, l'écart dépasse le bruit d'une séance à l'autre (jusqu'à 5 s/km : bruit). */
+const INTERVAL_GAIN_THRESHOLD_S = 6;
 const CONTINUOUS_GAIN_THRESHOLD_S = 6;
 
 function comparablesText(count: number): string {

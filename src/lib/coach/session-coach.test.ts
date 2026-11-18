@@ -3,7 +3,7 @@ import type { ActivityMetrics } from "@/lib/engine/activity-metrics";
 import type { ComparisonDeltas } from "@/lib/engine/comparable";
 import { classifyVerdict } from "@/lib/engine/verdict";
 import type { HeartRateZones } from "@/lib/source/types";
-import { allowedNumbers, findUnsupportedNumbers } from "./number-guard";
+import { allowedNumbers, findUnsupportedCauses, findUnsupportedNumbers } from "./number-guard";
 import { buildSessionPayload, buildSessionPrompt, SESSION_SYSTEM_PROMPT } from "./session-coach";
 
 const zones: HeartRateZones = { floors: [110, 128, 149, 159, 167], maxHeartRateBpm: 189, lactateThresholdHeartRateBpm: 169, method: "LACTATE_THRESHOLD" };
@@ -120,5 +120,26 @@ describe("session-v13 : répétitions courtes, foulée, écart à l'objectif, se
     expect(findUnsupportedNumbers("Cette séance ne travaille pas ton levier principal : passe à 3 sorties par semaine avec un footing de 30 à 40 min.", allowedNumbers(payload))).toEqual([]);
     // Sans objectif chiffré, pas de clé.
     expect(buildSessionPayload({ session, metrics, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 3.833, context, goal: {} })).not.toHaveProperty("ecart_objectif");
+  });
+});
+
+describe("causes fournies par le moteur", () => {
+  it("liste les seuls facteurs qui peuvent expliquer un écart, sinon « aucune »", () => {
+    const metrics = intervalMetrics(3);
+    const calm = buildSessionPayload({ session, metrics, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 3.833, context, goal: {} });
+    // Qualité 9 jours avant, rien de dégradé, ratio non corroboré : aucune cause.
+    expect(calm.causes_possibles).toBe("aucune");
+    const busy = buildSessionPayload({ session, metrics, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 3.833, context: { ...context, qualityBefore14d: [{ localDate: "2026-11-11", title: "Fractionné court 8 × 70 s", daysBefore: 2 }], recovery: { ...context.recovery, flags: ["hrv_low"] } }, goal: {}, feeling: { perceivedEffort: 8, note: "" } });
+    expect(busy.causes_possibles).toEqual(["Fractionné court 8 × 70 s, 2 jours avant", "VFC sous la plage habituelle", "effort perçu 8/10"]);
+  });
+
+  it("refuse une explication inventée quand aucune cause n'est fournie, l'accepte sinon", () => {
+    const metrics = intervalMetrics(3);
+    const calm = buildSessionPayload({ session, metrics, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 3.833, context, goal: {} });
+    expect(findUnsupportedCauses("Les dernières sont plus lentes : le départ était trop rapide pour tenir 14 répétitions.", calm)).toHaveLength(1);
+    expect(findUnsupportedCauses("Cause probable : la séance d'il y a 3 jours.", calm)).toHaveLength(1);
+    expect(findUnsupportedCauses("Séance régulière, dans ta norme.", calm)).toEqual([]);
+    const busy = { ...calm, causes_possibles: ["VFC sous la plage habituelle"] };
+    expect(findUnsupportedCauses("Cause probable : VFC sous la plage habituelle.", busy)).toEqual([]);
   });
 });

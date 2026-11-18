@@ -6,7 +6,7 @@ import { createClaudeAgentClient } from "@/lib/coach/claude-agent-client";
 import { LLM_FAILURE_MESSAGES, LlmError, type LlmClient, type LlmFailureKind } from "@/lib/coach/llm";
 import { buildWeeklyPrompt, WEEKLY_MODEL, WEEKLY_PROMPT_VERSION, WEEKLY_SYSTEM_PROMPT, weeklyReviewJsonSchema, weeklyReviewSchema, type WeeklyReview } from "@/lib/coach/weekly-review";
 import { buildWeeklyDossier } from "./weekly-dossier";
-import { allowedNumbers, collectText, excerpt, findUnsupportedMultiples, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
+import { allowedNumbers, collectText, excerpt, findUnsupportedCauses, findUnsupportedMultiples, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
 import { zoneOf } from "@/lib/engine/zones";
 import { goalForCoach } from "@/lib/goal/goal";
 import { buildOutlookPayload, buildOutlookPrompt, OUTLOOK_PROMPT_VERSION, OUTLOOK_SYSTEM_PROMPT, outlookCoachJsonSchema, outlookCoachSchema, type OutlookCoachOutput } from "@/lib/coach/outlook-coach";
@@ -100,14 +100,14 @@ async function generate<T>(job: Job<T>, options: { preparation?: boolean } = {})
           throw error;
         }
         const text = collectText(response.data);
-        const unsupported = [...findUnsupportedNumbers(text, allowed), ...findZoneContradictions(text, job.zoneOf), ...findUnsupportedMultiples(text, job.payload)];
+        const unsupported = [...findUnsupportedNumbers(text, allowed), ...findZoneContradictions(text, job.zoneOf), ...findUnsupportedMultiples(text, job.payload), ...findUnsupportedCauses(text, job.payload)];
         recordUsage(usageKind, job.subject, response.model, unsupported.length ? "rejected" : "ok", response.usage);
         if (unsupported.length === 0) {
           const row = createCoachOutputRepository().save({ kind: job.kind, subject: job.subject, inputHash: storedHash(job as Job<unknown>), model: response.model, promptVersion: job.promptVersion, output: response.data });
           return { status: "ready", output: response.data, model: response.model, createdAt: row.createdAt };
         }
         console.warn(`[coach] ${job.kind} : chiffres ou zones non sourcés (essai ${attempt}) : ${unsupported.map((token) => excerpt(text, token.split(" ")[0])).join(" | ")}`);
-        prompt = `${job.prompt}\n\nATTENTION : ta réponse précédente contenait des erreurs (${unsupported.join(" ; ")}). Réécris-la en n'utilisant que des chiffres et des zones présents tels quels dans la charge utile.`;
+        prompt = `${job.prompt}\n\nATTENTION : ta réponse précédente contenait des erreurs (${unsupported.join(" ; ")}). Réécris-la en n'utilisant que des chiffres et des zones présents tels quels dans la charge utile, sans cause absente de "causes_possibles".`;
       }
       throw new LlmError("invalid_output", "Chiffres non sourcés");
     } catch (error) {
@@ -153,7 +153,7 @@ function sessionJob(analysis: SessionAnalysis): Job<SessionCoachOutput> {
 }
 
 function outlookJob(dashboard: Dashboard): Job<OutlookCoachOutput> {
-  const payload = buildOutlookPayload({ suggestion: dashboard.suggestion, progression: dashboard.progression, recovery: dashboard.recovery, load: dashboard.load, goal: goalForCoach(dashboard.goal, dashboard.today), lastSameType: dashboard.lastSameType });
+  const payload = buildOutlookPayload({ suggestion: dashboard.suggestion, progression: dashboard.progression, recovery: dashboard.recovery, load: dashboard.load, goal: goalForCoach(dashboard.goal, dashboard.today), lastSameType: dashboard.lastSameType, goalGaps: dashboard.goalGaps.map((gap) => gap.summary) });
   return { zoneOf: (hr: number) => zoneOf(hr, dashboard.profile.zones), kind: "outlook", subject: "current", promptVersion: OUTLOOK_PROMPT_VERSION, payload, system: systemPromptFor(OUTLOOK_SYSTEM_PROMPT, { isAdmin: requireActiveMember().role === "admin", runsPerWeek12w: dashboard.rhythm.runsPerWeek12w }), prompt: buildOutlookPrompt(payload), schema: outlookCoachSchema, jsonSchema: outlookCoachJsonSchema as unknown as Record<string, unknown> };
 }
 

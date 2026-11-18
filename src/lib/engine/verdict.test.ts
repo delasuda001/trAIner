@@ -17,14 +17,19 @@ function deltas(gain: number, count = 3): ComparisonDeltas {
 }
 
 describe("verdict", () => {
-  it("place en dessous des repères des répétitions plus lentes à FC égale, même régulières (13/11)", () => {
-    const verdict = classifyVerdict(metrics, deltas(-5));
+  it("place en dessous des repères des répétitions plus lentes à FC égale au-delà du bruit (6 s/km et plus)", () => {
+    const verdict = classifyVerdict(metrics, deltas(-6));
     expect(verdict.level).toBe("below");
-    expect(verdict.headline).toContain("8 s/km plus lentes, soit 5 s/km plus lentes une fois corrigé de la FC");
+    expect(verdict.headline).toContain("8 s/km plus lentes, soit 6 s/km plus lentes une fois corrigé de la FC");
     expect(verdict.toWork).toContain("corrigé de la FC");
     // Un seul signal de pacing, jugé par rapport aux comparables (8 s/km contre 7) : dans la norme.
     expect(verdict.signals.filter((signal) => signal.key.startsWith("rep_") && !signal.primary)).toHaveLength(1);
     expect(verdict.signals.find((signal) => signal.key === "rep_pacing")?.tone).toBe("neutral");
+  });
+
+  it("13/11 : 4 à 5 s/km corrigés de la FC, c'est du bruit : dans tes repères", () => {
+    expect(classifyVerdict(metrics, deltas(-5)).level).toBe("in_line");
+    expect(classifyVerdict(metrics, deltas(-4)).level).toBe("in_line");
   });
 
   it("au-dessus quand le signal principal est bon", () => {

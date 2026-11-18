@@ -27,7 +27,7 @@ async function main() {
       return { id: run.id, date: run.localDate, verdict: analysis.verdict.level, prescription: analysis.prescription, loadAlert: analysis.context.loadAlertBefore, payload: hash(payload) };
     });
     const dashboard = getDashboard();
-    const outlook = buildOutlookPayload({ suggestion: dashboard.suggestion, progression: dashboard.progression, recovery: dashboard.recovery, load: dashboard.load, goal: goalForCoach(dashboard.goal, dashboard.today), lastSameType: dashboard.lastSameType });
+    const outlook = buildOutlookPayload({ suggestion: dashboard.suggestion, progression: dashboard.progression, recovery: dashboard.recovery, load: dashboard.load, goal: goalForCoach(dashboard.goal, dashboard.today), lastSameType: dashboard.lastSameType, goalGaps: dashboard.goalGaps.map((gap) => gap.summary) });
     console.log(JSON.stringify({ sessions, suggestion: dashboard.suggestion, loadAlert: dashboard.loadAlert, outlookPayload: hash(outlook) }, null, 1));
   });
 }

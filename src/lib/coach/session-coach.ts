@@ -8,7 +8,7 @@ import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 
-export const SESSION_PROMPT_VERSION = "session-v14";
+export const SESSION_PROMPT_VERSION = "session-v15";
 
 export const sessionCoachSchema = z.object({
   verdict: z.string().min(10).max(260),
@@ -58,7 +58,7 @@ Règles :
 - Si "format_reconnu" commence par « non », dis simplement que la séance ne correspond pas au format reconnu, ne force aucun verdict ni comparaison, et limite-toi aux constats sûrs (durée, allure, FC, zones).
 - Pas de redite : le verdict donne l'écart principal une fois ; chaque puce apporte un fait nouveau (la première ne répète pas l'écart du verdict).
 - Un indicateur = une seule lecture, celle de "verdict_calcule" : jamais le même fait dans "keep" et dans "shouldHave" ; si "aurait_du" corrige un indicateur, "keep" n'en parle pas.
-- Cause probable : si "hausse_de_charge" est corroborée, c'est la cause probable, avec ses raisons. Sinon, une cause seulement si un facteur du contexte la soutient (séance de qualité à moins de 72 h, signal de récupération dégradé, ressenti). Une séance de qualité à 72 h ou plus n'est pas une cause. S'il n'y en a aucun, n'écris pas de ligne « cause probable » du tout. Une cause retenue doit être cohérente avec "shouldHave". Un écart favorable (séance au-dessus de tes repères) n'a jamais de « cause probable » : une hausse de charge devient au plus une précaution pour les jours suivants.
+- Cause : seulement un élément de "causes_possibles" (une hausse de charge corroborée passe en premier) ; si la liste dit « aucune », n'avance aucune cause ni explication (pas de « parce que », « à cause de », « départ trop rapide pour tenir »). Une cause retenue doit être cohérente avec "shouldHave". Un écart favorable (séance au-dessus de tes repères) n'a jamais de « cause probable » : une hausse de charge devient au plus une précaution pour les jours suivants.
 - Dynamique de course : si "dynamique_de_course" dit que rien ne ressort, n'en parle pas du tout. Sinon, compare-la à ses propres valeurs uniquement, et seulement si un écart ressort. L'allure est le produit de la cadence et de la longueur de pas : un pas plus court à cadence égale EST l'allure plus lente, ce n'est jamais une cause. Un indicateur de foulée n'explique quelque chose que s'il bouge indépendamment de l'allure (contact au sol, oscillation, ratio vertical, dérive entre début et fin).
 - Constats et cause probable : dans "bullets" seulement.
 - "shouldHave" et "nextTime" sont des consignes, pas des constats : verbe d'action, cible chiffrée en tête (allure, FC, récupération, placement), reprises de "consignes_moteur". N'invente aucune autre cible. Si "consignes_moteur" n'en donne pas, dis simplement qu'il n'y a pas de consigne chiffrée pour ce format.
@@ -96,6 +96,8 @@ export type SessionContextInput = {
   chronicWeekly28d: number;
   qualityBefore14d: Array<{ localDate: string; title: string; daysBefore: number }>;
   daysSincePreviousRun: number | null;
+  /** Écart habituel minimal entre deux séances de qualité (jours) ; 3 par défaut. */
+  rhythm?: { qualitySpacingDays: number };
   recovery: {
     hrv: { latest: number | null; baselineLow: number | null; baselineHigh: number | null };
     restingHr: { latest: number | null; delta: number | null };
@@ -150,6 +152,18 @@ function ageText(days: number): string {
 }
 
 const FLAG_TEXT: Record<string, string> = { hrv_low: "VFC sous la plage habituelle", resting_hr_high: "FC de repos au-dessus de la base", sleep_short: "nuit courte" };
+
+/** Causes que le moteur autorise : facteurs du contexte qui peuvent expliquer un écart (sinon, aucune). */
+export function possibleCauses(context: SessionContextInput | null, feeling: { perceivedEffort: number | null; note: string } | null | undefined): string[] {
+  const causes: string[] = [];
+  if (context?.loadAlertBefore?.actionable) causes.push(`hausse de charge corroborée (${context.loadAlertBefore.reasons.join(", ")})`);
+  const spacing = context?.rhythm?.qualitySpacingDays ?? 3;
+  for (const entry of context?.qualityBefore14d ?? []) if (entry.daysBefore < spacing) causes.push(`${entry.title}, ${entry.daysBefore} jour${entry.daysBefore > 1 ? "s" : ""} avant`);
+  for (const flag of context?.recovery.flags ?? []) causes.push(FLAG_TEXT[flag] ?? flag);
+  if (feeling?.perceivedEffort != null && feeling.perceivedEffort >= 8) causes.push(`effort perçu ${feeling.perceivedEffort}/10`);
+  if (feeling?.note) causes.push("ressenti noté par l'athlète");
+  return causes;
+}
 
 export function buildSessionPayload(input: {
   session: Session;
@@ -271,6 +285,7 @@ export function buildSessionPayload(input: {
           },
         }
       : null,
+    causes_possibles: (() => { const causes = possibleCauses(context, input.feeling); return causes.length ? causes : "aucune"; })(),
     objectif: input.goal,
     ...(input.goalGaps?.length ? { ecart_objectif: input.goalGaps } : {}),
     ressenti: input.feeling ? { effort_percu: input.feeling.perceivedEffort != null ? `${input.feeling.perceivedEffort}/10` : "—", note: input.feeling.note || "—" } : "non renseigné",
