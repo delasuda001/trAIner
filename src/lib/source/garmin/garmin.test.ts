@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GarminClient } from "./client";
 import { extractFirstZipEntry } from "./fit";
 import { garminGmtToIso, mapGarminActivity } from "./mapper";
+import { GarminSource } from "./index";
 import { garminActivityListItemSchema } from "./schemas";
 
 function zipOf(name: string, content: Buffer): Buffer {
@@ -68,5 +69,19 @@ describe("adaptateur Garmin", () => {
   it("renvoie null sur 404 (pas de données ce jour-là)", async () => {
     const fetchImpl = async (url: string) => (url.endsWith("/token") ? new Response("t") : new Response("{}", { status: 404 }));
     await expect(new GarminClient({ apiKey: "k", fetchImpl }).getJson("/x")).resolves.toBeNull();
+  });
+  it("ignore les jours de bien-être sans date au lieu d'échouer (sommeil, santé, VO2max, VFC)", async () => {
+    const fetchImpl = async (url: string) => {
+      if (url.endsWith("/token")) return new Response("t");
+      if (url.includes("/sleep-service/")) return new Response(JSON.stringify([{ calendarDate: "2026-11-10", sleepTimeSeconds: 27000 }, { calendarDate: null, sleepTimeSeconds: 0 }]));
+      if (url.includes("/usersummary-service/")) return new Response(JSON.stringify({ data: [{ calendarDate: null, heartRate: { restingValue: 50 } }, { calendarDate: "2026-11-10", heartRate: { restingValue: 48 } }] }));
+      if (url.includes("/maxmet/")) return new Response(JSON.stringify([{ generic: { calendarDate: null, vo2MaxValue: 50 } }]));
+      if (url.includes("/hrv-service/")) return new Response(JSON.stringify({ hrvSummaries: [{ calendarDate: null, lastNightAvg: 40 }] }));
+      return new Response("{}", { status: 404 });
+    };
+    const source = new GarminSource(new GarminClient({ apiKey: "k", fetchImpl, sleep: async () => {} }));
+    const days = await source.getWellness("2026-11-01", "2026-11-12");
+    expect(days).toHaveLength(1);
+    expect(days[0]).toMatchObject({ date: "2026-11-10", sleepDurationS: 27000, restingHeartRateBpm: 48, vo2max: null, hrvLastNightMs: null });
   });
 });

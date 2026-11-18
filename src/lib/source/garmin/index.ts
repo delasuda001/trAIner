@@ -61,7 +61,9 @@ export class GarminSource implements DataSource {
 
   async getWellness(startDate: string, endDate: string): Promise<WellnessDay[]> {
     const days = new Map<string, WellnessDay>();
-    const day = (date: string) => {
+    const day = (date: string | null | undefined): WellnessDay => {
+      // Jour sans date (vu chez certains comptes) : écrit dans un brouillon jeté, jamais en base.
+      if (!date) return emptyDay("");
       let value = days.get(date);
       if (!value) {
         value = emptyDay(date);

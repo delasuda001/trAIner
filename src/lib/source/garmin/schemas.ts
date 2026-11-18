@@ -4,6 +4,8 @@ import { z } from "zod";
 
 const num = z.number().nullable().optional();
 const str = z.string().nullable().optional();
+/** Date du jour : Garmin renvoie parfois des jours sans date (null) ; ils sont ignorés à l'import. */
+const calendarDate = z.string().nullable().optional();
 
 export const garminActivityListItemSchema = z.object({
   activityId: z.number(),
@@ -40,7 +42,7 @@ export const garminActivityListSchema = z.array(z.unknown());
 
 export const garminHrvSchema = z.object({
   hrvSummaries: z.array(z.object({
-    calendarDate: z.string(),
+    calendarDate,
     weeklyAvg: num,
     lastNightAvg: num,
     status: str,
@@ -49,20 +51,20 @@ export const garminHrvSchema = z.object({
 }).passthrough();
 
 export const garminSleepSchema = z.array(z.object({
-  calendarDate: z.string(),
+  calendarDate,
   sleepTimeSeconds: num,
   sleepScores: z.object({ overall: z.object({ value: num }).passthrough().nullable().optional() }).passthrough().nullable().optional(),
 }).passthrough());
 
 export const garminDailySummariesSchema = z.object({
   data: z.array(z.object({
-    calendarDate: z.string(),
+    calendarDate,
     heartRate: z.object({ restingValue: num }).passthrough().nullable().optional(),
   }).passthrough()).default([]),
 }).passthrough();
 
 export const garminVo2Schema = z.array(z.object({
-  generic: z.object({ calendarDate: z.string(), vo2MaxPreciseValue: num, vo2MaxValue: num }).passthrough().nullable().optional(),
+  generic: z.object({ calendarDate, vo2MaxPreciseValue: num, vo2MaxValue: num }).passthrough().nullable().optional(),
 }).passthrough());
 
 export const garminHeartRateZonesSchema = z.array(z.object({
