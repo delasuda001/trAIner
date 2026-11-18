@@ -2,7 +2,7 @@
 
 import { Copy, FlaskConical, KeyRound, Link2, RotateCcw, ShieldOff, Smartphone, Sparkles, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PrepareStatus } from "@/lib/server/prepare-service";
 
 export type DeviceView = { id: string; device: string; lastSeenAt: string };
@@ -165,8 +165,13 @@ async function post(url: string, body: unknown): Promise<Record<string, unknown>
 
 function SecretBox({ secret, onClose }: { secret: Secret; onClose: () => void }) {
   const [copied, setCopied] = useState<string | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  // Le lien s'affiche en tête de la liste des profils : on l'amène à l'écran (le bouton cliqué est souvent bien plus bas).
+  useEffect(() => {
+    box.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [secret]);
   return (
-    <div className="secret-box" role="dialog" aria-label={secret.title}>
+    <div ref={box} className="secret-box" role="dialog" aria-label={secret.title}>
       <strong>{secret.title}</strong>
       {secret.lines.map((line) => (
         <div key={line.label} className="secret-line">
