@@ -35,9 +35,9 @@ function payloadFor(reps: number) {
 }
 
 describe("charge utile du débrief", () => {
-  it("reste sous ~2 400 tokens même pour 20 répétitions (≈ 3,2 caractères par token en français ; prompt session-v11 plus long de ~250)", () => {
+  it("reste sous ~2 450 tokens même pour 20 répétitions (≈ 3,2 caractères par token en français ; session-v13 : +~40 en entrée pour la ligne objectif, contre ~40 % de sortie en moins)", () => {
     const size = buildSessionPrompt(payloadFor(20)).length + SESSION_SYSTEM_PROMPT.length;
-    expect(size / 3.2).toBeLessThan(2400);
+    expect(size / 3.2).toBeLessThan(2450);
   });
 
   it("détaille au plus 8 répétitions", () => {
@@ -89,5 +89,36 @@ describe("charge dans le résumé : une seule référence, ratio = valeur / réf
     }
     // Plus de seconde ligne de charge « séance comprise » avec une autre référence.
     expect(text).not.toContain("seance_comprise");
+  });
+});
+
+describe("session-v13 : répétitions courtes, foulée, écart à l'objectif, seuil", () => {
+  it("répétitions de moins de 60 s : ni détail par répétition ni écart entre la plus rapide et la plus lente", () => {
+    const metrics = intervalMetrics(14);
+    const work = { ...(metrics.work as NonNullable<ActivityMetrics["work"]>), averageDurationS: 31, repsDetail: (metrics.work as NonNullable<ActivityMetrics["work"]>).repsDetail.map((rep) => ({ ...rep, durationS: 31 })) };
+    const payload = buildSessionPayload({ session, metrics: { ...metrics, work }, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 3.833, context, goal: {} });
+    const structure = payload.structure as Record<string, unknown>;
+    expect(structure.detail_repetitions).toBe("—");
+    expect(structure).not.toHaveProperty("ecart_entre_rep_la_plus_rapide_et_la_plus_lente");
+    expect(String(structure.precision)).toContain("imprécise au GPS");
+  });
+
+  it("foulée sans écart notable : le coach est prié de ne pas en parler", () => {
+    const metrics = intervalMetrics(3);
+    const values = { cadenceSpm: 171, groundContactMs: 259, verticalOscillationMm: 86, verticalRatioPct: 6, stepLengthM: 1.39 };
+    const withDynamics: ActivityMetrics = { ...metrics, dynamics: { ...values, basis: "reps", early: values, late: values } };
+    const payload = buildSessionPayload({ session, metrics: withDynamics, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 3.833, context, goal: {} });
+    expect(payload.dynamique_de_course).toContain("n'en parle pas");
+  });
+
+  it("transmet l'écart à l'objectif et l'origine du seuil, dont les chiffres passent le garde-fou", () => {
+    const metrics = intervalMetrics(3);
+    const gap = "Levier principal pour le semi : sorties par semaine (1,4, repère 3 au moins). Passe à 3 sorties par semaine : ajoute un footing facile de 30 à 40 min en Z2.";
+    const payload = buildSessionPayload({ session, metrics, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 4, thresholdBasis: "seuil observé 4:10/km (3 × 2 km du 13 nov. à 4:10/km pour 168 bpm), la montre l'estime à 4:21/km", context, goal: {}, goalGaps: [gap] });
+    expect(payload).toMatchObject({ ecart_objectif: [gap] });
+    expect(payload.reperes_athlete.seuil).toContain("seuil observé 4:10/km");
+    expect(findUnsupportedNumbers("Cette séance ne travaille pas ton levier principal : passe à 3 sorties par semaine avec un footing de 30 à 40 min.", allowedNumbers(payload))).toEqual([]);
+    // Sans objectif chiffré, pas de clé.
+    expect(buildSessionPayload({ session, metrics, deltas, verdict: classifyVerdict(metrics, deltas), comparables, zones, lactateThresholdSpeedMps: 3.833, context, goal: {} })).not.toHaveProperty("ecart_objectif");
   });
 });

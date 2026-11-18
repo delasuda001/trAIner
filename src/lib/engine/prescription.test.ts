@@ -131,6 +131,39 @@ describe("prescribe, fractionné", () => {
     expect(result.shouldHave.join(" ")).not.toContain("Récupération");
   });
 
+  it("répétitions de moins de 60 s : aucune répétition jugée isolément, seulement la moyenne et la tenue", () => {
+    // 14 × 30 s à 3:35/km de moyenne, 1re répétition à 3:25 (bruit GPS probable), dernières 18 s/km plus lentes.
+    const paces = [205, 209, 205, 210, 212, 214, 213, 215, 216, 218, 220, 222, 223, 224];
+    const reps = paces.map((paceS) => ({ ...rep(paceS, 30), durationS: 31, distanceM: 150 }));
+    const metrics: ActivityMetrics = { ...base, kind: "intervals_short", work: { ...(base.work as Work), reps: 14, averageDurationS: 31, averageDistanceM: 150, averageSpeedMps: 1000 / 215, fadeSPerKm: 18, paceSpreadSPerKm: 26, averageRecoveryS: 31, repsDetail: reps } };
+    const result = prescribe(input(metrics, { context: null, reference: { repSpeedMps: 1000 / 212, repHeartRateBpm: 168, repSpreadSPerKm: 22, halvesFadeSPerKm: null } }));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    const text = [...result.shouldHave, result.keep ?? "", result.next.cue].join(" ");
+    expect(text).not.toContain("1re répétition");
+    expect(text).not.toContain("Départ");
+    expect(result.shouldHave).toEqual(["Gestion : tes dernières répétitions perdent 18 s/km ; vise 3:38–3:44/km en moyenne sur toute la série, sans chercher plus vite au début."]);
+    expect(result.next.cue).toContain("règle-toi sur l'effort et la moyenne");
+    // Perte dans le bruit GPS (< 10 s/km) : rien à reprocher.
+    const steady = prescribe(input({ ...metrics, work: { ...(metrics.work as Work), fadeSPerKm: 7, averageSpeedMps: 1000 / 221 } }, { context: null, reference: null }));
+    if (steady.status !== "ok") throw new Error("attendu ok");
+    expect(steady.shouldHave).toEqual([]);
+    expect(steady.keep).toBe("Répétitions à 3:41/km en moyenne dans la cible 3:38–3:44/km : à reproduire.");
+  });
+
+  it("répétitions longues au seuil : FC cible autour de la FC seuil (164–171), pas la Z4 Garmin sous le seuil", () => {
+    const result = prescribe(input({ ...base, kind: "intervals_threshold" }, { context: null }));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.target).toMatchObject({ label: "seuil", heartRateLow: 164, heartRateHigh: 171, zone: "Z4–Z5", paceFastS: 258, paceSlowS: 265 });
+    // FC au-dessus de la cible et plus haute que les comparables : une seule consigne d'intensité.
+    const hot = prescribe(input({ ...base, kind: "intervals_threshold", work: { ...(base.work as Work), averageHeartRateBpm: 175, averageSpeedMps: 1000 / 260 } }, { context: null, reference: { repSpeedMps: 1000 / 260, repHeartRateBpm: 168, repSpreadSPerKm: 8, halvesFadeSPerKm: null } }));
+    if (hot.status !== "ok") throw new Error("attendu ok");
+    expect(hot.shouldHave.filter((line) => line.startsWith("Intensité"))).toEqual(["Intensité : repasse sous 171 bpm (Z4–Z5) ; 175 bpm, c'est déjà plus que ce format."]);
+  });
+
+  it("seuil observé : les phrases disent d'où vient le seuil", () => {
+    expect(raceEstimate(21.0975, { lactateThresholdSpeedMps: 4, thresholdLabel: "seuil observé", efforts: [] })?.basis).toBe("seuil observé 4:10/km");
+  });
+
   it("pas de consigne quand les répétitions ne sont pas reconnues", () => {
     expect(prescribe(input({ ...base, work: null })).status).toBe("none");
   });

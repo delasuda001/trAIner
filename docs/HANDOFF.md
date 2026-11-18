@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 17 novembre 2026 (après-midi).
+Dernière mise à jour : 18 novembre 2026 (nuit).
 
 ## En deux phrases
 
@@ -335,6 +335,41 @@ Plan validé par le coordinateur (ordre 3, 2, 1, 5, 4). Aucun appel réel à Cla
   dédiée « Bastien · test »).
 - Le lien remplace la session du navigateur où il s'ouvre : fenêtre privée ou autre navigateur (sinon, se reconnecter
   en administrateur avec son code ou `npm run profiles -- invitation`).
+
+## Revue produit et écart à l'objectif (18 nov., nuit)
+
+Revue candide : `docs/REVUE-PRODUIT.md` (écart à l'objectif = volume et fréquence, pas l'exécution ; comparaison
+aux autres outils ; analyses jugées ; priorités). Points 1 à 4 validés par le coordinateur et faits, sans appel à Claude.
+
+- Seuil observé (`engine/threshold.ts`) : répétitions ≥ 6 min ou ≥ 1 600 m, ≥ 15 min de travail, 8 dernières
+  semaines, FC moyenne entre FC seuil − 6 et + 3, ≤ 10 m D+/km ; moyenne des allures des 3 plus récentes. Remplace
+  le seuil montre seulement s'il est plus rapide d'au moins 8 s/km. Branché dans `loadContext` :
+  `profile.lactateThresholdSpeedMps` = seuil retenu, `profile.threshold` = détail (`basis`, preuves). Bastien :
+  4:10/km (3 × 2 km du 13 nov. à 168 bpm) contre 4:21 montre. Phrases : « seuil observé » / « seuil montre »
+  (`thresholdLabel`). Le seuil est celui d'aujourd'hui, aussi pour les séances passées (comme la montre).
+- Classement (`classifyKind`, `METRICS_VERSION` 12) : répétitions ≥ 6 min ou ≥ 1 600 m = seuil, sauf FC moyenne
+  > FC seuil + 8 (VO2max) ou sous la Z4 (tempo). Raison : les zones Garmin de Bastien font commencer Z5 (167) sous
+  sa FC seuil (169), donc tout 3 × 2 km était « VO2max ». FC cible d'un travail au seuil : FC seuil − 5 à + 2
+  (164–171, « Z4–Z5 »), plus la Z4. FC au-dessus de la cible : une seule consigne d'intensité.
+- Répétitions < 60 s (`SHORT_REP_S`) : pas de jugement répétition par répétition (pas de « 1re répétition », pas de
+  répétitions « trop rapides » une à une), perte en fin de série jugée à partir de 10 s/km, consigne sur la moyenne.
+  Charge utile : ni `detail_repetitions` ni écart plus rapide / plus lente, une ligne `precision`.
+- Écart à l'objectif (`engine/goal-gap.ts`) : sur 8 semaines, sorties/semaine, km/semaine, plus longue sortie,
+  allure au seuil, face à des repères d'entraîneur par distance (semi < 4:30/km : 3 sorties, 40 km, 18 km ; 5 km
+  < 4:00 : 3, 30 km, 12 km ; seuil nécessaire = allure visée × ratio de course). Levier principal : fréquence ou
+  volume sous 70 % du repère, puis sortie longue, puis seuil. Action chiffrée : « Passe à N sorties par semaine
+  (une de plus à la fois) : ajoute un footing… ; ensuite, allonge ta sortie longue de 2 km toutes les 2 semaines
+  (11 → 18 km en 8 semaines) ». `Dashboard.goalGaps`, `SessionAnalysis.goalGaps` (vu le jour de la séance).
+  Affiché page Objectif (tableau des leviers) et carte Progression (action seule).
+- Prompt `session-v13` : champ `goalLink` (« Pour ton objectif » sous les consignes), reçoit `ecart_objectif` ;
+  `detail` réduit à 2–3 phrases nouvelles ; foulée envoyée seulement si un écart ressort (`notableDynamics`),
+  sinon « n'en parle pas » ; `reperes_athlete.seuil` avec son origine. Taille d'entrée +~40 tokens.
+- Photographie du moteur : 38 consignes sur 244 changent, aucun verdict ; toutes les empreintes changent (nouvelles
+  clés), donc toutes les analyses sont « à mettre à jour ». Jeu figé du banc à refaire (`npm run bench:freeze`).
+- Non fait (hors plan validé) : la prochaine séance ne suit pas encore le levier (semaine type à 3 sorties) ; le
+  conseil du jour ne reçoit pas l'écart ; le bilan hebdomadaire a affirmé à tort que Bastien ne fait pas
+  d'endurance (règle candidate à ne pas appliquer).
+- Vérification réelle à faire sur feu vert de Bastien : 2 analyses Sonnet (≈ 20 k), par ex. 13 et 17 nov.
 
 ## État
 

@@ -47,7 +47,7 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
       </div>
       {previous ? (
         <div className="stale-note">
-          <span style={{ flex: 1 }}><Say tu="Tes données ont changé depuis cette analyse (ressenti, nouvelles séances ou réglages du coach)." /></span>
+          <span style={{ flex: "1 1 220px" }}><Say tu="Tes données ont changé depuis cette analyse (ressenti, nouvelles séances ou réglages du coach)." /></span>
           <CoachRequest endpoint={endpoint} label="Mettre à jour l'analyse" queueLabel={`Analyse de la séance du ${formatDate(activity.localDate, "short")}`} />
         </div>
       ) : null}
@@ -56,6 +56,7 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
         {(ready ? ready.bullets : verdict.signals.map((signal) => signal.label).filter((label) => label !== verdict.wentWell && label !== verdict.toWork)).map((line) => <li key={line}>{line}</li>)}
       </ul>
       <SessionPoints ready={ready} prescription={analysis.prescription} fallbackKeep={verdict.wentWell} />
+      {ready?.goalLink ? <p className="goal-link"><strong><Say tu="Pour ton objectif" vous="Pour votre objectif" /> :</strong> {ready.goalLink}</p> : null}
       {ready ? (
         <details className="more">
           <summary><ChevronRight size={14} className="chev" /> Analyse détaillée</summary>

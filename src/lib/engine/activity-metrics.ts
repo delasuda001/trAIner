@@ -9,7 +9,7 @@ import { zoneOf, type ZoneIndex } from "./zones";
  * découlent : le LLM ne calcule rien.
  */
 
-export const METRICS_VERSION = 11;
+export const METRICS_VERSION = 12;
 
 export type SessionKind =
   | "recovery"
@@ -425,10 +425,23 @@ function computeZoneShares(input: MetricsInput): ActivityMetrics["zoneShares"] {
   return counts.map((value) => round(value / total, 3)) as [number, number, number, number, number];
 }
 
+/** Répétitions longues : format de seuil sauf FC moyenne nettement au-dessus de la FC seuil. */
+const LONG_REP_S = 360;
+const LONG_REP_M = 1600;
+const LONG_REP_VO2_MARGIN_BPM = 8;
+
 export function classifyKind(input: { work: WorkBlock | null; zoneShares: ActivityMetrics["zoneShares"]; movingTimeS: number | null; distanceM: number | null; zones: HeartRateZones; trainingEffectLabel?: string | null }): SessionKind {
   const { work, zoneShares, zones } = input;
   if (work) {
     if (work.averageDurationS < 75) return "intervals_short";
+    // Répétitions longues (≥ 6 min ou ≥ 1 600 m) : format de seuil (« cruise intervals »), jugé sur la FC seuil de la montre
+    // et non sur le plancher de Z5, qui peut se trouver sous la FC seuil (zones Garmin). Nettement au-dessus : VO2max.
+    if ((work.averageDurationS >= LONG_REP_S || (work.averageDistanceM ?? 0) >= LONG_REP_M) && work.averageHeartRateBpm != null) {
+      const thresholdHr = zones.lactateThresholdHeartRateBpm ?? zones.floors[4];
+      if (work.averageHeartRateBpm > thresholdHr + LONG_REP_VO2_MARGIN_BPM) return "intervals_vo2";
+      if (work.averageHeartRateBpm >= zones.floors[3]) return "intervals_threshold";
+      return "intervals_tempo";
+    }
     // Répétitions longues : la FC moyenne dit l'intensité ; courtes : la FC atteinte en fin de rep.
     const reference = work.averageDurationS >= 300 ? (work.averageHeartRateBpm ?? work.peakHeartRateBpm) : (work.peakHeartRateBpm ?? work.averageHeartRateBpm);
     if (reference != null && reference >= zones.floors[4]) return "intervals_vo2";

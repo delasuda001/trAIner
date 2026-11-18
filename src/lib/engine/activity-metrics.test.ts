@@ -80,6 +80,23 @@ describe("classifyKind", () => {
   });
 });
 
+describe("classifyKind, répétitions longues", () => {
+  const longWork = (heartRate: number) => ({ reps: 3, averageDurationS: 500, averageDistanceM: 2000, averageSpeedMps: 4, averageHeartRateBpm: heartRate, peakHeartRateBpm: heartRate + 6, speedCvPct: 1, fadePct: 0, paceSpreadSPerKm: 6, fadeSPerKm: 0, averageRecoveryS: 120, repsDetail: [] });
+  it("3 × 2 km à 168 bpm (FC seuil 169, Z5 dès 167) : seuil, pas VO2max", () => {
+    expect(classifyKind({ work: longWork(168), zoneShares: null, movingTimeS: 2850, distanceM: 10100, zones })).toBe("intervals_threshold");
+  });
+  it("3 × 2 km à 175 bpm : toujours un format seuil, couru trop fort (jugé par les consignes)", () => {
+    expect(classifyKind({ work: longWork(175), zoneShares: null, movingTimeS: 2850, distanceM: 10100, zones })).toBe("intervals_threshold");
+  });
+  it("nettement au-dessus de la FC seuil (+ 8 bpm) : VO2max ; sous la Z4 : tempo", () => {
+    expect(classifyKind({ work: longWork(178), zoneShares: null, movingTimeS: 2850, distanceM: 10100, zones })).toBe("intervals_vo2");
+    expect(classifyKind({ work: longWork(155), zoneShares: null, movingTimeS: 2850, distanceM: 10100, zones })).toBe("intervals_tempo");
+  });
+  it("répétitions de 4 min : règle inchangée (Z5 = VO2max)", () => {
+    expect(classifyKind({ work: { ...longWork(168), averageDurationS: 240, averageDistanceM: 1000 }, zoneShares: null, movingTimeS: 2850, distanceM: 10100, zones })).toBe("intervals_vo2");
+  });
+});
+
 describe("computeActivityMetrics", () => {
   it("mesure ralentissement, dérive cardiaque et efficacité aérobie sur une sortie continue", () => {
     const streams = steadyStreams(3600, (t) => (t < 1800 ? 2.8 : 2.7), (t) => (t < 1800 ? 135 : 140));

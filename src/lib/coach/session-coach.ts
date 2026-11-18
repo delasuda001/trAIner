@@ -2,13 +2,13 @@ import { z } from "zod";
 import { INTERVAL_INTENSITY_LABELS, paceSeconds, SESSION_KIND_LABELS, sessionTitle, type ActivityMetrics, type DynamicsValues } from "@/lib/engine/activity-metrics";
 import type { ComparisonDeltas } from "@/lib/engine/comparable";
 import { readDynamics } from "@/lib/engine/dynamics-reading";
-import { paceReferenceSentence, type Prescription, type PrescriptionTarget } from "@/lib/engine/prescription";
+import { paceReferenceSentence, SHORT_REP_S, type Prescription, type PrescriptionTarget } from "@/lib/engine/prescription";
 import { VERDICT_LABELS, type SessionVerdict } from "@/lib/engine/verdict";
 import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 
-export const SESSION_PROMPT_VERSION = "session-v12";
+export const SESSION_PROMPT_VERSION = "session-v13";
 
 export const sessionCoachSchema = z.object({
   verdict: z.string().min(10).max(260),
@@ -16,7 +16,9 @@ export const sessionCoachSchema = z.object({
   keep: z.string().min(10).max(260),
   shouldHave: z.string().min(10).max(280),
   nextTime: z.string().min(10).max(280),
-  detail: z.string().min(40).max(1800),
+  /** Depuis session-v13 : ce que la séance change pour l'objectif (absent des analyses plus anciennes). */
+  goalLink: z.string().max(280).optional(),
+  detail: z.string().min(20).max(1800),
 });
 
 export type SessionCoachOutput = z.infer<typeof sessionCoachSchema>;
@@ -35,14 +37,15 @@ export function normalizeSessionOutput(value: unknown): SessionCoachOutput | nul
 export const sessionCoachJsonSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["verdict", "bullets", "keep", "shouldHave", "nextTime", "detail"],
+  required: ["verdict", "bullets", "keep", "shouldHave", "nextTime", "goalLink", "detail"],
   properties: {
     verdict: { type: "string", description: "Une phrase de verdict, 180 caractères max." },
     bullets: { type: "array", minItems: 3, maxItems: 4, items: { type: "string" }, description: "3 ou 4 constats chiffrés (dont la cause probable de l'écart), 200 caractères au plus chacun." },
     keep: { type: "string", description: "À reproduire : une chose réussie, avec le chiffre à garder. Une phrase, 160 caractères au plus." },
     shouldHave: { type: "string", description: "Comment elle aurait dû être menée : la consigne la plus utile de consignes_moteur.aurait_du, cible chiffrée en tête. Une ou deux phrases, 200 caractères au plus." },
     nextTime: { type: "string", description: "La prochaine séance de ce type : consignes_moteur.prochaine_fois, avec le format et la cible chiffrée. Une ou deux phrases, 200 caractères au plus." },
-    detail: { type: "string", description: "Un paragraphe d'analyse plus détaillée, 1200 caractères max." },
+    goalLink: { type: "string", description: "Ce que cette séance change pour l'objectif : une phrase, 200 caractères au plus, qui reprend \"ecart_objectif\". Chaîne vide s'il n'y a pas d'objectif chiffré." },
+    detail: { type: "string", description: "Deux ou trois phrases, 450 caractères au plus, avec seulement ce qui n'est ni dans le verdict ni dans les puces." },
   },
 } as const;
 
@@ -56,14 +59,15 @@ Règles :
 - Pas de redite : le verdict donne l'écart principal une fois ; chaque puce apporte un fait nouveau (la première ne répète pas l'écart du verdict).
 - Un indicateur = une seule lecture, celle de "verdict_calcule" : jamais le même fait dans "keep" et dans "shouldHave".
 - Cause probable : si "hausse_de_charge" est corroborée, c'est la cause probable, avec ses raisons. Sinon, une cause seulement si un facteur du contexte la soutient (séance de qualité à moins de 72 h, signal de récupération dégradé, ressenti). S'il n'y en a aucun, n'écris pas de ligne « cause probable » du tout. Une cause retenue doit être cohérente avec "shouldHave". Un écart favorable (séance au-dessus de tes repères) n'a jamais de « cause probable » : une hausse de charge devient au plus une précaution pour les jours suivants.
-- Dynamique de course : compare-la à ses propres valeurs uniquement, et seulement si un écart ressort. L'allure est le produit de la cadence et de la longueur de pas : un pas plus court à cadence égale EST l'allure plus lente, ce n'est jamais une cause. Un indicateur de foulée n'explique quelque chose que s'il bouge indépendamment de l'allure (contact au sol, oscillation, ratio vertical, dérive entre début et fin).
+- Dynamique de course : si "dynamique_de_course" dit que rien ne ressort, n'en parle pas du tout. Sinon, compare-la à ses propres valeurs uniquement, et seulement si un écart ressort. L'allure est le produit de la cadence et de la longueur de pas : un pas plus court à cadence égale EST l'allure plus lente, ce n'est jamais une cause. Un indicateur de foulée n'explique quelque chose que s'il bouge indépendamment de l'allure (contact au sol, oscillation, ratio vertical, dérive entre début et fin).
 - Les constats et la cause probable vont dans "bullets", jamais dans "shouldHave" ni "nextTime".
 - "shouldHave" et "nextTime" sont des consignes, pas des constats : verbe d'action, cible chiffrée en tête (allure, FC, récupération, placement), reprises de "consignes_moteur". N'invente aucune autre cible. Si "consignes_moteur" n'en donne pas, dis simplement qu'il n'y a pas de consigne chiffrée pour ce format.
 - "shouldHave" : une consigne principale (la première de "consignes_moteur.aurait_du"), au plus une secondaire très courte. Si "aurait_du" dit qu'il n'y a rien à corriger, écris-le en une phrase, sans inventer de reproche.
-- Ne juge pas l'objectif (c'est fait ailleurs) : cite au plus "consignes_moteur.repere_du_moment".
+- Ne juge pas si l'objectif est atteignable. "goalLink" : en une phrase, ce que la séance apporte ou non au levier principal de "ecart_objectif", avec son action chiffrée s'il n'est pas travaillé ; vide sans "ecart_objectif".
+- Répétitions de moins de 60 s : aucune répétition isolée commentée (GPS imprécis), seulement moyenne, FC et tenue.
 - Pas de conseil générique, pas de température, aucune interprétation médicale.
 
-Format : "verdict" (une phrase), "bullets" (3 ou 4 constats chiffrés), "keep", "shouldHave", "nextTime" (une ou deux phrases courtes chacun, lisibles d'un coup d'œil), "detail" (un paragraphe).`;
+Format : "verdict" (une phrase), "bullets" (3 ou 4 constats chiffrés), "keep", "shouldHave", "nextTime", "goalLink" (une ou deux phrases courtes), "detail" (deux ou trois phrases nouvelles, jamais une redite des puces).`;
 
 type Session = {
   name: string;
@@ -110,15 +114,22 @@ function dynamicsLine(values: DynamicsValues): string {
   return parts.join(", ") || "—";
 }
 
+/** Lectures de foulée qui apprennent quelque chose : pas « foulée stable », ni le pas plus court qui n'est que l'allure. */
+export function notableDynamics(metrics: ActivityMetrics, deltas: ComparisonDeltas): string[] {
+  return readDynamics(metrics, deltas).filter((line) => !line.startsWith("Foulée stable") && !line.startsWith("Légère évolution") && !line.includes("à cadence égale"));
+}
+
 function describeDynamics(metrics: ActivityMetrics, deltas: ComparisonDeltas) {
   const dynamics = metrics.dynamics;
   if (!dynamics) return null;
+  const notable = notableDynamics(metrics, deltas);
+  if (!notable.length) return "rien qui ressorte face à tes comparables ni entre début et fin : n'en parle pas";
   return {
     base: dynamics.basis === "reps" ? "répétitions" : "séance courue hors échauffement",
     moyennes: dynamicsLine(dynamics),
     [dynamics.basis === "reps" ? "premiere_repetition" : "premiere_moitie"]: dynamicsLine(dynamics.early),
     [dynamics.basis === "reps" ? "derniere_repetition" : "deuxieme_moitie"]: dynamicsLine(dynamics.late),
-    lecture: readDynamics(metrics, deltas),
+    lecture: notable,
     comparables: deltas.dynamicsReference ? `${dynamicsLine(deltas.dynamicsReference.values)} (${deltas.dynamicsReference.count} séance${deltas.dynamicsReference.count > 1 ? "s" : ""})` : "—",
   };
 }
@@ -148,8 +159,12 @@ export function buildSessionPayload(input: {
   comparables: Comparable[];
   zones: HeartRateZones;
   lactateThresholdSpeedMps: number | null;
+  /** D'où vient le seuil retenu (« seuil observé 4:10/km (…), la montre l'estime à 4:21/km »). */
+  thresholdBasis?: string | null;
   context: SessionContextInput | null;
   goal: Record<string, string>;
+  /** Levier principal et action pour chaque objectif chiffré (moteur). */
+  goalGaps?: string[];
   feeling?: { perceivedEffort: number | null; note: string } | null;
   prescription?: Prescription | null;
 }) {
@@ -163,6 +178,8 @@ export function buildSessionPayload(input: {
     return `${rounded} bpm (${zone === 0 ? "sous Z1" : `Z${zone}`})`;
   };
   const work = metrics.work;
+  // Répétitions courtes : l'allure de chacune est du bruit GPS, on ne la transmet pas.
+  const shortReps = work != null && work.averageDurationS < SHORT_REP_S;
   const gain = deltas.paceAtEqualHrGainSPerKm;
   const hrDelta = deltas.hrAtEqualPaceDeltaBpm;
   const workGain = deltas.work?.paceAtEqualHrGainSPerKm ?? null;
@@ -189,10 +206,12 @@ export function buildSessionPayload(input: {
           allure_repetitions: formatPace(work.averageSpeedMps),
           fc_moyenne_repetitions: bpm(work.averageHeartRateBpm),
           fc_max_moyenne_repetitions: bpm(work.peakHeartRateBpm),
-          ecart_entre_rep_la_plus_rapide_et_la_plus_lente: work.paceSpreadSPerKm == null ? "—" : `${work.paceSpreadSPerKm} s/km`,
+          ...(shortReps
+            ? { precision: `répétitions de moins de ${SHORT_REP_S} s : l'allure de chacune est imprécise au GPS, seules la moyenne, la FC et la tenue en fin de série comptent` }
+            : { ecart_entre_rep_la_plus_rapide_et_la_plus_lente: work.paceSpreadSPerKm == null ? "—" : `${work.paceSpreadSPerKm} s/km` }),
           evolution_premieres_vs_dernieres: work.fadeSPerKm == null ? "—" : work.fadeSPerKm === 0 ? "même allure" : `dernières ${Math.abs(work.fadeSPerKm)} s/km plus ${work.fadeSPerKm > 0 ? "lentes" : "rapides"}`,
           recuperation_moyenne: work.averageRecoveryS ? formatDuration(work.averageRecoveryS) : "—",
-          detail_repetitions: work.repsDetail.slice(0, 8).map((rep, index) => `#${index + 1} ${formatClock(rep.durationS)}${rep.distanceM ? ` ${formatDistance(rep.distanceM, 2)}` : ""} à ${formatPace(rep.speedMps)}, FC ${bpm(rep.heartRateBpm)}, max ${bpm(rep.maxHeartRateBpm)}${rep.recoveryAfterS ? `, récup ${formatClock(rep.recoveryAfterS)}` : ""}`),
+          detail_repetitions: shortReps ? "—" : work.repsDetail.slice(0, 8).map((rep, index) => `#${index + 1} ${formatClock(rep.durationS)}${rep.distanceM ? ` ${formatDistance(rep.distanceM, 2)}` : ""} à ${formatPace(rep.speedMps)}, FC ${bpm(rep.heartRateBpm)}, max ${bpm(rep.maxHeartRateBpm)}${rep.recoveryAfterS ? `, récup ${formatClock(rep.recoveryAfterS)}` : ""}`),
         }
       : metrics.halves
         ? {
@@ -225,7 +244,7 @@ export function buildSessionPayload(input: {
       })),
       ...(work
         ? {
-            repetitions_comparables: deltas.work?.reference ? { allure: formatPace(deltas.work.reference.speedMps), fc: bpm(deltas.work.reference.heartRateBpm), ecart_entre_rep_la_plus_rapide_et_la_plus_lente: deltas.work.reference.paceSpreadSPerKm == null ? "—" : `${deltas.work.reference.paceSpreadSPerKm} s/km` } : null,
+            repetitions_comparables: deltas.work?.reference ? { allure: formatPace(deltas.work.reference.speedMps), fc: bpm(deltas.work.reference.heartRateBpm), ...(shortReps ? {} : { ecart_entre_rep_la_plus_rapide_et_la_plus_lente: deltas.work.reference.paceSpreadSPerKm == null ? "—" : `${deltas.work.reference.paceSpreadSPerKm} s/km` }) } : null,
             repetitions_ecart_brut: deltas.work?.reference?.speedMps && work ? (() => { const raw = paceSeconds(work.averageSpeedMps) - paceSeconds(deltas.work.reference.speedMps); return raw === 0 ? "même allure" : `${Math.abs(raw)} s/km plus ${raw > 0 ? "lentes" : "rapides"}`; })() : "—",
             repetitions_allure_a_fc_egale: workGain == null ? "—" : Math.abs(workGain) < 2 ? "identique" : `${formatNumber(Math.abs(workGain))} s/km plus ${workGain > 0 ? "rapide" : "lent"}`,
           }
@@ -253,6 +272,7 @@ export function buildSessionPayload(input: {
         }
       : null,
     objectif: input.goal,
+    ...(input.goalGaps?.length ? { ecart_objectif: input.goalGaps } : {}),
     ressenti: input.feeling ? { effort_percu: input.feeling.perceivedEffort != null ? `${input.feeling.perceivedEffort}/10` : "—", note: input.feeling.note || "—" } : "non renseigné",
     verdict_calcule: {
       niveau: VERDICT_LABELS[verdict.level],
@@ -261,7 +281,7 @@ export function buildSessionPayload(input: {
     consignes_moteur: describePrescription(input.prescription ?? null),
     reperes_athlete: {
       zones_fc: Object.fromEntries(([1, 2, 3, 4, 5] as const).map((zone) => [ZONE_LABELS[zone], `${zoneRange(zone, zones)[0]}–${zoneRange(zone, zones)[1]} bpm`])),
-      seuil_montre: input.lactateThresholdSpeedMps && zones.lactateThresholdHeartRateBpm ? `${formatPace(input.lactateThresholdSpeedMps)} à ${bpm(zones.lactateThresholdHeartRateBpm)}` : "—",
+      seuil: input.lactateThresholdSpeedMps && zones.lactateThresholdHeartRateBpm ? `${formatPace(input.lactateThresholdSpeedMps)} à ${bpm(zones.lactateThresholdHeartRateBpm)}${input.thresholdBasis ? ` (${input.thresholdBasis})` : ""}` : "—",
     },
   };
 }

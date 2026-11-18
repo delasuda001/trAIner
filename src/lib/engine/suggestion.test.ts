@@ -39,7 +39,8 @@ describe("suggestNextSession", () => {
   it("sans qualité depuis 8 jours, propose une séance au seuil calée sur l'allure seuil de la montre", () => {
     const result = suggestNextSession(input([run(12, "intervals_vo2", "intervals"), run(4, "endurance", "easy")]));
     expect(result.primary.type).toBe("threshold");
-    expect(result.primary.target?.heartRateLow).toBe(159);
+    // FC d'un travail au seuil : FC seuil de la montre − 5 (les zones Garmin peuvent placer Z5 sous la FC seuil).
+    expect(result.primary.target?.heartRateLow).toBe(164);
     // Même cible que les consignes de séance : seuil montre (4:21/km) de −3 à +4 s/km.
     expect(Math.round(1000 / (result.primary.target?.paceSlowMps ?? 1))).toBe(265);
   });

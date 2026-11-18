@@ -241,6 +241,14 @@ ul.bullets li::marker { color: var(--sl-pink); }
 .goal-status-row.goal-reachable { border-left-color: var(--sl-green); }
 .goal-status-row.goal-out_of_reach { border-left-color: var(--sl-orange); }
 .goal-status-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.goal-gap { margin-top: 8px; display: grid; gap: 6px; }
+.goal-gap-action { padding: 8px 10px; border-radius: var(--sl-radius-sm); background: var(--sl-paper); border: 1.5px dashed var(--sl-border); }
+.goal-gap-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.goal-gap-table th, .goal-gap-table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--sl-border); }
+.goal-gap-table th { font-weight: 600; color: var(--sl-ink-muted); font-size: 12px; }
+.goal-gap-table tr.main td { font-weight: 700; }
+.goal-gap-table tr.met td { opacity: 0.7; }
+.goal-link { margin-top: 10px; font-size: 14px; }
 .three-points { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
 .point-target { font-family: var(--font-data); font-size: 13px; font-weight: 600; color: var(--sl-ink); margin-bottom: 4px; }
 

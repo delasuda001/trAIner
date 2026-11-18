@@ -133,6 +133,8 @@ function sessionPayload(analysis: SessionAnalysis) {
     lactateThresholdSpeedMps: analysis.profile.lactateThresholdSpeedMps,
     context: analysis.context,
     goal: goalForCoach(analysis.goal, analysis.activity.localDate),
+    thresholdBasis: analysis.profile.threshold?.basis ?? null,
+    goalGaps: analysis.goalGaps.map((gap) => gap.summary),
     feeling: analysis.feeling,
     prescription: analysis.prescription,
   });

@@ -15,6 +15,8 @@ import { runningRhythm, type Rhythm } from "@/lib/engine/rhythm";
 import { median, present } from "@/lib/engine/stats";
 import { goalMarker, prescribe, type GoalMarker, type Prescription, type RecentEffort } from "@/lib/engine/prescription";
 import { suggestNextSession, type Suggestion } from "@/lib/engine/suggestion";
+import { estimateThreshold, type ThresholdEstimate } from "@/lib/engine/threshold";
+import { goalGap, type GoalGap } from "@/lib/engine/goal-gap";
 import { classifyVerdict, type SessionVerdict } from "@/lib/engine/verdict";
 import { fallbackZones } from "@/lib/engine/zones";
 import { activeMember } from "@/lib/profiles/context";
@@ -23,7 +25,8 @@ import type { ActivityStreams, HeartRateZones, Lap, WellnessDay } from "@/lib/so
 import { EMPTY_GOAL, GOAL_KEY, goalSchema, targetPaceMps, type Goal } from "@/lib/goal/goal";
 import { athleteProfileSchema, PROFILE_KEY, SYNC_STATE_KEY, syncStateSchema, type SyncState } from "@/lib/sync/sync";
 
-export type Profile = { zones: HeartRateZones; zonesFromWatch: boolean; lactateThresholdSpeedMps: number | null; restingHeartRateBpm: number };
+/** `lactateThresholdSpeedMps` : seuil retenu (observé en séance s'il est nettement plus rapide que la montre, sinon montre) ; détail dans `threshold`. */
+export type Profile = { zones: HeartRateZones; zonesFromWatch: boolean; lactateThresholdSpeedMps: number | null; restingHeartRateBpm: number; threshold?: ThresholdEstimate };
 
 function toWellnessDay(row: WellnessRow): WellnessDay {
   return { date: row.date, hrvLastNightMs: row.hrvLastNightMs, hrvWeeklyAvgMs: row.hrvWeeklyAvgMs, hrvBaselineLowMs: row.hrvBaselineLowMs, hrvBaselineHighMs: row.hrvBaselineHighMs, hrvStatus: row.hrvStatus, sleepDurationS: row.sleepDurationS, sleepScore: row.sleepScore, restingHeartRateBpm: row.restingHeartRateBpm, vo2max: row.vo2max };
@@ -106,7 +109,10 @@ export function loadContext(): Context {
     if (!metrics) continue;
     runs.push({ id: row.id, startTimeUtc: row.startTimeUtc, localDate: row.localDate, name: row.name, sport: row.sport, movingTimeS: row.movingTimeS, distanceM: row.distanceM, averageTemperatureC: row.averageTemperatureC, metrics, row });
   }
-  return { today, rows, runs, wellness, profile, goal: readGoal() };
+  // Seuil du moment : la montre, sauf si ses répétitions longues récentes à la FC du seuil disent nettement plus rapide.
+  const threshold = estimateThreshold({ runs, today, watchSpeedMps: profile.lactateThresholdSpeedMps, thresholdHeartRateBpm: profile.zones.lactateThresholdHeartRateBpm });
+  const withThreshold: Profile = { ...profile, lactateThresholdSpeedMps: threshold.speedMps, threshold };
+  return { today, rows, runs, wellness, profile: withThreshold, goal: readGoal() };
 }
 
 export type SessionAnalysis = {
@@ -123,6 +129,8 @@ export type SessionAnalysis = {
   context: SessionContext;
   /** Consignes chiffrées du moteur : comment la mener, et la prochaine fois. */
   prescription: Prescription;
+  /** Écart à chaque objectif chiffré, vu le jour de la séance (levier principal et action). */
+  goalGaps: GoalGap[];
 };
 
 export type SessionContext = {
@@ -186,6 +194,19 @@ function recentEfforts(runs: AnalyzedRun[], date: string): RecentEffort[] {
     });
 }
 
+function thresholdLabel(profile: Profile): string {
+  return profile.threshold?.source === "observed" ? "seuil observé" : "seuil montre";
+}
+
+/** Écart à chaque objectif chiffré, au jour `today` (courses jusqu'à ce jour inclus). */
+function goalGapsFor(goal: Goal | null, runs: AnalyzedRun[], today: string, thresholdSpeedMps: number | null): GoalGap[] {
+  if (!goal?.raceTargets.length) return [];
+  const history = runs.filter((run) => run.localDate <= today).map((run) => ({ localDate: run.localDate, distanceM: run.distanceM }));
+  return goal.raceTargets
+    .map((target) => goalGap({ target, runs: history, today, thresholdSpeedMps, eventDate: goal.distanceKm && Math.abs(goal.distanceKm - target.distanceKm) < 0.05 ? goal.eventDate : null }))
+    .filter((gap): gap is GoalGap => gap != null);
+}
+
 /** Registre du profil actif : les phrases du moteur sont vouvoyées pour un invité, inchangées pour Bastien. */
 function currentRegister(): Register {
   return registerForRole(activeMember()?.role);
@@ -204,6 +225,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     metrics: current.metrics,
     zones: context.profile.zones,
     lactateThresholdSpeedMps: context.profile.lactateThresholdSpeedMps,
+    thresholdLabel: thresholdLabel(context.profile),
     restingHeartRateBpm: context.profile.restingHeartRateBpm,
     recentSpeedPerBeat: perBeat.length ? median(perBeat) : null,
     movingTimeS: current.movingTimeS,
@@ -223,6 +245,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     feeling: createFeelingRepository().get(current.id),
     context: voiceDeep(sessionCtx, currentRegister()),
     prescription: voiceDeep(prescription, currentRegister()),
+    goalGaps: voiceDeep(goalGapsFor(context.goal, context.runs, current.localDate, context.profile.lactateThresholdSpeedMps), currentRegister()),
   };
 }
 
@@ -290,6 +313,8 @@ export type Dashboard = {
   loadAlert: LoadAlert;
   /** Objectifs chiffrés situés par rapport aux repères du moment. */
   goalMarkers: GoalMarker[];
+  /** Ce qui sépare de chaque objectif chiffré : leviers, levier principal, action. */
+  goalGaps: GoalGap[];
   /** Dernière séance du même type que la prochaine proposée, et sa consigne « prochaine fois ». */
   lastSameType: { id: string; localDate: string; title: string; prescription: Prescription } | null;
   /** Semaine en cours, lundi → dimanche : séances faites et séances proposées. */
@@ -385,7 +410,8 @@ export function getDashboard(): Dashboard {
     suggestion,
     lastRun: last ? analyzeSession(last.id, context) : null,
     loadAlert: currentLoadAlert,
-    goalMarkers: (goal?.raceTargets ?? []).map((target) => goalMarker(goal?.raceTargets ?? [], target.distanceKm, { lactateThresholdSpeedMps: profile.lactateThresholdSpeedMps, efforts: recentEfforts(runs, addDays(today, 1)) })).filter((marker): marker is GoalMarker => marker != null),
+    goalMarkers: (goal?.raceTargets ?? []).map((target) => goalMarker(goal?.raceTargets ?? [], target.distanceKm, { lactateThresholdSpeedMps: profile.lactateThresholdSpeedMps, thresholdLabel: thresholdLabel(profile), efforts: recentEfforts(runs, addDays(today, 1)) })).filter((marker): marker is GoalMarker => marker != null),
+    goalGaps: voiceDeep(goalGapsFor(goal, runs, today, profile.lactateThresholdSpeedMps), currentRegister()),
     lastSameType: sameRun && sameAnalysis ? { id: sameRun.id, localDate: sameRun.localDate, title: sessionTitle(sameRun.metrics), prescription: sameAnalysis.prescription } : null,
     recent: [...rows].reverse().slice(0, 10).map((row) => ({ id: row.id, name: row.name, sport: row.sport, localDate: row.localDate, startTimeLocal: row.startTimeLocal, distanceM: row.distanceM, movingTimeS: row.movingTimeS, averageSpeedMps: row.averageSpeedMps, averageHeartRateBpm: row.averageHeartRateBpm, kind: runById.get(row.id)?.metrics.kind ?? null, title: runById.get(row.id) ? sessionTitle((runById.get(row.id) as AnalyzedRun).metrics) : null, zoneShares: runById.get(row.id)?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null) })),
     activityCount: rows.length,

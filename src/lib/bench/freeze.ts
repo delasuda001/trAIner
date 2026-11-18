@@ -54,6 +54,8 @@ export function freezeFixtures(maxFixtures = 6): BenchFixture[] {
       comparables: analysis.comparables,
       zones: analysis.profile.zones,
       lactateThresholdSpeedMps: analysis.profile.lactateThresholdSpeedMps,
+      thresholdBasis: analysis.profile.threshold?.basis ?? null,
+      goalGaps: analysis.goalGaps.map((gap) => gap.summary),
       context: analysis.context,
       goal: goalForCoach(analysis.goal, analysis.activity.localDate),
       feeling: analysis.feeling,

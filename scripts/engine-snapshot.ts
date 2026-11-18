@@ -23,7 +23,7 @@ async function main() {
     const sessions = context.runs.map((run) => {
       const analysis = analyzeSession(run.id, context);
       if (!analysis) return { id: run.id, analysis: null };
-      const payload = buildSessionPayload({ session: analysis.activity, metrics: analysis.metrics, deltas: analysis.deltas, verdict: analysis.verdict, comparables: analysis.comparables, zones: analysis.profile.zones, lactateThresholdSpeedMps: analysis.profile.lactateThresholdSpeedMps, context: analysis.context, goal: goalForCoach(analysis.goal, analysis.activity.localDate), feeling: analysis.feeling, prescription: analysis.prescription });
+      const payload = buildSessionPayload({ session: analysis.activity, metrics: analysis.metrics, deltas: analysis.deltas, verdict: analysis.verdict, comparables: analysis.comparables, zones: analysis.profile.zones, lactateThresholdSpeedMps: analysis.profile.lactateThresholdSpeedMps, thresholdBasis: analysis.profile.threshold?.basis ?? null, goalGaps: analysis.goalGaps.map((gap) => gap.summary), context: analysis.context, goal: goalForCoach(analysis.goal, analysis.activity.localDate), feeling: analysis.feeling, prescription: analysis.prescription });
       return { id: run.id, date: run.localDate, verdict: analysis.verdict.level, prescription: analysis.prescription, loadAlert: analysis.context.loadAlertBefore, payload: hash(payload) };
     });
     const dashboard = getDashboard();

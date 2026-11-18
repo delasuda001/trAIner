@@ -211,7 +211,7 @@ export function ProgressionCard({ dashboard, coach }: { dashboard: Dashboard; co
         <Fact label="Volume course" value={formatNumber(progression.recent.runKmPerWeek, 1)} unit="km/sem" sub={`avant : ${formatNumber(progression.previous.runKmPerWeek, 1)}`} />
         <Fact label="Sorties faciles mesurées" value={String(progression.recent.runs)} sub={`contre ${progression.previous.runs} avant`} />
       </div>
-      <GoalStatusList markers={dashboard.goalMarkers} goal={dashboard.goal} today={dashboard.today} compact />
+      <GoalStatusList markers={dashboard.goalMarkers} gaps={dashboard.goalGaps} goal={dashboard.goal} today={dashboard.today} compact />
     </section>
   );
 }
