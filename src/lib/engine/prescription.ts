@@ -1,7 +1,7 @@
 import { formatClock, formatDate, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 import type { ActivityMetrics, SessionKind } from "./activity-metrics";
-import { paceSeconds } from "./activity-metrics";
+import { easyAboveZ2Share, paceSeconds } from "./activity-metrics";
 import type { LoadAlert, LoadFigure } from "./load";
 import { DEFAULT_QUALITY_SPACING_DAYS, spacingHours } from "./rhythm";
 import { zoneOf, zoneRange } from "./zones";
@@ -289,6 +289,27 @@ function thresholdHeartRate(zones: HeartRateZones): { heartRateLow: number; hear
   return { heartRateLow: low, heartRateHigh: high, zone: zoneLow === zoneHigh ? `Z${zoneLow}` : `Z${zoneLow}–Z${zoneHigh}` };
 }
 
+/**
+ * Tempo : allure de la course visée (10 km si tous les objectifs chiffrés sont de 10 km au plus, sinon semi),
+ * FC resserrée sur une dizaine de bpm : sous la FC seuil de la montre (semi : −10 à −1, 10 km : −6 à +3) ;
+ * sans FC seuil, autour du début de la Z4 (semi : −7 à +3, 10 km : −3 à +7).
+ */
+function tempoTarget(input: PaceInputs): { target: PrescriptionTarget; goal: GoalMarker | null } {
+  const tenK = input.raceTargets.length > 0 && input.raceTargets.every((target) => target.distanceKm <= 10.5);
+  const race = tenK ? { km: 10, name: "10 km" } : { km: 21.0975, name: "semi" };
+  const marker = goalMarker(input.raceTargets, race.km, input);
+  const zones = input.zones;
+  const lthr = zones.lactateThresholdHeartRateBpm;
+  const z4 = zones.floors[3];
+  const [low, high] = lthr != null ? (tenK ? [lthr - 6, lthr + 3] : [lthr - 10, lthr - 1]) : tenK ? [z4 - 3, z4 + 7] : [z4 - 7, z4 + 3];
+  const zoneLow = Math.max(1, zoneOf(low, zones));
+  const zoneHigh = Math.max(1, zoneOf(high, zones));
+  return {
+    target: { label: raceLabel(marker, race.name), ...around(raceAimS(marker, raceEstimate(race.km, input)), 4), heartRateLow: low, heartRateHigh: high, zone: zoneLow === zoneHigh ? `Z${zoneLow}` : `Z${zoneLow}–Z${zoneHigh}` },
+    goal: marker,
+  };
+}
+
 function around(centerS: number | null, half: number): { paceFastS: number | null; paceSlowS: number | null } {
   return centerS == null ? { paceFastS: null, paceSlowS: null } : { paceFastS: centerS - half, paceSlowS: centerS + half };
 }
@@ -322,10 +343,7 @@ function intervalPlan(kind: SessionKind, repDurationS: number, input: PaceInputs
   if (kind === "intervals_threshold") {
     return { target: { label: "seuil", paceFastS: ltS != null ? ltS - 3 : null, paceSlowS: ltS != null ? ltS + 4 : null, ...thresholdHeartRate(zones) }, goal: goalMarker(input.raceTargets, 21.0975, input), recoveryS: roundTo(Math.min(120, Math.max(60, repDurationS * 0.2)), 15), maxReps: 6 };
   }
-  if (kind === "intervals_tempo") {
-    const marker = goalMarker(input.raceTargets, 21.0975, input);
-    return { target: { label: raceLabel(marker, "semi"), ...around(raceAimS(marker, raceEstimate(21.0975, input)), 4), heartRateLow: hr(3, zones)[0], heartRateHigh: hr(4, zones)[1], zone: "Z3–Z4" }, goal: marker, recoveryS: 60, maxReps: 5 };
-  }
+  if (kind === "intervals_tempo") return { ...tempoTarget(input), recoveryS: 60, maxReps: 5 };
   return null;
 }
 
@@ -336,10 +354,7 @@ function continuousPlan(kind: SessionKind, input: PrescriptionInput): Plan | nul
     const ltS = lt ? paceSeconds(lt) : null;
     return { target: { label: "seuil", paceFastS: ltS != null ? ltS - 3 : null, paceSlowS: ltS != null ? ltS + 4 : null, ...thresholdHeartRate(zones) }, goal: goalMarker(input.raceTargets, 21.0975, input), recoveryS: null, maxReps: 1 };
   }
-  if (kind === "tempo") {
-    const marker = goalMarker(input.raceTargets, 21.0975, input);
-    return { target: { label: raceLabel(marker, "semi"), ...around(raceAimS(marker, raceEstimate(21.0975, input)), 4), heartRateLow: hr(3, zones)[0], heartRateHigh: hr(4, zones)[1], zone: "Z3–Z4" }, goal: marker, recoveryS: null, maxReps: 1 };
-  }
+  if (kind === "tempo") return { ...tempoTarget(input), recoveryS: null, maxReps: 1 };
   // Endurance, récupération, sortie longue : FC en Z2 (Z1–Z2 en récupération), allure traduite de la FC.
   const [z2Low, z2High] = hr(2, zones);
   const low = kind === "recovery" ? zones.floors[0] : z2Low;
@@ -495,8 +510,11 @@ export function prescribe(input: PrescriptionInput): Prescription {
   if (metrics.family === "easy" || metrics.family === "long") {
     const execution: string[] = [];
     if (mainHr != null && mainHr > target.heartRateHigh) execution.push(`Intensité : reste sous ${target.heartRateHigh} bpm (haut de ${target.zone})${hasPace ? `, soit ${band(target)}` : ""} ; ${mainHr} bpm de moyenne, ce n'est plus de l'endurance.`);
+    // FC moyenne en Z2 mais une part notable du temps au-dessus : ralentir pour y rester.
+    const aboveZ2 = mainHr != null && mainHr <= target.heartRateHigh ? easyAboveZ2Share(metrics) : null;
+    if (aboveZ2 != null) execution.push(`Intensité : ${Math.round(aboveZ2 * 100)} % du temps au-dessus de ${target.heartRateHigh} bpm (haut de ${target.zone}) ; ralentis dès que tu le dépasses${hasPace ? `, quitte à courir à ${pace(target.paceSlowS as number)}` : ""}.`);
     if (halves?.driftPct != null && halves.driftPct > 5) execution.push(`Départ : ${hasPace ? `pars à ${pace(target.paceSlowS as number)}` : "pars plus lentement"} sur les 15 premières minutes pour limiter la dérive cardiaque (${decimal(halves.driftPct)} %).`);
-    const keep = mainHr != null && mainHr <= target.heartRateHigh ? `FC moyenne à ${mainHr} bpm, dans la cible ${target.heartRateLow}–${target.heartRateHigh} bpm : à reproduire.` : null;
+    const keep = mainHr != null && mainHr <= target.heartRateHigh && aboveZ2 == null ? `FC moyenne à ${mainHr} bpm, dans la cible ${target.heartRateLow}–${target.heartRateHigh} bpm : à reproduire.` : null;
     const nextMinutes = metrics.family === "long" && minutes ? Math.min(120, roundTo(minutes * 1.1, 5)) : minutes;
     const format = nextMinutes ? `${nextMinutes} min` : "même durée";
     const cue = `${metrics.family === "long" ? "Sortie longue" : "Endurance"} de ${format} entre ${target.heartRateLow} et ${target.heartRateHigh} bpm${hasPace ? `, soit environ ${band(target)}` : ""} ; la fin aussi facile que le début.`;

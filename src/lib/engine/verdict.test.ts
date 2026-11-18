@@ -72,3 +72,17 @@ describe("lecture de la dynamique de course", () => {
     expect(lines.at(-1)).toContain("Foulée stable");
   });
 });
+
+describe("sortie facile trop intense", () => {
+  const easy = (shares: [number, number, number, number, number]): ActivityMetrics => ({ ...metrics, kind: "endurance", family: "easy", structure: "continuous", work: null, zoneShares: shares });
+
+  it("signale la part du temps au-dessus de la Z2 à partir de 25 %", () => {
+    const signal = classifyVerdict(easy([0.11, 0.6, 0.25, 0.04, 0]), deltas(0, 0)).signals.find((entry) => entry.key === "easy_intensity");
+    expect(signal).toMatchObject({ tone: "watch", label: "29 % du temps au-dessus de la Z2 : trop intense pour une sortie facile." });
+  });
+
+  it("rien sous 25 %, ni pour un fractionné", () => {
+    expect(classifyVerdict(easy([0.2, 0.6, 0.15, 0.05, 0]), deltas(0, 0)).signals.some((entry) => entry.key === "easy_intensity")).toBe(false);
+    expect(classifyVerdict({ ...metrics, zoneShares: [0, 0.2, 0.3, 0.4, 0.1] }, deltas(0)).signals.some((entry) => entry.key === "easy_intensity")).toBe(false);
+  });
+});

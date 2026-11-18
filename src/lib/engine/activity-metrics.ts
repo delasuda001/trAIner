@@ -74,6 +74,16 @@ export function sessionTitle(metrics: Pick<ActivityMetrics, "kind" | "work">): s
   return `Fractionné${adjective} ${work.reps} × ${format}`;
 }
 
+/** Endurance : au-delà de cette part du temps au-dessus de la Z2 (Z3 et plus), la séance n'est plus facile. */
+export const EASY_ABOVE_Z2_LIMIT = 0.25;
+
+/** Part du temps au-dessus de la Z2 d'une sortie facile ou longue, si elle dépasse la limite ; null sinon. */
+export function easyAboveZ2Share(metrics: Pick<ActivityMetrics, "family" | "zoneShares">): number | null {
+  if ((metrics.family !== "easy" && metrics.family !== "long") || !metrics.zoneShares) return null;
+  const share = metrics.zoneShares[2] + metrics.zoneShares[3] + metrics.zoneShares[4];
+  return share >= EASY_ABOVE_Z2_LIMIT ? share : null;
+}
+
 export function familyOf(kind: SessionKind): SessionFamily {
   if (kind === "recovery" || kind === "endurance") return "easy";
   if (kind === "long") return "long";

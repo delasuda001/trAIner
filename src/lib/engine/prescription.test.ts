@@ -240,16 +240,46 @@ describe("prescribe, fractionné sans allure cible (ni seuil ni objectif chiffr�
   it("FC des répétitions dans la cible : séance tenue, une répétition de plus avec son allure du jour comme repère", () => {
     const result = prescribe(pacelessInput(tempo));
     if (result.status !== "ok") throw new Error("attendu ok");
-    expect(result.target).toMatchObject({ paceFastS: null, heartRateLow: 148, heartRateHigh: 175 });
+    expect(result.target).toMatchObject({ paceFastS: null, label: "allure semi du moment", heartRateLow: 154, heartRateHigh: 164 });
     expect(result.shouldHave).toEqual([]);
-    expect(result.keep).toBe("Répétitions à 5:17/km et 158 bpm, dans la cible 148–175 bpm, 6 s/km entre la plus rapide et la plus lente : à reproduire.");
-    expect(result.next.cue).toBe("Une répétition de plus : 4 × 1 km à 148–175 bpm (repère d'allure : 5:17/km, celle de cette séance), récupération 1:00.");
+    expect(result.keep).toBe("Répétitions à 5:17/km et 158 bpm, dans la cible 154–164 bpm, 6 s/km entre la plus rapide et la plus lente : à reproduire.");
+    expect(result.next.cue).toBe("Une répétition de plus : 4 × 1 km à 154–164 bpm (repère d'allure : 5:17/km, celle de cette séance), récupération 1:00.");
     expect(result.next.cue).not.toMatch(/1re répétition à \d+ bpm/);
+  });
+
+  it("objectif de 10 km : allure nommée « 10 km », FC resserrée un cran plus haut sur ses zones", () => {
+    const result = prescribe({ ...pacelessInput(tempo), raceTargets: [{ distanceKm: 10, targetTimeS: 3000 }] });
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.target).toMatchObject({ label: "allure 10 km du moment", heartRateLow: 158, heartRateHigh: 168, zone: "Z3–Z4" });
+  });
+
+  it("avec une FC seuil montre : fourchette semi de 10 bpm sous le seuil", () => {
+    const result = prescribe({ ...pacelessInput(tempo), zones: { ...hrMaxZones, lactateThresholdHeartRateBpm: 166 } });
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.target).toMatchObject({ heartRateLow: 156, heartRateHigh: 165 });
   });
 
   it("FC hors cible : même format, sans consigne de départ exprimée en bpm", () => {
     const result = prescribe(pacelessInput({ ...tempo, work: { ...(tempo.work as Work), averageHeartRateBpm: 140 } }));
     if (result.status !== "ok") throw new Error("attendu ok");
-    expect(result.next.cue).toBe("Même format 3 × 1 km à 148–175 bpm, récupération 1:00.");
+    expect(result.next.cue).toBe("Même format 3 × 1 km à 154–164 bpm, récupération 1:00.");
+  });
+});
+
+describe("prescribe, endurance avec une part notable au-dessus de la Z2", () => {
+  const easy = (shares: [number, number, number, number, number]): ActivityMetrics => ({ ...base, kind: "endurance", family: "easy", structure: "continuous", work: null, mainHeartRateBpm: 140, zoneShares: shares, halves: null });
+
+  it("29 % au-dessus de la Z2 malgré une FC moyenne en Z2 : consigne de ralentir, rien « à reproduire » sur la FC", () => {
+    const result = prescribe(input(easy([0.11, 0.6, 0.25, 0.04, 0])));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.shouldHave[0]).toMatch(/^Intensité : 29 % du temps au-dessus de 148 bpm \(haut de Z2\) ; ralentis dès que tu le dépasses/);
+    expect(result.keep).toBeNull();
+  });
+
+  it("15 % au-dessus de la Z2 : rien à corriger", () => {
+    const result = prescribe(input(easy([0.2, 0.65, 0.12, 0.03, 0])));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.shouldHave).toEqual([]);
+    expect(result.keep).toMatch(/^FC moyenne à 140 bpm/);
   });
 });

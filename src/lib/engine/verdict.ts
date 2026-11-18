@@ -1,5 +1,5 @@
 import { formatNumber, formatPace } from "@/lib/formatters";
-import { paceSeconds, sessionTitle, type ActivityMetrics } from "./activity-metrics";
+import { easyAboveZ2Share, paceSeconds, sessionTitle, type ActivityMetrics } from "./activity-metrics";
 import { MIN_SOLID_COMPARABLES, type ComparisonDeltas } from "./comparable";
 import { SHORT_REP_S } from "./prescription";
 
@@ -84,6 +84,11 @@ export function buildSignals(metrics: ActivityMetrics, deltas: ComparisonDeltas)
     const fade = metrics.halves.fadePct;
     const tone: SignalTone = fade <= -1 ? "good" : fade > 3 ? "watch" : "neutral";
     signals.push({ key: "fade", tone, weight: 1, primary: false, label: Math.abs(fade) < 0.5 ? "Allure tenue à l'identique sur les deux moitiés." : `Deuxième moitié ${formatNumber(Math.abs(metrics.halves.fadeSPerKm))} s/km plus ${fade > 0 ? "lente" : "rapide"} que la première.` });
+  }
+
+  const aboveZ2 = easyAboveZ2Share(metrics);
+  if (aboveZ2 != null) {
+    signals.push({ key: "easy_intensity", tone: "watch", weight: 1, primary: false, label: `${Math.round(aboveZ2 * 100)} % du temps au-dessus de la Z2 : trop intense pour une sortie facile.` });
   }
 
   if (metrics.work) {

@@ -11,6 +11,7 @@ describe("vouvoyer", () => {
     expect(vouvoyer("En continu, en aisance respiratoire : tu dois pouvoir parler en phrases complètes.")).toBe("En continu, en aisance respiratoire : vous devez pouvoir parler en phrases complètes.");
     expect(vouvoyer("Durée normale pour toi.")).toBe("Durée normale pour vous.");
     expect(vouvoyer("Dans tes repères")).toBe("Dans vos repères");
+    expect(vouvoyer("Intensité : 28 % du temps au-dessus de 149 bpm (haut de Z2) ; ralentis dès que tu le dépasses, quitte à courir à 7:05/km.")).toBe("Intensité : 28 % du temps au-dessus de 149 bpm (haut de Z2) ; ralentissez dès que vous le dépassez, quitte à courir à 7:05/km.");
     expect(vouvoyer("Si les signaux restent dégradés le jour J (VFC sous ta plage habituelle), remplace par ce footing facile.")).toBe("Si les signaux restent dégradés le jour J (VFC sous votre plage habituelle), remplacez par ce footing facile.");
   });
 

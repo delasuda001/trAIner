@@ -449,10 +449,17 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
 - Lien d'invitation : consommé par un robot d'aperçu de messagerie (navigateur inconnu, jamais revu) ; l'invitée a dû
   passer par son code. Le GET ne consomme plus rien. La session du robot (« appareil, navigateur ») est à révoquer par
   Bastien dans Paramètres.
-- À arbitrer : endurance « rien à corriger » avec une part notable au-dessus de la Z2 (le moteur ne regarde que la FC
-  moyenne) ; libellé « allure semi du moment » pour un tempo quand l'objectif est un 10 km ; fourchette FC tempo
-  Z3–Z4 très large en zones % FC max ; écart « à FC égale » en endurance face à des comparables à FC très
-  dispersées, à vérifier dans `comparable.ts`.
+- Arbitrages du coordinateur (même soir), faits :
+  - Sortie facile ou longue avec ≥ 25 % du temps au-dessus de la Z2 (`EASY_ABOVE_Z2_LIMIT`, `easyAboveZ2Share`) :
+    signal « à surveiller » au verdict (`easy_intensity`, poids 1) et consigne « Intensité : N % du temps au-dessus
+    de X bpm (haut de Z2) ; ralentis dès que tu le dépasses » ; plus de « FC moyenne… à reproduire » dans ce cas.
+  - Tempo (`tempoTarget`) : allure « 10 km » si tous les objectifs chiffrés font 10 km au plus, sinon « semi ».
+    FC resserrée à ~10 bpm : avec FC seuil montre, semi −10 à −1, 10 km −6 à +3 ; sans, autour du début de la Z4
+    (semi −7 à +3, 10 km −3 à +7).
+  - Bastien (photographie) : 27 endurances reçoivent la consigne d'intensité (3 depuis juin 2026), 7 verdicts passent
+    de « au-dessus » à « dans la ligne » (tous avant 2026), 2 tempos ont la fourchette resserrée (159–168 au lieu de
+    149–166). Suggestion du jour inchangée.
+- Reste à vérifier : écart « à FC égale » en endurance face à des comparables à FC très dispersées (`comparable.ts`).
 
 ## État
 
