@@ -59,6 +59,8 @@ const GAIN_SMALL_S = 5;
 export const SHORT_REP_S = 60;
 /** Perte en fin de série jugée significative pour des répétitions courtes (s/km), au-delà du bruit GPS. */
 const SHORT_FADE_LIMIT_S = 10;
+/** …et seulement si elle dépasse celle des comparables de 2 points de pourcentage. */
+const FADE_PCT_ABOVE_REFERENCE = 2;
 const MISMATCH_REASON = "allure trop éloignée de la cible du format reconnu, séance probablement d'un autre type";
 
 export type PrescriptionTarget = {
@@ -113,7 +115,7 @@ export type Prescription =
     };
 
 /** Repères des séances comparables (déjà calculés par le moteur de comparaison). */
-export type ComparableReference = { repSpeedMps: number | null; repHeartRateBpm: number | null; repSpreadSPerKm: number | null; halvesFadeSPerKm: number | null };
+export type ComparableReference = { repSpeedMps: number | null; repHeartRateBpm: number | null; repSpreadSPerKm: number | null; halvesFadeSPerKm: number | null; /** Perte (%) premier tiers → dernier tiers des répétitions sur les comparables du même format. */ repFadePct?: number | null };
 
 export type PrescriptionInput = {
   metrics: ActivityMetrics;
@@ -404,8 +406,10 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
   const referenceSpread = reference?.repSpreadSPerKm ?? null;
   const spread = work.paceSpreadSPerKm;
   const shortReps = work.averageDurationS < SHORT_REP_S;
+  // Répétitions courtes : perte au-delà du bruit GPS ET au-delà de la perte habituelle sur ses comparables du même format.
+  const referenceFadePct = reference?.repFadePct ?? null;
   const fadeDegraded = shortReps
-    ? fade >= SHORT_FADE_LIMIT_S
+    ? fade >= SHORT_FADE_LIMIT_S && (referenceFadePct == null || work.fadePct == null || work.fadePct >= referenceFadePct + FADE_PCT_ABOVE_REFERENCE)
     : fade >= FADE_LIMIT_S && (referenceSpread == null || spread == null || spread >= referenceSpread + FADE_ABOVE_REFERENCE_S);
   // Coût cardiaque : FC nettement plus haute que les comparables pour une allure à peine meilleure.
   const refHr = reference?.repHeartRateBpm != null ? Math.round(reference.repHeartRateBpm) : null;
@@ -442,7 +446,7 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
   const strictlyOnTarget = onTarget && averageS >= fast && averageS <= slow;
   const keep = strictlyOnTarget
     ? `Répétitions à ${pace(averageS)}${shortReps ? " en moyenne" : ""} dans la cible ${band(target)}${spread != null && !shortReps ? `, ${spread} s/km entre la plus rapide et la plus lente` : ""} : à reproduire.`
-    : shortReps ? null
+    : shortReps ? (hasPace && averageS >= fast && averageS <= slow ? `Allure moyenne des répétitions à ${pace(averageS)}, dans la cible ${band(target)} : à reproduire.` : null)
     : !fadeDegraded && spread != null ? `Régularité : ${spread} s/km entre la répétition la plus rapide et la plus lente${referenceSpread != null ? `, ${spread < referenceSpread - 2 ? "mieux que" : "comme"} tes comparables (${referenceSpread} s/km)` : ""}.` : null;
 
   const format = `${work.reps} × ${repFormat(work.averageDistanceM, work.averageDurationS)}`;

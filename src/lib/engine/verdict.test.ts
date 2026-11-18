@@ -42,6 +42,21 @@ describe("verdict", () => {
   });
 });
 
+describe("régularité des répétitions", () => {
+  it("compare l'écart à l'écart des comparables, sans mélanger avec la perte premières → dernières", () => {
+    const label = classifyVerdict(metrics, deltas(-5)).signals.find((signal) => signal.key === "rep_pacing")?.label ?? "";
+    expect(label).toBe("8 s/km d'écart entre ta répétition la plus rapide et la plus lente (comparables : 7 s/km d'écart) : dans ta norme.");
+  });
+
+  it("répétitions de moins de 60 s : seule la perte en fin de série compte, jugée face à celle des comparables", () => {
+    const short: ActivityMetrics = { ...metrics, kind: "intervals_short", work: { ...metrics.work!, averageDurationS: 31, fadeSPerKm: 18, fadePct: 8.2, paceSpreadSPerKm: 26 } };
+    const signal = classifyVerdict(short, deltas(0)).signals.find((entry) => entry.key === "rep_pacing");
+    expect(signal).toMatchObject({ tone: "watch", label: "Dernières répétitions 18 s/km plus lentes que les premières : plus de perte que sur tes comparables." });
+    const calm = classifyVerdict({ ...short, work: { ...short.work!, fadeSPerKm: 7, fadePct: 3 } }, deltas(0)).signals.find((entry) => entry.key === "rep_pacing");
+    expect(calm?.label).toBe("Dernières répétitions 7 s/km plus lentes que les premières : dans ta norme.");
+  });
+});
+
 describe("lecture de la dynamique de course", () => {
   it("explique un pas plus court à cadence égale et repère une foulée stable", async () => {
     const { readDynamics } = await import("./dynamics-reading");

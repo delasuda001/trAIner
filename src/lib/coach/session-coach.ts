@@ -8,7 +8,7 @@ import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 
-export const SESSION_PROMPT_VERSION = "session-v13";
+export const SESSION_PROMPT_VERSION = "session-v14";
 
 export const sessionCoachSchema = z.object({
   verdict: z.string().min(10).max(260),
@@ -57,10 +57,10 @@ Règles :
 - Le verdict suit "verdict_calcule.niveau" et reprend "comparaison.ecart_face_aux_comparables" (écart brut puis corrigé de la FC). Cite le nombre de séances comparables et leur ancienneté ; si "comparaison_fragile" est vrai, dis-le.
 - Si "format_reconnu" commence par « non », dis simplement que la séance ne correspond pas au format reconnu, ne force aucun verdict ni comparaison, et limite-toi aux constats sûrs (durée, allure, FC, zones).
 - Pas de redite : le verdict donne l'écart principal une fois ; chaque puce apporte un fait nouveau (la première ne répète pas l'écart du verdict).
-- Un indicateur = une seule lecture, celle de "verdict_calcule" : jamais le même fait dans "keep" et dans "shouldHave".
-- Cause probable : si "hausse_de_charge" est corroborée, c'est la cause probable, avec ses raisons. Sinon, une cause seulement si un facteur du contexte la soutient (séance de qualité à moins de 72 h, signal de récupération dégradé, ressenti). S'il n'y en a aucun, n'écris pas de ligne « cause probable » du tout. Une cause retenue doit être cohérente avec "shouldHave". Un écart favorable (séance au-dessus de tes repères) n'a jamais de « cause probable » : une hausse de charge devient au plus une précaution pour les jours suivants.
+- Un indicateur = une seule lecture, celle de "verdict_calcule" : jamais le même fait dans "keep" et dans "shouldHave" ; si "aurait_du" corrige un indicateur, "keep" n'en parle pas.
+- Cause probable : si "hausse_de_charge" est corroborée, c'est la cause probable, avec ses raisons. Sinon, une cause seulement si un facteur du contexte la soutient (séance de qualité à moins de 72 h, signal de récupération dégradé, ressenti). Une séance de qualité à 72 h ou plus n'est pas une cause. S'il n'y en a aucun, n'écris pas de ligne « cause probable » du tout. Une cause retenue doit être cohérente avec "shouldHave". Un écart favorable (séance au-dessus de tes repères) n'a jamais de « cause probable » : une hausse de charge devient au plus une précaution pour les jours suivants.
 - Dynamique de course : si "dynamique_de_course" dit que rien ne ressort, n'en parle pas du tout. Sinon, compare-la à ses propres valeurs uniquement, et seulement si un écart ressort. L'allure est le produit de la cadence et de la longueur de pas : un pas plus court à cadence égale EST l'allure plus lente, ce n'est jamais une cause. Un indicateur de foulée n'explique quelque chose que s'il bouge indépendamment de l'allure (contact au sol, oscillation, ratio vertical, dérive entre début et fin).
-- Les constats et la cause probable vont dans "bullets", jamais dans "shouldHave" ni "nextTime".
+- Constats et cause probable : dans "bullets" seulement.
 - "shouldHave" et "nextTime" sont des consignes, pas des constats : verbe d'action, cible chiffrée en tête (allure, FC, récupération, placement), reprises de "consignes_moteur". N'invente aucune autre cible. Si "consignes_moteur" n'en donne pas, dis simplement qu'il n'y a pas de consigne chiffrée pour ce format.
 - "shouldHave" : une consigne principale (la première de "consignes_moteur.aurait_du"), au plus une secondaire très courte. Si "aurait_du" dit qu'il n'y a rien à corriger, écris-le en une phrase, sans inventer de reproche.
 - Ne juge pas si l'objectif est atteignable. "goalLink" : en une phrase, ce que la séance apporte ou non au levier principal de "ecart_objectif", avec son action chiffrée s'il n'est pas travaillé ; vide sans "ecart_objectif".

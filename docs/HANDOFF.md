@@ -366,10 +366,26 @@ aux autres outils ; analyses jugées ; priorités). Points 1 à 4 validés par l
   sinon « n'en parle pas » ; `reperes_athlete.seuil` avec son origine. Taille d'entrée +~40 tokens.
 - Photographie du moteur : 38 consignes sur 244 changent, aucun verdict ; toutes les empreintes changent (nouvelles
   clés), donc toutes les analyses sont « à mettre à jour ». Jeu figé du banc à refaire (`npm run bench:freeze`).
-- Non fait (hors plan validé) : la prochaine séance ne suit pas encore le levier (semaine type à 3 sorties) ; le
-  conseil du jour ne reçoit pas l'écart ; le bilan hebdomadaire a affirmé à tort que Bastien ne fait pas
-  d'endurance (règle candidate à ne pas appliquer).
-- Vérification réelle à faire sur feu vert de Bastien : 2 analyses Sonnet (≈ 20 k), par ex. 13 et 17 nov.
+- Semaine type (`WeekPlan`, `weekPlanFor` dans analytics) : si le levier principal de l'objectif le plus long est
+  structurel (fréquence, volume, sortie longue), `suggestNextSession` vise `max(sorties déclarées, une de plus que
+  l'habitude)` sorties : après une séance dure, footing Z2 de 35 min au plus tôt (sans attendre le jour habituel,
+  « si ton planning le permet »), la sortie longue en « Ensuite » ; sortie longue en km (`nextLongRunKm` : +2 km
+  quand la plus longue des 8 semaines a été tenue deux fois en 4 semaines, sinon on consolide, plafond = repère),
+  une sortie facile ≥ (km visés − 2,5) compte comme longue ; qualité dès 5 jours. Bastien au 17 nov. : footing
+  35 min jeudi ou vendredi, puis sortie longue de 13 km samedi.
+- Bilan hebdo `weekly-v2` : `habitudes_8_semaines` (courses, par type, sorties faciles par jour) et `ecart_objectif`
+  dans le dossier ; interdit d'affirmer une habitude contredite ou une règle contraire au levier.
+- `session-v14` : « keep » ne reprend pas un indicateur corrigé dans « aurait dû » ; une qualité à 72 h ou plus
+  n'est pas une cause. Répétitions < 60 s : perte en fin de série jugée face à la perte (%) des comparables
+  (`repFadePct`), « à reproduire » = l'allure moyenne si elle est dans la cible. Verdict : le signal de régularité
+  compare l'écart à l'écart des comparables (il mélangeait perte et écart), et pour < 60 s seulement la perte.
+- Vérification réelle (feu vert de Bastien) : 6 appels Sonnet le 18 nov. (≈ 71 k tokens cache compris, 8,8 k de
+  sortie, ≈ 1 000 de sortie par analyse contre 1 300–1 500 avant) sur le 13 et le 17 nov. ; analyses affichées à
+  jour en v14. Reste vu : le verdict du 13 nov. dit « En dessous » pour 4 s/km corrigés de la FC face à des
+  comparables dont l'un était couru trop fort (175 bpm) alors que la consigne dit « rien à corriger » ; le coach
+  avance encore parfois une explication non fournie (« départ trop rapide » sur le 30/30).
+- Non fait : le conseil du jour ne reçoit pas l'écart (le texte du conseil actuel est donc à régénérer : la
+  suggestion a changé).
 
 ## État
 

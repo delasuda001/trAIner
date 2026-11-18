@@ -247,7 +247,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     movingTimeS: current.movingTimeS,
     raceTargets: context.goal?.raceTargets ?? [],
     efforts: recentEfforts(history, current.localDate),
-    reference: deltas.count ? { repSpeedMps: deltas.work?.reference?.speedMps ?? null, repHeartRateBpm: deltas.work?.reference?.heartRateBpm ?? null, repSpreadSPerKm: deltas.work?.reference?.paceSpreadSPerKm ?? null, halvesFadeSPerKm: deltas.fadeSPerKm.reference } : null,
+    reference: deltas.count ? { repSpeedMps: deltas.work?.reference?.speedMps ?? null, repHeartRateBpm: deltas.work?.reference?.heartRateBpm ?? null, repSpreadSPerKm: deltas.work?.reference?.paceSpreadSPerKm ?? null, halvesFadeSPerKm: deltas.fadeSPerKm.reference, repFadePct: deltas.work?.reference?.fadePct ?? null } : null,
     context: { loadAlert: sessionCtx.loadAlertBefore, loadFigure: sessionCtx.loadBefore, qualityBefore: sessionCtx.qualityBefore14d, recoveryFlags: sessionCtx.recovery.flags, verdictLevel: classifyVerdict(current.metrics, deltas).level, qualitySpacingDays: sessionCtx.rhythm.qualitySpacingDays },
   });
   return {

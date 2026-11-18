@@ -1,6 +1,7 @@
 import { formatNumber, formatPace } from "@/lib/formatters";
 import { paceSeconds, sessionTitle, type ActivityMetrics } from "./activity-metrics";
 import { MIN_SOLID_COMPARABLES, type ComparisonDeltas } from "./comparable";
+import { SHORT_REP_S } from "./prescription";
 
 /**
  * Verdict déterministe d'une séance. C'est lui qui s'affiche quand Claude
@@ -93,12 +94,23 @@ export function buildSignals(metrics: ActivityMetrics, deltas: ComparisonDeltas)
     const reference = deltas.count > 0 ? deltas.work?.reference?.paceSpreadSPerKm ?? null : null;
     if (progressive) {
       signals.push({ key: "rep_pacing", tone: "good", weight: 1, primary: false, label: `Répétitions de plus en plus rapides : les dernières ${formatNumber(Math.abs(work.fadeSPerKm ?? 0))} s/km plus vite que les premières.` });
+    } else if (work.averageDurationS < SHORT_REP_S && work.fadeSPerKm != null) {
+      // Répétitions courtes : l'écart entre deux répétitions est du bruit GPS ; seule la perte en fin de série compte,
+      // jugée comme dans les consignes (≥ 10 s/km et 2 points de plus que la perte des comparables du même format).
+      const fade = work.fadeSPerKm;
+      const referenceFade = deltas.count > 0 ? deltas.work?.reference?.fadePct ?? null : null;
+      const worse = fade >= 10 && (referenceFade == null || work.fadePct == null || work.fadePct >= referenceFade + 2);
+      const tone: SignalTone = worse ? "watch" : fade <= 3 ? "good" : "neutral";
+      const fact = fade > 0 ? `Dernières répétitions ${formatNumber(fade)} s/km plus lentes que les premières` : "Allure tenue jusqu'aux dernières répétitions";
+      const reading = worse ? (referenceFade != null ? " : plus de perte que sur tes comparables" : " : perte en fin de série") : " : dans ta norme";
+      signals.push({ key: "rep_pacing", tone, weight: 1, primary: false, label: `${fact}${reading}.` });
     } else if (work.paceSpreadSPerKm != null) {
       const spread = work.paceSpreadSPerKm;
       const tone: SignalTone = reference != null
         ? spread <= reference - 3 ? "good" : spread > reference + 5 ? "watch" : "neutral"
         : (work.speedCvPct ?? 0) <= 3 ? "good" : (work.speedCvPct ?? 0) > 5 ? "watch" : "neutral";
-      const fact = work.fadeSPerKm != null && work.fadeSPerKm > 0 ? `Dernière répétition ${formatNumber(work.fadeSPerKm)} s/km plus lente que la première` : `${formatNumber(spread)} s/km d'écart entre ta répétition la plus rapide et la plus lente`;
+      // Comparé à l'écart des comparables : on cite le même indicateur (écart), pas la perte premières → dernières.
+      const fact = reference == null && work.fadeSPerKm != null && work.fadeSPerKm > 0 ? `Dernières répétitions ${formatNumber(work.fadeSPerKm)} s/km plus lentes que les premières` : `${formatNumber(spread)} s/km d'écart entre ta répétition la plus rapide et la plus lente`;
       const reading = reference != null
         ? ` (comparables : ${formatNumber(reference)} s/km d'écart) : ${tone === "good" ? "plus régulier que d'habitude" : tone === "watch" ? "plus irrégulier que d'habitude" : "dans ta norme"}`
         : tone === "good" ? " : allure bien tenue" : tone === "watch" ? " : allure mal tenue" : "";
