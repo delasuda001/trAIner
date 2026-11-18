@@ -384,8 +384,13 @@ aux autres outils ; analyses jugées ; priorités). Points 1 à 4 validés par l
   jour en v14. Reste vu : le verdict du 13 nov. dit « En dessous » pour 4 s/km corrigés de la FC face à des
   comparables dont l'un était couru trop fort (175 bpm) alors que la consigne dit « rien à corriger » ; le coach
   avance encore parfois une explication non fournie (« départ trop rapide » sur le 30/30).
-- Non fait : le conseil du jour ne reçoit pas l'écart (le texte du conseil actuel est donc à régénérer : la
-  suggestion a changé).
+- Ensuite (commit 25e2e6e) : verdict des fractionnés neutre jusqu'à 5 s/km d'écart corrigé de la FC
+  (`INTERVAL_GAIN_THRESHOLD_S` 6 ; le 13 nov. passe « dans tes repères ») ; `causes_possibles` dans la charge
+  utile (`possibleCauses` : hausse de charge corroborée, qualité plus proche que l'écart habituel, signaux de
+  récupération, effort perçu ≥ 8, note) et garde-fou `findUnsupportedCauses` (« parce que », « à cause de »,
+  « cause probable », « trop rapide pour tenir »… refusés quand la liste est « aucune ») : `session-v15` ;
+  `ecart_objectif` dans le conseil du jour (`outlook-v4`), régénéré le 18 nov. (1 appel, ≈ 6,7 k). Les analyses
+  du 13 et du 17 nov. sont de nouveau « à mettre à jour » (v15), à régénérer d'un clic.
 
 ## État
 
