@@ -70,7 +70,8 @@ describe("suggestNextSession", () => {
   it("donne la séance d'après, cohérente avec 2 sorties par semaine", () => {
     const result = suggestNextSession(input([run(12, "intervals_vo2", "intervals"), run(4, "endurance", "easy")]));
     expect(result.primary.type).toBe("threshold");
-    expect(result.then?.type).toBe("endurance");
+    // Décidée au jour où elle peut avoir lieu : plus de sortie longue depuis 14 jours, c'est son tour.
+    expect(result.then?.type).toBe("long");
     expect(result.then && result.then.when.date > result.when.date).toBe(true);
   });
 
@@ -222,5 +223,14 @@ describe("semaine type alignée sur le levier de l'objectif", () => {
     expect(result.primary).toMatchObject({ type: "long", title: "Sortie longue : 13 km" });
     expect(result.primary.structure).toContain("ta plus longue des 8 dernières semaines : 11 km");
     expect(result.reason).toBe("Pour le semi, ton levier principal est la fréquence : ta plus longue sortie est tenue, elle gagne 2 km (13 km), en Z2.");
+  });
+
+  it("2 sorties par semaine, qualité faite la veille : la sortie longue d'abord, puis la qualité (pas deux faciles de suite)", () => {
+    const two = { ...plan, runsPerWeek: 2, race: "10 km" };
+    const runs = [withDistance(run(15, "endurance", "easy", 70), 11), run(8, "endurance", "easy", 45), run(1, "intervals_tempo", "intervals", 35)];
+    const result = suggestNextSession(input(runs, { weekPlan: two }));
+    expect(result.primary).toMatchObject({ type: "long", title: "Sortie longue : 13 km" });
+    expect(result.reason).toContain("avec 2 sorties par semaine : une de qualité, une longue");
+    expect(["threshold", "vo2max"]).toContain(result.then?.type);
   });
 });

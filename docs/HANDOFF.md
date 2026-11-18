@@ -459,6 +459,16 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
   - Bastien (photographie) : 27 endurances reçoivent la consigne d'intensité (3 depuis juin 2026), 7 verdicts passent
     de « au-dessus » à « dans la ligne » (tous avant 2026), 2 tempos ont la fourchette resserrée (159–168 au lieu de
     149–166). Suggestion du jour inchangée.
+- Retours de l'invitée relayés par Bastien (même soir), corrigés :
+  - Cumuls amputés : les courses dont les séries ne sont pas encore chargées (invités, au-delà de 12 semaines,
+    `detail_status = pending`) étaient exclues de `loadContext().runs`, donc des km de l'année (accueil), du rythme,
+    des habitudes et du calendrier. Elles ont maintenant des métriques tirées du résumé seul (comme une séance
+    « failed ») ; le passage à « ready » les efface et les recalcule avec les séries. Bastien : toutes ses courses
+    sont « ready », rien ne change.
+  - Séance d'après (`suggestNextSession`) : elle était décidée au jour de la prochaine séance et non au jour où elle
+    peut avoir lieu, ce qui écartait une qualité due. Décidée maintenant au plus tôt après la fenêtre et l'écart du
+    rythme (`decideOn`). Avec une semaine type à 2 sorties : après une qualité, la sortie suivante est la longue si
+    elle est due (sinon la longue ne venait jamais), puis la qualité. Bastien : suggestion et « ensuite » identiques.
 - Reste à vérifier : écart « à FC égale » en endurance face à des comparables à FC très dispersées (`comparable.ts`).
 
 ## État

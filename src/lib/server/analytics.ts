@@ -70,7 +70,9 @@ function metricsFor(row: ActivityRow, profile: Profile, repo: ReturnType<typeof 
     const cached = JSON.parse(row.metricsJson) as ActivityMetrics;
     if (cached.restingHeartRateUsed === profile.restingHeartRateBpm) return cached;
   }
-  if (row.detailStatus !== "ready" && row.detailStatus !== "failed") return null;
+  // Séries pas encore chargées (invités : au-delà de 12 semaines, chargées à l'ouverture) : métriques du résumé seul,
+  // comme une séance sans détail. Sinon ces courses manquaient à tous les cumuls (km, sorties, rythme). Le passage
+  // à « ready » efface ces métriques, recalculées alors avec les séries.
   const detail = row.detailStatus === "ready" ? repo.getDetail(row.id) : null;
   const metrics = computeActivityMetrics({
     streams: detail?.streams ?? null,

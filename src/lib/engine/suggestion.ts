@@ -378,6 +378,11 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
     primary = footingSession(input);
     skipHabit = true;
     reason = `Pour le ${plan.race}, ton levier principal est ${plan.lever} : ${plan.runsPerWeek} sorties par semaine. Après ${lowerFirst(lastHard.title ?? SESSION_KIND_LABELS[lastHard.kind])}, un footing court et facile ajoute une sortie sans fatiguer, si ton planning le permet ; la sortie longue suit.`;
+  } else if (lastHard && lastRun === lastHard && daysBetween(lastHard.localDate, today) < qualitySpacing && plan && plannedRunsPerWeek <= 2 && (daysSinceLastLong == null || daysSinceLastLong >= longEveryDays)) {
+    // Deux sorties par semaine : une de qualité, une longue. La qualité est faite : la facile qui suit est la longue,
+    // sinon la sortie longue ne viendrait jamais (la qualité repasse devant à chaque fois).
+    primary = longSession();
+    reason = `Pour le ${plan.race}, avec ${plannedRunsPerWeek} sorties par semaine : une de qualité, une longue. La qualité est faite (${lowerFirst(lastHard.title ?? SESSION_KIND_LABELS[lastHard.kind])}) : c'est le tour de la sortie longue (${plan.longRunKm} km), en Z2.`;
   } else if (lastHard && lastRun === lastHard && daysBetween(lastHard.localDate, today) < qualitySpacing) {
     primary = enduranceSession(input, easyDuration);
     reason = `Ta dernière course (${lowerFirst(lastHard.title ?? SESSION_KIND_LABELS[lastHard.kind])}) était exigeante : la suivante reste facile pour que le travail paie.`;
@@ -471,10 +476,14 @@ export function suggestNextSession(input: SuggestionInput): Suggestion {
     const shape = kindOf(primary.type);
     const simulatedRun: SuggestionRun = { localDate: core.when, kind: shape.kind, family: shape.family, movingTimeS: primary.durationMin * 60, aerobicTrainingEffect: shape.hard ? 4.2 : 2.8, distanceM: primary.type === "long" && input.weekPlan ? input.weekPlan.longRunKm * 1000 : null };
     const neutralRecovery: RecoverySignals = { ...recovery, flags: [], state: "unknown" };
-    const next = decide({ ...input, today: core.when, runs: [...input.runs, simulatedRun], load: { ...input.load, ratio: null }, loadAlert: null, recovery: neutralRecovery }, input.today);
-    // Rythme visé : pas plus de N séances par semaine.
-    const spacing = Math.max(1, Math.round(7 / next.facts.plannedRunsPerWeek) - 1);
+    // Rythme visé : pas plus de N séances par semaine. La séance d'après se décide au jour où elle peut avoir lieu
+    // (au plus tôt après la fenêtre et l'écart du rythme), pas au jour de la prochaine : sinon une qualité due ce
+    // jour-là était écartée comme trop proche de la précédente.
+    const planned = core.facts.plannedRunsPerWeek;
+    const spacing = Math.max(1, Math.round(7 / planned) - 1);
     const windowEnd = core.dates.at(-1) ?? core.when;
+    const decideOn = [addDays(windowEnd, 1), addDays(core.when, spacing)].sort().at(-1) as string;
+    const next = decide({ ...input, today: decideOn, runs: [...input.runs, simulatedRun], load: { ...input.load, ratio: null }, loadAlert: null, recovery: neutralRecovery }, input.today);
     let date = next.when > windowEnd ? next.when : addDays(windowEnd, 1);
     if (daysBetween(core.when, date) < spacing) date = snapToPreferredDay(addDays(core.when, spacing), input.goal?.preferredDays ?? []);
     if (date <= windowEnd) date = addDays(windowEnd, 1);
