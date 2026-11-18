@@ -66,3 +66,59 @@ export function goalForCoach(goal: Goal | null, today: string): Record<string, s
     ...(goal.raceTargets.length ? { objectifs_chiffres: goal.raceTargets.map((target) => `${raceLabel(target.distanceKm)} en ${formatClock(target.targetTimeS)} (${formatPace((target.distanceKm * 1000) / target.targetTimeS)})`).join(", ") } : {}),
   };
 }
+
+const SEMI_KM = 21.0975;
+const MARATHON_KM = 42.195;
+/** Allures plausibles (s/km) pour accepter un objectif lu dans le titre. */
+const PLAUSIBLE_PACE_S = { min: 150, max: 720 } as const;
+
+function parseDistanceKm(text: string): { km: number; rest: string } | null {
+  const semi = /semi(?:[\s-]*marathon)?/.exec(text);
+  if (semi) return { km: SEMI_KM, rest: text.replace(semi[0], " ") };
+  const marathon = /marathon/.exec(text);
+  if (marathon) return { km: MARATHON_KM, rest: text.replace(marathon[0], " ") };
+  const km = /(\d+(?:[.,]\d+)?)\s*(?:km|k)(?![a-z])/.exec(text);
+  if (!km) return null;
+  return { km: Number(km[1].replace(",", ".")), rest: text.replace(km[0], " ") };
+}
+
+function parseTimeS(text: string): number | null {
+  const hms = /(\d{1,2}):(\d{2}):(\d{2})/.exec(text);
+  if (hms) return Number(hms[1]) * 3600 + Number(hms[2]) * 60 + Number(hms[3]);
+  const hours = /(\d{1,2})\s*h\s*(\d{2})?(?!\d)/.exec(text);
+  if (hours) return Number(hours[1]) * 3600 + Number(hours[2] ?? 0) * 60;
+  const ms = /(\d{1,3}):(\d{2})(?!\d)/.exec(text);
+  if (ms) return Number(ms[1]) * 60 + Number(ms[2]);
+  const minutes = /(\d{1,3})\s*(?:min(?:utes?)?|mn|')(?![a-z])/.exec(text);
+  if (minutes) return Number(minutes[1]) * 60;
+  return null;
+}
+
+/**
+ * Objectif chiffré lu dans le titre libre (« 10 km sous 50 min », « semi en 1h45 »,
+ * « 5 km en 24:30 ») quand la distance et le temps n'ont pas été saisis à part.
+ * Null si l'un manque ou si l'allure obtenue n'est pas plausible.
+ */
+export function inferRaceTarget(title: string): { distanceKm: number; targetTimeS: number } | null {
+  const text = title.toLowerCase().replace(/ /g, " ");
+  const distance = parseDistanceKm(text);
+  if (!distance || distance.km <= 0 || distance.km > 250) return null;
+  const timeS = parseTimeS(distance.rest);
+  if (!timeS) return null;
+  const paceS = timeS / distance.km;
+  if (paceS < PLAUSIBLE_PACE_S.min || paceS > PLAUSIBLE_PACE_S.max) return null;
+  return { distanceKm: distance.km, targetTimeS: timeS };
+}
+
+/**
+ * Objectif utilisé par le moteur : sans objectif chiffré saisi, on reprend la
+ * distance et le temps saisis à part, sinon ceux lus dans le titre. Rien n'est
+ * écrit en base ; un objectif déjà chiffré est rendu tel quel.
+ */
+export function withInferredTarget(goal: Goal): Goal {
+  if (goal.raceTargets.length) return goal;
+  if (goal.distanceKm && goal.targetTimeS) return { ...goal, raceTargets: [{ distanceKm: goal.distanceKm, targetTimeS: goal.targetTimeS }] };
+  if (goal.distanceKm || goal.targetTimeS) return goal;
+  const inferred = inferRaceTarget(goal.title);
+  return inferred ? { ...goal, ...inferred, raceTargets: [inferred] } : goal;
+}

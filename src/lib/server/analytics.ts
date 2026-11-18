@@ -23,7 +23,7 @@ import { fallbackZones, zonesFromHistory, type ZonesSource } from "@/lib/engine/
 import { activeMember } from "@/lib/profiles/context";
 import { registerForRole, voiceDeep, type Register } from "@/lib/register";
 import type { ActivityStreams, HeartRateZones, Lap, WellnessDay } from "@/lib/source/types";
-import { EMPTY_GOAL, GOAL_KEY, goalSchema, targetPaceMps, type Goal } from "@/lib/goal/goal";
+import { EMPTY_GOAL, GOAL_KEY, goalSchema, targetPaceMps, withInferredTarget, type Goal } from "@/lib/goal/goal";
 import { athleteProfileSchema, PROFILE_KEY, SYNC_STATE_KEY, syncStateSchema, type SyncState } from "@/lib/sync/sync";
 
 /** `lactateThresholdSpeedMps` : seuil retenu (observé en séance s'il est nettement plus rapide que la montre, sinon montre) ; détail dans `threshold`. */
@@ -56,7 +56,8 @@ export function loadProfile(wellness: WellnessDay[], runs: ActivityRow[]): Profi
 
 export function readGoal(): Goal | null {
   const goal = createAppStateRepository().get(GOAL_KEY, goalSchema);
-  return goal && (goal.title || goal.eventDate || goal.preferredDays.length || goal.raceTargets.length || goal.runsPerWeek !== EMPTY_GOAL.runsPerWeek) ? goal : null;
+  // Objectif chiffré lu dans le titre (« 10 km sous 50 min ») quand rien n'a été saisi à part.
+  return goal && (goal.title || goal.eventDate || goal.preferredDays.length || goal.raceTargets.length || goal.runsPerWeek !== EMPTY_GOAL.runsPerWeek) ? withInferredTarget(goal) : null;
 }
 
 export function readSyncState(): SyncState | null {

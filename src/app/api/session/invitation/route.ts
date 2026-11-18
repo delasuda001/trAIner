@@ -7,11 +7,21 @@ export const dynamic = "force-dynamic";
 
 /**
  * Lien d'invitation personnel : `/api/session/invitation?t=…`. Usage unique,
- * valable 7 jours ; ouvre la session sur l'appareil puis envoie vers l'accueil.
+ * valable 7 jours. Le GET ne consomme rien : il renvoie vers une page de
+ * confirmation (les robots d'aperçu des messageries ouvrent le lien avant la
+ * personne et prenaient sa place). Le POST du bouton consomme le lien, ouvre la
+ * session sur l'appareil puis envoie vers l'accueil.
  */
 export function GET(request: Request) {
-  const url = new URL(request.url);
-  const token = url.searchParams.get("t");
+  const token = new URL(request.url).searchParams.get("t");
+  if (!looksLikeToken(token)) return relativeRedirect("/connexion?invitation=invalide");
+  return relativeRedirect(`/connexion/invitation?t=${encodeURIComponent(token)}`);
+}
+
+export async function POST(request: Request) {
+  const form = await request.formData().catch(() => null);
+  const raw = form?.get("t");
+  const token = typeof raw === "string" ? raw : null;
   const address = clientAddress(request.headers);
   const device = deviceLabel(request.headers.get("user-agent"));
   const registry = getRegistry();

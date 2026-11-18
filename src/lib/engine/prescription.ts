@@ -442,10 +442,14 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
   if (tooSlow && !fadeDegraded && !placement) execution.push(`Allure : vise ${band(target)} dès la 1re répétition ; ${pace(averageS)}, c'est sous l'intensité du format.`);
   const shouldHave = prioritize(placement, execution);
 
-  const onTarget = hasPace && !tooFast && !tooSlow && !fadeDegraded && !hrCost;
-  const strictlyOnTarget = onTarget && averageS >= fast && averageS <= slow;
+  // Sans allure cible (ni seuil ni objectif chiffré) : la cible est la FC des répétitions.
+  const hrOnTarget = !hasPace && repHr != null && repHr >= target.heartRateLow && repHr <= target.heartRateHigh;
+  const onTarget = (hasPace || hrOnTarget) && !tooFast && !tooSlow && !fadeDegraded && !hrCost;
+  const strictlyOnTarget = onTarget && (hrOnTarget || (averageS >= fast && averageS <= slow));
+  // Repère d'allure quand la cible n'est qu'une FC : l'allure de cette séance, tenue dans la cible.
+  const paceHint = hasPace ? "" : ` (repère d'allure : ${pace(averageS)}, celle de cette séance)`;
   const keep = strictlyOnTarget
-    ? `Répétitions à ${pace(averageS)}${shortReps ? " en moyenne" : ""} dans la cible ${band(target)}${spread != null && !shortReps ? `, ${spread} s/km entre la plus rapide et la plus lente` : ""} : à reproduire.`
+    ? `Répétitions à ${pace(averageS)}${shortReps ? " en moyenne" : ""}${hrOnTarget ? ` et ${repHr} bpm,` : ""} dans la cible ${band(target)}${spread != null && !shortReps ? `, ${spread} s/km entre la plus rapide et la plus lente` : ""} : à reproduire.`
     : shortReps ? (hasPace && averageS >= fast && averageS <= slow ? `Allure moyenne des répétitions à ${pace(averageS)}, dans la cible ${band(target)} : à reproduire.` : null)
     : !fadeDegraded && spread != null ? `Régularité : ${spread} s/km entre la répétition la plus rapide et la plus lente${referenceSpread != null ? `, ${spread < referenceSpread - 2 ? "mieux que" : "comme"} tes comparables (${referenceSpread} s/km)` : ""}.` : null;
 
@@ -461,15 +465,16 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
   } else if (!strictlyOnTarget && shortReps) {
     cue = `Même format ${format} à ${band(target)} en moyenne, récupération ${recoveryText} ; sur moins de ${SHORT_REP_S} s, l'allure d'une répétition au GPS n'est pas fiable : règle-toi sur l'effort et la moyenne.`;
   } else if (!strictlyOnTarget) {
-    cue = `Même format ${format} à ${band(target)}, récupération ${recoveryText} ; 1re répétition à ${hasPace ? pace(slow) : `${target.heartRateLow} bpm`}, pas plus vite.`;
+    // Sans allure cible, pas de consigne de départ en bpm (la FC monte pendant la répétition).
+    cue = hasPace ? `Même format ${format} à ${band(target)}, récupération ${recoveryText} ; 1re répétition à ${pace(slow)}, pas plus vite.` : `Même format ${format} à ${band(target)}, récupération ${recoveryText}.`;
   } else if (plan.goal && plan.goal.status !== "out_of_reach" && fast > plan.goal.goalPaceS) {
     nextTarget = { ...target, paceFastS: fast - 3, paceSlowS: slow - 3 };
     cue = `Même format ${format}, 3 s/km plus vite : ${band(nextTarget)}, récupération ${recoveryText}.`;
   } else if (work.reps < plan.maxReps) {
     nextFormat = format.replace(/^\d+/, String(work.reps + 1));
-    cue = `Une répétition de plus : ${nextFormat} à ${band(target)}, récupération ${recoveryText}.`;
+    cue = `Une répétition de plus : ${nextFormat} à ${band(target)}${paceHint}, récupération ${recoveryText}.`;
   } else {
-    cue = `Même format ${format} à ${band(target)} : le volume est au maximum utile, garde la qualité.`;
+    cue = `Même format ${format} à ${band(target)}${paceHint} : le volume est au maximum utile, garde la qualité.`;
   }
   return { status: "ok", target, goal: plan.goal, shouldHave, keep, next: { format: nextFormat, target: nextTarget, recoveryS: plan.recoveryS, cue } };
 }

@@ -216,7 +216,7 @@ export function buildSessionPayload(input: {
     },
     structure: work
       ? {
-          repetitions: `${work.reps} répétitions de ${formatDuration(work.averageDurationS)}${work.averageDistanceM ? ` (${formatDistance(work.averageDistanceM, 2)})` : ""}`,
+          repetitions: `${work.reps} répétitions de ${work.averageDurationS < 600 ? formatClock(work.averageDurationS) : formatDuration(work.averageDurationS)}${work.averageDistanceM ? ` (${formatDistance(work.averageDistanceM, 2)})` : ""}`,
           allure_repetitions: formatPace(work.averageSpeedMps),
           fc_moyenne_repetitions: bpm(work.averageHeartRateBpm),
           fc_max_moyenne_repetitions: bpm(work.peakHeartRateBpm),
@@ -224,7 +224,8 @@ export function buildSessionPayload(input: {
             ? { precision: `répétitions de moins de ${SHORT_REP_S} s : l'allure de chacune est imprécise au GPS, seules la moyenne, la FC et la tenue en fin de série comptent` }
             : { ecart_entre_rep_la_plus_rapide_et_la_plus_lente: work.paceSpreadSPerKm == null ? "—" : `${work.paceSpreadSPerKm} s/km` }),
           evolution_premieres_vs_dernieres: work.fadeSPerKm == null ? "—" : work.fadeSPerKm === 0 ? "même allure" : `dernières ${Math.abs(work.fadeSPerKm)} s/km plus ${work.fadeSPerKm > 0 ? "lentes" : "rapides"}`,
-          recuperation_moyenne: work.averageRecoveryS ? formatDuration(work.averageRecoveryS) : "—",
+          // Chrono (1:30) et non « 1 min » : formatDuration tronque les secondes.
+          recuperation_moyenne: work.averageRecoveryS ? formatClock(work.averageRecoveryS) : "—",
           detail_repetitions: shortReps ? "—" : work.repsDetail.slice(0, 8).map((rep, index) => `#${index + 1} ${formatClock(rep.durationS)}${rep.distanceM ? ` ${formatDistance(rep.distanceM, 2)}` : ""} à ${formatPace(rep.speedMps)}, FC ${bpm(rep.heartRateBpm)}, max ${bpm(rep.maxHeartRateBpm)}${rep.recoveryAfterS ? `, récup ${formatClock(rep.recoveryAfterS)}` : ""}`),
         }
       : metrics.halves

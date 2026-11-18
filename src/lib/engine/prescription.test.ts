@@ -226,3 +226,30 @@ describe("placement adapté au rythme du coureur", () => {
   });
 });
 
+
+describe("prescribe, fractionné sans allure cible (ni seuil ni objectif chiffré)", () => {
+  // Zones « % FC max » d'une montre sans seuil, 3 × 1 km tempo en Z3 progressif.
+  const hrMaxZones: HeartRateZones = { floors: [120, 134, 148, 161, 176], maxHeartRateBpm: 190, lactateThresholdHeartRateBpm: null, method: "HR_MAX" };
+  const tempoRep = (paceS: number, recoveryAfterS = 90) => ({ startOffsetS: 0, durationS: 309, distanceM: 1010, speedMps: 1000 / paceS, heartRateBpm: 158, maxHeartRateBpm: 167, recoveryAfterS });
+  const tempo: ActivityMetrics = {
+    ...base, kind: "intervals_tempo",
+    work: { reps: 3, averageDurationS: 309, averageDistanceM: 1010, averageSpeedMps: 1000 / 317, averageHeartRateBpm: 157.6, peakHeartRateBpm: 173, speedCvPct: 0.8, fadePct: -2, paceSpreadSPerKm: 6, fadeSPerKm: -6, averageRecoveryS: 90, repsDetail: [tempoRep(321), tempoRep(317), tempoRep(315)] },
+  };
+  const pacelessInput = (metrics: ActivityMetrics) => input(metrics, { zones: hrMaxZones, lactateThresholdSpeedMps: null, raceTargets: [], efforts: [], reference: { repSpeedMps: 1000 / 324, repHeartRateBpm: 162, repSpreadSPerKm: 4, halvesFadeSPerKm: null }, context: null });
+
+  it("FC des répétitions dans la cible : séance tenue, une répétition de plus avec son allure du jour comme repère", () => {
+    const result = prescribe(pacelessInput(tempo));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.target).toMatchObject({ paceFastS: null, heartRateLow: 148, heartRateHigh: 175 });
+    expect(result.shouldHave).toEqual([]);
+    expect(result.keep).toBe("Répétitions à 5:17/km et 158 bpm, dans la cible 148–175 bpm, 6 s/km entre la plus rapide et la plus lente : à reproduire.");
+    expect(result.next.cue).toBe("Une répétition de plus : 4 × 1 km à 148–175 bpm (repère d'allure : 5:17/km, celle de cette séance), récupération 1:00.");
+    expect(result.next.cue).not.toMatch(/1re répétition à \d+ bpm/);
+  });
+
+  it("FC hors cible : même format, sans consigne de départ exprimée en bpm", () => {
+    const result = prescribe(pacelessInput({ ...tempo, work: { ...(tempo.work as Work), averageHeartRateBpm: 140 } }));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.next.cue).toBe("Même format 3 × 1 km à 148–175 bpm, récupération 1:00.");
+  });
+});

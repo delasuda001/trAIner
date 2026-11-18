@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 18 novembre 2026 (après-midi, FC de référence par profil sur la carte aérobie).
+Dernière mise à jour : 18 novembre 2026 (soir, revue des premières analyses d'une invitée, lien d'invitation confirmé).
 
 ## En deux phrases
 
@@ -141,7 +141,8 @@ abonnement Claude le temps du test, et récolter leurs retours.
   (`profiles/request.ts`) ; `src/proxy.ts` renvoie vers /connexion sans cookie. Tout accès en base doit
   avoir lieu dans le rendu de la page (les composants ne lisent pas la base). Scripts (banc, gel) :
   `runAs(adminMember(), …)`.
-- Connexion : lien d'invitation personnel à usage unique (7 jours, `/api/session/invitation?t=…`) ou
+- Connexion : lien d'invitation personnel à usage unique (7 jours, `/api/session/invitation?t=…` ; depuis le 18 nov. le GET
+  renvoie vers `/connexion/invitation`, et seul le bouton (POST) consomme le lien) ou
   code de secours long généré (20 caractères). Page /connexion sans aucun nom de profil. Sessions par
   appareil (cookie `sillage_session` 180 j, httpOnly, Secure en HTTPS ; seule l'empreinte SHA-256 est
   stockée), révocables. Freinage : 5 échecs/adresse → 15 min, 20 échecs/h → tout bloqué 30 min.
@@ -431,6 +432,27 @@ aux autres outils ; analyses jugées ; priorités). Points 1 à 4 validés par l
   `vouvoyer` conjugue « tu cours / courais / tiens / fais / as / es » (« vous cours » corrigé).
   La FC de référence entre dans la charge utile du conseil du jour : il passe « à mettre à jour »,
   aucun appel fait.
+
+## Revue des premières analyses d'une invitée (18 nov., soir)
+
+Aucun détail de ses données ici (engagement de confidentialité). Défauts génériques trouvés et corrigés sans appel à Claude :
+
+- Objectif saisi en texte seul (ex. « 10 km sous 50 min ») : `inferRaceTarget` / `withInferredTarget` (`goal/goal.ts`),
+  appliqué dans `readGoal` (rien n'est écrit en base). Distance et temps saisis à part, sinon lus dans le titre
+  (km, semi, marathon ; « 50 min », « 50:00 », « 1h45 », « 49' » ; allure plausible 2:30–12:00/km). Sans cela,
+  ni écart à l'objectif, ni semaine type, ni `goalLink`.
+- Fractionné sans allure cible (montre sans seuil, pas d'objectif à cette distance) : plus de consigne « 1re répétition
+  à N bpm, pas plus vite » ; FC des répétitions dans la cible = séance tenue (`hrOnTarget`), progression « une
+  répétition de plus » avec l'allure du jour comme repère.
+- Charge utile séance : `recuperation_moyenne` et durée des répétitions en chrono (1:30) ; `formatDuration` tronquait
+  à « 1 min ». Bastien : aucune consigne ni verdict changé sur 244 séances, 25 empreintes de fractionnés changent.
+- Lien d'invitation : consommé par un robot d'aperçu de messagerie (navigateur inconnu, jamais revu) ; l'invitée a dû
+  passer par son code. Le GET ne consomme plus rien. La session du robot (« appareil, navigateur ») est à révoquer par
+  Bastien dans Paramètres.
+- À arbitrer : endurance « rien à corriger » avec une part notable au-dessus de la Z2 (le moteur ne regarde que la FC
+  moyenne) ; libellé « allure semi du moment » pour un tempo quand l'objectif est un 10 km ; fourchette FC tempo
+  Z3–Z4 très large en zones % FC max ; écart « à FC égale » en endurance face à des comparables à FC très
+  dispersées, à vérifier dans `comparable.ts`.
 
 ## État
 
