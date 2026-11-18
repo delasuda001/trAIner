@@ -54,3 +54,12 @@ export function getDb(): Handle {
 }
 
 export type AppDatabase = Handle;
+
+/** Ferme la base d'un profil (avant de la remplacer : réinitialisation du profil de test). */
+export function closeDbFor(member: Pick<Member, "id" | "role">): void {
+  const path = databasePathFor(member);
+  const handle = globalForDatabase.sillageDatabases?.get(path);
+  if (!handle) return;
+  handle.$client.close();
+  globalForDatabase.sillageDatabases?.delete(path);
+}

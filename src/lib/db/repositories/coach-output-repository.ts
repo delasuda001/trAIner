@@ -17,6 +17,10 @@ export function createCoachOutputRepository(database: AppDatabase = getDb()) {
     recent(kind: string, limit: number): CoachOutputRow[] {
       return database.select().from(coachOutputs).where(eq(coachOutputs.kind, kind)).orderBy(desc(coachOutputs.createdAt)).limit(limit).all();
     },
+    /** Réétiquette une sortie (reprise des analyses de Bastien par son profil de test). */
+    setInputHash(id: string, inputHash: string): void {
+      database.update(coachOutputs).set({ inputHash }).where(eq(coachOutputs.id, id)).run();
+    },
     save(input: { kind: string; subject: string; inputHash: string; model: string; promptVersion: string; output: unknown }): CoachOutputRow {
       const row = { id: randomUUID(), kind: input.kind, subject: input.subject, inputHash: input.inputHash, model: input.model, promptVersion: input.promptVersion, outputJson: JSON.stringify(input.output), createdAt: new Date().toISOString() };
       database.insert(coachOutputs).values(row).run();

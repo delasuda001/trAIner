@@ -68,6 +68,8 @@ const MIGRATIONS: string[] = [
     device TEXT NOT NULL
   );
   CREATE INDEX login_events_at_idx ON login_events(at);`,
+  // Profil invité de test de Bastien : copie de sa base, réinitialisable (`test_of` = profil copié).
+  `ALTER TABLE profiles ADD COLUMN test_of TEXT;`,
 ];
 
 export const ADMIN_ID = "bastien";
@@ -86,6 +88,7 @@ const profileRowSchema = z.object({
   last_login_at: z.string().nullable(),
   onboarded_at: z.string().nullable(),
   disabled_at: z.string().nullable(),
+  test_of: z.string().nullable().default(null),
 });
 type ProfileRow = z.infer<typeof profileRowSchema>;
 
@@ -102,6 +105,7 @@ function toRecord(row: ProfileRow): MemberRecord {
     lastLoginAt: row.last_login_at,
     onboardedAt: row.onboarded_at,
     disabledAt: row.disabled_at,
+    testOf: row.test_of,
   };
 }
 
@@ -209,6 +213,29 @@ export function createRegistry(connection: Database.Database, clock: () => Date 
         .prepare("INSERT INTO profiles (id, name, role, code_hash, code_salt, garmin_env_var, daily_token_cap, weekly_token_cap, created_at) VALUES (?, ?, 'guest', ?, ?, ?, ?, ?, ?)")
         .run(input.id, input.name, hash, salt, garminEnvVarFor(input.id, "guest"), input.dailyTokenCap === undefined ? DEFAULT_GUEST_DAILY_CAP : input.dailyTokenCap, input.weeklyTokenCap === undefined ? DEFAULT_GUEST_WEEKLY_CAP : input.weeklyTokenCap, nowIso());
       return toRecord(getRow(input.id) as ProfileRow);
+    },
+
+    /**
+     * Profil invité de test : vu comme un invité (vouvoyé, plafonds, accueil), mais sur la
+     * clé Garmin du profil copié et sans code (entrée par lien d'invitation).
+     */
+    createTestGuest(input: { id: string; name: string; testOf: string }): MemberRecord {
+      if (!MEMBER_ID_PATTERN.test(input.id)) throw new Error("Identifiant de profil invalide");
+      if (getRow(input.id)) throw new Error("Ce profil existe déjà");
+      const source = getRow(input.testOf);
+      if (!source) throw new Error("Profil copié introuvable");
+      connection
+        .prepare("INSERT INTO profiles (id, name, role, garmin_env_var, daily_token_cap, weekly_token_cap, created_at, test_of) VALUES (?, ?, 'guest', ?, ?, ?, ?, ?)")
+        .run(input.id, input.name, source.garmin_env_var, DEFAULT_GUEST_DAILY_CAP, DEFAULT_GUEST_WEEKLY_CAP, nowIso(), input.testOf);
+      return toRecord(getRow(input.id) as ProfileRow);
+    },
+
+    /** Profil de test remis comme neuf : jamais connecté, accueil à revoir, appareils et invitations révoqués. */
+    resetFirstVisit(id: string): void {
+      const row = getRow(id);
+      if (!row?.test_of) throw new Error("Seul un profil de test se réinitialise");
+      connection.prepare("UPDATE profiles SET onboarded_at = NULL, last_login_at = NULL, disabled_at = NULL WHERE id = ?").run(id);
+      registry.revokeAllSessions(id);
     },
 
     /** Nouveau code de secours (les appareils déjà connectés le restent ; les révoquer à part). */

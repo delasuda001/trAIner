@@ -17,7 +17,7 @@ import { systemPromptFor } from "@/lib/coach/athlete";
 import { fingerprintIsCurrent, hashPayload, storedFingerprint } from "@/lib/coach/fingerprint";
 import { checkQuota } from "./quota";
 import { recordFailure, recordUsage } from "./usage";
-import { analyzeSession, loadContext, type Dashboard, type SessionAnalysis } from "./analytics";
+import { analyzeSession, getDashboard, loadContext, type Dashboard, type SessionAnalysis } from "./analytics";
 
 export type CoachResult<T> =
   | { status: "ready"; output: T; model: string; createdAt: string }
@@ -179,6 +179,47 @@ export function readOutlookCoach(dashboard: Dashboard): CoachResult<OutlookCoach
 
 export function generateOutlookCoach(dashboard: Dashboard): Promise<CoachResult<OutlookCoachOutput>> {
   return generate(outlookJob(dashboard));
+}
+
+/** Sorties du coach reprises par un profil de test : séances (identifiants) et conseil du jour. */
+export type AdoptableOutputs = { sessions: string[]; outlook: boolean };
+
+/**
+ * Sorties à jour du profil actif (Bastien) pour ses `limit` dernières séances et le conseil du
+ * jour : lecture seule, aucun appel.
+ */
+export function currentCoachOutputs(limit: number): AdoptableOutputs {
+  const context = loadContext();
+  const sessions: string[] = [];
+  for (const run of context.runs.slice(-limit)) {
+    const analysis = analyzeSession(run.id, context);
+    if (analysis && cached(sessionJob(analysis)).status === "ready") sessions.push(run.id);
+  }
+  const outlook = context.runs.length > 0 && cached(outlookJob(getDashboard())).status === "ready";
+  return { sessions, outlook };
+}
+
+/**
+ * Profil de test (base copiée de Bastien) : les sorties à jour chez Bastien sont réétiquetées
+ * avec l'empreinte de la charge utile du profil actif (vouvoyée), pour être reprises sans appel.
+ * Le texte reste celui écrit pour Bastien. Renvoie le nombre de sorties reprises.
+ */
+export function adoptCoachOutputs(outputs: AdoptableOutputs): number {
+  const repository = createCoachOutputRepository();
+  const context = loadContext();
+  let adopted = 0;
+  const adopt = (job: Job<unknown>) => {
+    const latest = repository.latest(job.kind, job.subject);
+    if (!latest) return;
+    repository.setInputHash(latest.id, storedHash(job));
+    adopted += 1;
+  };
+  for (const id of outputs.sessions) {
+    const analysis = analyzeSession(id, context);
+    if (analysis) adopt(sessionJob(analysis) as Job<unknown>);
+  }
+  if (outputs.outlook) adopt(outlookJob(getDashboard()) as Job<unknown>);
+  return adopted;
 }
 
 function weeklyJob(weekStart: string, zones: Parameters<typeof zoneOf>[1]): Job<WeeklyReview> {

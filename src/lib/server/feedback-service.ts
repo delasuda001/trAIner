@@ -13,7 +13,9 @@ import { recordFailure, recordUsage } from "./usage";
 export function feedbackOverview(filter: { profileId?: string } = {}) {
   const registry = getRegistry();
   const names = new Map(registry.list().map((record) => [record.id, record.name]));
-  const records = registry.listFeedback(filter);
+  // Sans filtre (vue « Tous », export, synthèse), les retours du profil de test de Bastien sont exclus.
+  const testIds = new Set(registry.list().filter((record) => record.testOf != null).map((record) => record.id));
+  const records = registry.listFeedback(filter).filter((record) => filter.profileId != null || !testIds.has(record.profileId));
   const digest = digestFeedback(records);
   return { records, digest, names, markdown: digestMarkdown(digest, names, new Date().toISOString()) };
 }

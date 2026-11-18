@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
 import { activeMember } from "@/lib/profiles/context";
+import { simulatedCoachForActive } from "@/lib/profiles/test-profile";
 import { createClaudeAgentClient } from "./claude-agent-client";
 import { createFakeClient } from "./fake-client";
 import type { LlmClient } from "./llm";
@@ -30,11 +31,13 @@ const clients = new Map<string, LlmClient>();
  */
 export function getLlmClient(): LlmClient {
   const model = currentCoachModel();
-  let client = clients.get(model);
+  // Serveur d'essai, ou profil de test de Bastien en coach simulé : aucune requête à Claude.
+  const simulated = process.env.SILLAGE_FAKE_COACH === "1" || simulatedCoachForActive();
+  const key = simulated ? `simulé:${model}` : model;
+  let client = clients.get(key);
   if (!client) {
-    // Serveur d'essai uniquement : aucune requête à Claude.
-    client = process.env.SILLAGE_FAKE_COACH === "1" ? createFakeClient(model) : createClaudeAgentClient(model);
-    clients.set(model, client);
+    client = simulated ? createFakeClient(model) : createClaudeAgentClient(model);
+    clients.set(key, client);
   }
   return client;
 }

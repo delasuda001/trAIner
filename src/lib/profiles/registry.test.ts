@@ -106,4 +106,20 @@ describe("identifiants", () => {
     expect(memberIdFromName("É")).toBe("profile");
     expect(garminEnvVarFor("frere", "guest")).toBe("GARMIN_API_KEY_FRERE");
   });
+
+  it("crée un profil de test sur la clé Garmin du profil copié, sans code, et le remet comme neuf", () => {
+    const value = registry();
+    const tester = value.createTestGuest({ id: "bastientest", name: "Bastien", testOf: ADMIN_ID });
+    expect(tester).toMatchObject({ role: "guest", testOf: ADMIN_ID, garminEnvVar: "GARMIN_API_KEY", hasCode: false, dailyTokenCap: 40_000 });
+    value.markOnboarded("bastientest");
+    value.markLogin("bastientest");
+    const token = generateToken();
+    value.createSession("bastientest", token, "iPhone");
+    value.resetFirstVisit("bastientest");
+    expect(value.find("bastientest")).toMatchObject({ onboardedAt: null, lastLoginAt: null });
+    expect(value.resolveSession(token)).toBeNull();
+    expect(value.find(ADMIN_ID)?.testOf).toBeNull();
+    value.createGuest({ id: "marie", name: "Marie", code: generateAccessCode() });
+    expect(() => value.resetFirstVisit("marie")).toThrow();
+  });
 });

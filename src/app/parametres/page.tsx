@@ -8,6 +8,7 @@ import { MyDevices } from "@/components/settings/my-devices";
 import { CoachGaugeLine } from "@/components/coach/coach-gauge";
 import { ProfilesAdmin, type ProfileView } from "@/components/settings/profiles-admin";
 import { getRegistry, toMember } from "@/lib/profiles/context";
+import { testCoachSimulated } from "@/lib/profiles/test-profile";
 import { PREPARATION_ESTIMATE, preparationAllowed, readPrepareStatus } from "@/lib/server/prepare-service";
 import { guestsWeeklyCap, quotaStateOf, usageOf } from "@/lib/server/quota";
 import { publicUrl, trainingOptOut } from "@/lib/server/profiles-admin";
@@ -92,13 +93,14 @@ async function adminSections() {
       invitationUntil: registry.pendingInvitation(record.id)?.expiresAt ?? null,
       onboarded: record.onboardedAt != null,
       hasCode: record.hasCode,
+      isTest: record.testOf != null,
       prepare: record.role === "guest" ? readPrepareStatus(record.id) : null,
       prepareGuard: record.role === "guest" ? preparationAllowed(toMember(record)) : null,
     };
   }));
   const names = new Map(records.map((record) => [record.id, record.name]));
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const guestsWeekUsed = records.filter((record) => record.role === "guest").flatMap((record) => usageOf(record, weekAgo)).reduce((sum, record) => sum + budgetTokens(record), 0);
+  const guestsWeekUsed = records.filter((record) => record.role === "guest" && record.testOf == null).flatMap((record) => usageOf(record, weekAgo)).reduce((sum, record) => sum + budgetTokens(record), 0);
   const url = publicUrl("");
   const logins = registry.listLogins(40);
   return (
@@ -108,7 +110,7 @@ async function adminSections() {
           <h2 className="section-title">Profils du test</h2>
           <span className="section-note">chacun a sa base, sa clé Garmin et son coach ; tu ne vois que leur consommation</span>
         </div>
-        <ProfilesAdmin profiles={profiles} publicUrlConfigured={url.configured} prepareEstimate={PREPARATION_ESTIMATE} />
+        <ProfilesAdmin profiles={profiles} publicUrlConfigured={url.configured} prepareEstimate={PREPARATION_ESTIMATE} testCoachSimulated={testCoachSimulated()} />
       </section>
       <section className="section grid grid-main-side" style={{ alignItems: "start" }}>
         <div className="card">

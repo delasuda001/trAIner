@@ -316,6 +316,26 @@ Plan validé par le coordinateur (ordre 3, 2, 1, 5, 4). Aucun appel réel à Cla
 - Lien d'invitation de Marie créé (usage unique, 7 jours, adresse publique). Restent à Bastien : sa clé Garmin
   (`GARMIN_API_KEY_MARIE`), la case confidentialité, « Préparer le profil », puis l'envoi du lien.
 
+## Profil invité de test de Bastien (17 nov., nuit)
+
+- But : Bastien vit le parcours d'un invité (lien, `/bienvenue`, vouvoiement, plafonds, jauge, hors ligne) sur ses
+  propres données. Profil `bastientest` (nom « Bastien »), rôle invité, colonne `test_of = 'bastien'` (migration 3
+  du registre), clé Garmin `GARMIN_API_KEY` (la sienne), sans code.
+- Paramètres → carte « ton profil invité de test » : « Créer mon profil test » / « Réinitialiser et nouveau lien »
+  (`POST /api/test-profile`, `server/test-profile-service.ts`). Copie cohérente de `run-insights.db` (backup SQLite,
+  base de Bastien seulement lue) vers `data/profiles/bastientest.db` (poignée fermée avant), effacement de
+  `coach_usage`, `coach_chat_messages`, sorties `weekly`/`feedback` ; première connexion remise à zéro, appareils et
+  invitations révoqués ; statut de préparation « prêt » ; nouveau lien (adresse publique).
+- Pas de « Préparer le profil » : les sorties à jour chez Bastien (20 dernières séances + conseil du jour) sont
+  réétiquetées avec l'empreinte de la charge utile vouvoyée (`currentCoachOutputs` / `adoptCoachOutputs`), texte au
+  « tu ». Sur une copie de la vraie base : 244 courses, 3 analyses reprises, 0,4 s.
+- Coach simulé par défaut pour ce profil (réglage `test_profile_coach_simulated`, case dans la carte) : client simulé,
+  consommation fictive, garde de l'abonnement ignorée, plafonds personnels inchangés. Profil de test exclu du plafond
+  commun des invités, du total « invités » de Paramètres et de la vue « Tous » / export / synthèse des retours (chip
+  dédiée « Bastien · test »).
+- Le lien remplace la session du navigateur où il s'ouvre : fenêtre privée ou autre navigateur (sinon, se reconnecter
+  en administrateur avec son code ou `npm run profiles -- invitation`).
+
 ## État
 
 - Branche `claude/project-thread-1m6x8x`, tout commité, rien poussé (push GitHub bloqué).

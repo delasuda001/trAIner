@@ -33,8 +33,8 @@ export default async function FeedbackPage({ searchParams }: { searchParams: Pro
         <div className="chips" style={{ marginBottom: 16 }}>
           <Link className={`chip${!profileFilter ? " selected" : ""}`} href="/retours">Tous ({all.digest.total})</Link>
           {profiles.map((profile) => {
-            const count = all.digest.byProfile.find((entry) => entry.profileId === profile.id)?.count ?? 0;
-            return <Link key={profile.id} className={`chip${profileFilter === profile.id ? " selected" : ""}`} href={`/retours?profil=${profile.id}`}>{profile.name} ({count})</Link>;
+            const count = profile.testOf != null ? feedbackOverview({ profileId: profile.id }).digest.total : all.digest.byProfile.find((entry) => entry.profileId === profile.id)?.count ?? 0;
+            return <Link key={profile.id} className={`chip${profileFilter === profile.id ? " selected" : ""}`} href={`/retours?profil=${profile.id}`}>{profile.name}{profile.testOf != null ? " · test" : ""} ({count})</Link>;
           })}
         </div>
 

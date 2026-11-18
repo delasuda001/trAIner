@@ -27,7 +27,12 @@ export type MemberRecord = Member & {
   lastLoginAt: string | null;
   onboardedAt: string | null;
   disabledAt: string | null;
+  /** Profil de test : identifiant du profil dont il copie la base (sinon null). */
+  testOf: string | null;
 };
+
+/** Profil invité de test de Bastien (copie de sa base, réinitialisable). */
+export const TEST_PROFILE_ID = "bastientest";
 
 export const DEFAULT_GUEST_DAILY_CAP = 40_000;
 export const DEFAULT_GUEST_WEEKLY_CAP = 150_000;

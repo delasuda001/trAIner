@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, KeyRound, Link2, ShieldOff, Smartphone, Sparkles, UserPlus } from "lucide-react";
+import { Copy, FlaskConical, KeyRound, Link2, RotateCcw, ShieldOff, Smartphone, Sparkles, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { PrepareStatus } from "@/lib/server/prepare-service";
@@ -23,6 +23,8 @@ export type ProfileView = {
   invitationUntil: string | null;
   onboarded: boolean;
   hasCode: boolean;
+  /** Ton profil invité de test (copie de ta base). */
+  isTest: boolean;
   /** Préparation avant la première ouverture (invités). */
   prepare: PrepareStatus | null;
   prepareGuard: { allowed: boolean; message: string | null } | null;
@@ -89,6 +91,60 @@ function PreparePanel({ profile, estimate }: { profile: ProfileView; estimate: n
   );
 }
 
+/**
+ * Ton profil invité de test : copie de ta base, réinitialisable pour rejouer la première
+ * connexion. Coach simulé par défaut (aucun appel à Claude).
+ */
+function TestPanel({ exists, simulated, onSecret }: { exists: boolean; simulated: boolean; onSecret: (secret: Secret) => void }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function reset() {
+    setError(null);
+    setBusy(true);
+    try {
+      const json = await post("/api/test-profile", { action: "reset" });
+      onSecret({
+        title: "Lien de ton profil invité de test",
+        lines: [{ label: "Lien", value: String(json?.link ?? "") }],
+        note: `Copie fraîche de ta base (${String(json?.runs ?? 0)} courses, ${String(json?.adopted ?? 0)} analyses du coach reprises sans appel). Ouvre-le dans une fenêtre privée ou un autre navigateur : il remplace la session du navigateur où il est ouvert (ton profil d'administrateur s'y déconnecte). Usage unique, 7 jours.`,
+      });
+      router.refresh();
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggle(value: boolean) {
+    setError(null);
+    try {
+      await post("/api/test-profile", { action: "coach", simulated: value });
+      router.refresh();
+    } catch (failure) {
+      setError((failure as Error).message);
+    }
+  }
+
+  return (
+    <div className="prepare-panel">
+      <div className="fact-label">Ton parcours d&apos;invité</div>
+      <p className="small" style={{ margin: "4px 0" }}>
+        {exists ? "Réinitialiser recopie ta base (la tienne n'est que lue), efface sa consommation et ses échanges avec le coach, déconnecte ses appareils et refait l'accueil de première connexion." : "Un profil invité sur une copie de ta base : lien d'invitation, accueil, vouvoiement, plafonds, jauge, hors ligne. Ta base n'est que lue."}
+        {" "}Pas de « Préparer le profil » : tes analyses à jour sont reprises sans appel (rédigées au « tu »).
+      </p>
+      <label className="row small" style={{ gap: 6, margin: "6px 0" }}>
+        <input type="checkbox" checked={simulated} onChange={(event) => void toggle(event.target.checked)} />
+        Coach simulé : aucun appel à Claude, consommation fictive (plafonds et jauge bougent quand même)
+      </label>
+      <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void reset()}>{exists ? <RotateCcw size={14} /> : <FlaskConical size={14} />} {busy ? "Copie en cours…" : exists ? "Réinitialiser et nouveau lien" : "Créer mon profil test"}</button>
+      {error ? <p className="form-error">{error}</p> : null}
+    </div>
+  );
+}
+
 type Secret = { title: string; lines: Array<{ label: string; value: string }>; note: string };
 
 function tokens(value: number): string {
@@ -148,7 +204,7 @@ function CapsEditor({ profile, onSaved }: { profile: ProfileView; onSaved: () =>
   );
 }
 
-function ProfileCard({ profile, onSecret, prepareEstimate }: { profile: ProfileView; onSecret: (secret: Secret) => void; prepareEstimate: number }) {
+function ProfileCard({ profile, onSecret, prepareEstimate, testCoachSimulated }: { profile: ProfileView; onSecret: (secret: Secret) => void; prepareEstimate: number; testCoachSimulated: boolean }) {
   const router = useRouter();
   const [garmin, setGarmin] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -173,7 +229,7 @@ function ProfileCard({ profile, onSecret, prepareEstimate }: { profile: ProfileV
   return (
     <article className={`card profile-card${profile.disabled ? " is-disabled" : ""}`}>
       <div className="row-between">
-        <h3 className="section-title" style={{ fontSize: 20 }}>{profile.name} <span className="muted small">· {guest ? "invité" : "administrateur"}{profile.disabled ? " · désactivé" : ""}</span></h3>
+        <h3 className="section-title" style={{ fontSize: 20 }}>{profile.name} <span className="muted small">· {profile.isTest ? "ton profil invité de test" : guest ? "invité" : "administrateur"}{profile.disabled ? " · désactivé" : ""}</span></h3>
         <span className="muted small">dernière connexion : {when(profile.lastLoginAt)}</span>
       </div>
 
@@ -208,7 +264,7 @@ function ProfileCard({ profile, onSecret, prepareEstimate }: { profile: ProfileV
         </div>
       </div>
 
-      {guest ? <PreparePanel profile={profile} estimate={prepareEstimate} /> : null}
+      {profile.isTest ? <TestPanel exists simulated={testCoachSimulated} onSecret={onSecret} /> : guest ? <PreparePanel profile={profile} estimate={prepareEstimate} /> : null}
 
       <div className="profile-actions">
         <button type="button" className="btn" onClick={() => void act({ action: "invitation" }, (json) => onSecret({ title: `Lien d'invitation de ${profile.name}`, lines: [{ label: "Lien", value: String(json?.link ?? "") }], note: "À usage unique, valable 7 jours : il ouvre la session sur l'appareil où il est ouvert (à ouvrir dans Safari sur iPhone). Il remplace le lien précédent. Il ne sera plus affiché." }))}><Link2 size={14} /> Nouveau lien d&apos;invitation</button>
@@ -221,7 +277,7 @@ function ProfileCard({ profile, onSecret, prepareEstimate }: { profile: ProfileV
   );
 }
 
-export function ProfilesAdmin({ profiles, publicUrlConfigured, prepareEstimate }: { profiles: ProfileView[]; publicUrlConfigured: boolean; prepareEstimate: number }) {
+export function ProfilesAdmin({ profiles, publicUrlConfigured, prepareEstimate, testCoachSimulated }: { profiles: ProfileView[]; publicUrlConfigured: boolean; prepareEstimate: number; testCoachSimulated: boolean }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [secret, setSecret] = useState<Secret | null>(null);
@@ -248,7 +304,8 @@ export function ProfilesAdmin({ profiles, publicUrlConfigured, prepareEstimate }
     <div className="stack">
       {secret ? <SecretBox secret={secret} onClose={() => setSecret(null)} /> : null}
       {!publicUrlConfigured ? <p className="notice">Adresse publique non renseignée (plus bas) : les liens d&apos;invitation utiliseront l&apos;adresse de ce navigateur. Renseigne d&apos;abord l&apos;adresse du tunnel.</p> : null}
-      {profiles.map((profile) => <ProfileCard key={profile.id} profile={profile} onSecret={setSecret} prepareEstimate={prepareEstimate} />)}
+      {profiles.map((profile) => <ProfileCard key={profile.id} profile={profile} onSecret={setSecret} prepareEstimate={prepareEstimate} testCoachSimulated={testCoachSimulated} />)}
+      {profiles.some((profile) => profile.isTest) ? null : <article className="card profile-card"><TestPanel exists={false} simulated={testCoachSimulated} onSecret={setSecret} /></article>}
       <form className="card create-guest" onSubmit={(event) => void create(event)}>
         <label className="field">
           <span>Ajouter une personne</span>

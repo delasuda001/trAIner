@@ -5,6 +5,7 @@ import { getDbFor } from "@/lib/db/client";
 import { createUsageRepository } from "@/lib/db/repositories/usage-repository";
 import { getRegistry, requireActiveMember } from "@/lib/profiles/context";
 import { analysesLeft, decideQuota, quotaState, subscriptionGauge, type QuotaDecision, type QuotaState, type SubscriptionGauge } from "@/lib/profiles/quota";
+import { simulatedCoachForActive } from "@/lib/profiles/test-profile";
 import { DEFAULT_GUESTS_WEEKLY_CAP, type MemberRecord } from "@/lib/profiles/types";
 import { readRateLimits } from "./usage";
 
@@ -34,7 +35,8 @@ export function checkQuota(estimate?: number, options: { preparation?: boolean }
   const record = registry.find(member.id);
   const now = new Date();
   const since = weekAgo(now);
-  const guests = registry.list().filter((entry) => entry.role === "guest");
+  // Le profil de test de Bastien n'entame pas le plafond commun des vrais invités.
+  const guests = registry.list().filter((entry) => entry.role === "guest" && entry.testOf == null);
   return decideQuota({
     role: member.role,
     dailyCap: record?.dailyTokenCap ?? null,
@@ -42,7 +44,8 @@ export function checkQuota(estimate?: number, options: { preparation?: boolean }
     own: createUsageRepository().since(since),
     allGuests: member.role === "guest" ? guests.flatMap((guest) => usageOf(guest, since)) : [],
     guestsWeeklyCap: guestsWeeklyCap(),
-    windows: windows(),
+    // Coach simulé du profil de test : aucun appel réel, l'abonnement n'est pas en jeu (plafonds personnels inchangés).
+    windows: simulatedCoachForActive() ? [] : windows(),
     now,
     startOfTodayIso: startOfToday(now),
     estimate,
