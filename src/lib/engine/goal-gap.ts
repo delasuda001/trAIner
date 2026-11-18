@@ -57,6 +57,11 @@ export type GoalGap = {
   action: string | null;
   /** Une phrase pour le coach et les cartes : levier principal et action. */
   summary: string;
+  /** Sorties par semaine visées pour la semaine type (une de plus à la fois, jusqu'au repère). */
+  nextRunsPerWeek: number;
+  /** Allure visée (s/km) et distance, pour situer la sortie longue. */
+  goalPaceS: number;
+  distanceKm: number;
 };
 
 function decimal(value: number): string {
@@ -97,6 +102,8 @@ export function goalGap(input: { target: RaceTarget; runs: GapRun[]; today: stri
   const longRun = levers[2];
   const threshold = levers.find((lever) => lever.key === "threshold") ?? null;
 
+  // Une sortie de plus à la fois : la semaine type passe de N à N + 1 sorties.
+  const nextRuns = Math.min(bench.runsPerWeek, Math.max(1, Math.ceil(runsPerWeek - 0.25)) + (frequency.met ? 0 : 1));
   let main: GoalLever["key"] | null = null;
   let action: string | null = null;
   const longKm = Math.max(1, Math.round(longestKm));
@@ -105,8 +112,6 @@ export function goalGap(input: { target: RaceTarget; runs: GapRun[]; today: stri
 
   if ((!frequency.met && frequency.share < STRUCTURAL_SHORTFALL) || (!volume.met && volume.share < STRUCTURAL_SHORTFALL)) {
     main = !frequency.met ? "frequency" : "volume";
-    // Une sortie de plus à la fois : la semaine type passe de N à N + 1 sorties.
-    const nextRuns = Math.min(bench.runsPerWeek, Math.ceil(runsPerWeek - 0.25) + 1);
     const step = Math.max(1, Math.round(kmPerWeek * VOLUME_WEEKLY_GROWTH));
     action = !frequency.met
       ? `Passe à ${nextRuns} sorties par semaine : ajoute un footing facile de 30 à 40 min en Z2${longPlan ? ` ; ensuite, ${longPlan}` : ""}.`
@@ -132,5 +137,29 @@ export function goalGap(input: { target: RaceTarget; runs: GapRun[]; today: stri
   const summary = mainLever && action
     ? `Levier principal pour le ${bench.race} : ${mainLever.label.toLowerCase()} (${mainLever.current}, repère ${mainLever.needed}). ${action}${timing}`
     : `Pour le ${bench.race}, fréquence, volume, sortie longue et seuil sont au niveau des repères : garde la régularité.`;
-  return { race: bench.race, levers, main, action, summary };
+  return { race: bench.race, levers, main, action, summary, nextRunsPerWeek: nextRuns, goalPaceS, distanceKm: input.target.distanceKm };
+}
+
+/** Le levier demande-t-il de changer la semaine type (fréquence, volume, sortie longue) ? */
+export function structuralLever(gap: GoalGap | null): boolean {
+  return gap?.main === "frequency" || gap?.main === "volume" || gap?.main === "long_run";
+}
+
+/** Repère de sortie longue pour une distance de course (km), null sans repère. */
+export function longRunBenchmarkKm(distanceKm: number, goalPaceS: number): number | null {
+  return benchmarks(distanceKm, goalPaceS)?.longRunKm ?? null;
+}
+
+/**
+ * Prochaine sortie longue (km) : +2 km dès que la plus longue sortie des 8 dernières
+ * semaines a été tenue deux fois en 4 semaines (à 0,7 km près), sinon on la consolide ;
+ * jamais au-delà du repère.
+ */
+export function nextLongRunKm(runs: GapRun[], today: string, benchmarkKm: number): { km: number; step: boolean; longestKm: number } {
+  const recent = runs.filter((run) => run.localDate > addDays(today, -7 * GAP_WINDOW_WEEKS) && run.localDate <= today);
+  const longestKm = Math.max(0, ...recent.map((run) => (run.distanceM ?? 0) / 1000));
+  const base = Math.max(6, Math.round(longestKm));
+  const held = recent.filter((run) => run.localDate > addDays(today, -28) && (run.distanceM ?? 0) / 1000 >= longestKm - 0.7).length;
+  const step = held >= 2 && base < benchmarkKm;
+  return { km: Math.min(benchmarkKm, step ? base + LONG_STEP_KM : base), step, longestKm: Math.round(longestKm * 10) / 10 };
 }

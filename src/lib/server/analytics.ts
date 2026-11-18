@@ -14,9 +14,9 @@ import { assessRecovery, type RecoverySignals } from "@/lib/engine/recovery";
 import { runningRhythm, type Rhythm } from "@/lib/engine/rhythm";
 import { median, present } from "@/lib/engine/stats";
 import { goalMarker, prescribe, type GoalMarker, type Prescription, type RecentEffort } from "@/lib/engine/prescription";
-import { suggestNextSession, type Suggestion } from "@/lib/engine/suggestion";
+import { suggestNextSession, type Suggestion, type WeekPlan } from "@/lib/engine/suggestion";
 import { estimateThreshold, type ThresholdEstimate } from "@/lib/engine/threshold";
-import { goalGap, type GoalGap } from "@/lib/engine/goal-gap";
+import { goalGap, longRunBenchmarkKm, nextLongRunKm, structuralLever, type GoalGap } from "@/lib/engine/goal-gap";
 import { classifyVerdict, type SessionVerdict } from "@/lib/engine/verdict";
 import { fallbackZones } from "@/lib/engine/zones";
 import { activeMember } from "@/lib/profiles/context";
@@ -207,6 +207,22 @@ function goalGapsFor(goal: Goal | null, runs: AnalyzedRun[], today: string, thre
     .filter((gap): gap is GoalGap => gap != null);
 }
 
+const LEVER_WORDS: Record<string, string> = { frequency: "la fréquence", volume: "le volume", long_run: "la sortie longue" };
+
+/**
+ * Semaine type alignée sur l'écart à l'objectif : seulement si le levier principal est
+ * structurel (fréquence, volume, sortie longue). L'objectif le plus long décide (la sortie
+ * longue y compte le plus). Les sorties par semaine déclarées restent un plancher.
+ */
+function weekPlanFor(goal: Goal | null, gaps: GoalGap[], runs: AnalyzedRun[], today: string): WeekPlan | null {
+  const gap = [...gaps].filter(structuralLever).sort((a, b) => b.distanceKm - a.distanceKm)[0] ?? null;
+  if (!gap) return null;
+  const benchmark = longRunBenchmarkKm(gap.distanceKm, gap.goalPaceS);
+  if (benchmark == null) return null;
+  const long = nextLongRunKm(runs.map((run) => ({ localDate: run.localDate, distanceM: run.distanceM })), today, benchmark);
+  return { runsPerWeek: Math.max(goal?.runsPerWeek ?? 1, gap.nextRunsPerWeek), longRunKm: long.km, longRunStep: long.step, longestKm: long.longestKm, lever: LEVER_WORDS[gap.main as string] ?? "la fréquence", race: gap.race };
+}
+
 /** Registre du profil actif : les phrases du moteur sont vouvoyées pour un invité, inchangées pour Bastien. */
 function currentRegister(): Register {
   return registerForRole(activeMember()?.role);
@@ -356,7 +372,7 @@ function computeOutlook(context: Context): Outlook {
   const goal = context.goal;
   const suggestion = suggestNextSession({
     today,
-    runs: runs.filter((run) => run.localDate >= addDays(today, -60)).map((run) => ({ localDate: run.localDate, kind: run.metrics.kind, family: run.metrics.family, movingTimeS: run.movingTimeS, aerobicTrainingEffect: run.row.aerobicTrainingEffect, title: sessionTitle(run.metrics) })),
+    runs: runs.filter((run) => run.localDate >= addDays(today, -60)).map((run) => ({ localDate: run.localDate, kind: run.metrics.kind, family: run.metrics.family, movingTimeS: run.movingTimeS, aerobicTrainingEffect: run.row.aerobicTrainingEffect, title: sessionTitle(run.metrics), distanceM: run.distanceM })),
     zones: profile.zones,
     restingHeartRateBpm: profile.restingHeartRateBpm,
     recentSpeedPerBeat: recentPerBeat.length ? median(recentPerBeat) : null,
@@ -366,6 +382,7 @@ function computeOutlook(context: Context): Outlook {
     loadAlert: alert,
     rhythm,
     recovery,
+    weekPlan: weekPlanFor(goal, goalGapsFor(goal, runs, today, profile.lactateThresholdSpeedMps), runs, today),
     raceTargets: goal?.raceTargets ?? [],
     efforts: recentEfforts(runs, addDays(today, 1)),
     goal: goal ? { eventDate: goal.eventDate, distanceKm: goal.distanceKm, targetPaceMps: targetPaceMps(goal), runsPerWeek: goal.runsPerWeek, preferredDays: goal.preferredDays } : null,

@@ -187,3 +187,40 @@ describe("jour conseillé selon la semaine type", () => {
     }
   });
 });
+
+describe("semaine type alignée sur le levier de l'objectif", () => {
+  const plan = { runsPerWeek: 3, longRunKm: 13, longRunStep: true, longestKm: 11, lever: "la fréquence", race: "semi" };
+  const withDistance = (entry: SuggestionRun, km: number): SuggestionRun => ({ ...entry, distanceM: km * 1000 });
+
+  it("après la qualité : footing court au plus tôt (sans attendre le jour habituel), puis la sortie longue chiffrée en km", () => {
+    const runs = [withDistance(run(13, "endurance", "easy", 70), 11), run(9, "intervals_short", "intervals", 34), withDistance(run(6, "endurance", "easy", 70), 11), run(0, "intervals_short", "intervals", 34)];
+    const result = suggestNextSession(input(runs, { weekPlan: plan }));
+    expect(result.primary).toMatchObject({ type: "endurance", title: "Footing facile : 35 min", durationMin: 35 });
+    expect(result.when.dates).toEqual([addDays(today, 2), addDays(today, 3)]);
+    expect(result.reason).toContain("ton levier principal est la fréquence : 3 sorties par semaine");
+    expect(result.reason).toContain("si ton planning le permet");
+    expect(result.then).toMatchObject({ type: "long", title: "Sortie longue : 13 km" });
+    expect((result.then?.when.date ?? "") > addDays(today, 3)).toBe(true);
+  });
+
+  it("sans semaine type : comportement d'origine (endurance, pas de footing)", () => {
+    const runs = [run(5, "intervals_short", "intervals", 34), run(0, "intervals_short", "intervals", 34)];
+    expect(suggestNextSession(input(runs)).primary.title).toBe("Endurance fondamentale");
+  });
+
+  it("la sortie facile du samedi compte comme sortie longue ; la qualité revient après 5 jours", () => {
+    const runs = [run(6, "intervals_threshold", "intervals", 48), run(4, "endurance", "easy", 35), withDistance(run(2, "endurance", "easy", 75), 11)];
+    const withPlan = suggestNextSession(input(runs, { weekPlan: plan }));
+    expect(["threshold", "vo2max"]).toContain(withPlan.primary.type);
+    // Sans semaine type, la qualité attend 8 jours.
+    expect(["threshold", "vo2max"]).not.toContain(suggestNextSession(input(runs)).primary.type);
+  });
+
+  it("sortie longue due : en km, durée estimée à l'allure facile, raison qui dit le palier", () => {
+    const runs = [run(4, "intervals_threshold", "intervals", 48), run(2, "endurance", "easy", 35)];
+    const result = suggestNextSession(input(runs, { weekPlan: plan }));
+    expect(result.primary).toMatchObject({ type: "long", title: "Sortie longue : 13 km" });
+    expect(result.primary.structure).toContain("ta plus longue des 8 dernières semaines : 11 km");
+    expect(result.reason).toBe("Pour le semi, ton levier principal est la fréquence : ta plus longue sortie est tenue, elle gagne 2 km (13 km), en Z2.");
+  });
+});

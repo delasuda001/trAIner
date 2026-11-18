@@ -128,6 +128,20 @@ export function buildWeeklyDossier(weekStart: string) {
   const rejected = usage.filter((row) => row.outcome === "rejected").length;
 
   const dashboard = getDashboard();
+  // Habitudes réelles des 8 semaines jusqu'à la fin de la semaine : le bilan ne peut pas en affirmer d'autres.
+  const habitStart = addDays(weekEnd, -55);
+  const habitRuns = context.runs.filter((run) => run.localDate >= habitStart && run.localDate <= weekEnd);
+  const byType = new Map<string, number>();
+  for (const run of habitRuns) {
+    const label = run.metrics.family === "easy" || run.metrics.family === "long" ? "sortie facile ou longue" : run.metrics.family === "intervals" ? "fractionné" : "continu tempo ou seuil";
+    byType.set(label, (byType.get(label) ?? 0) + 1);
+  }
+  const weekdays = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+  const easyDays = new Map<string, number>();
+  for (const run of habitRuns.filter((entry) => entry.metrics.family === "easy" || entry.metrics.family === "long")) {
+    const day = weekdays[(new Date(`${run.localDate}T12:00:00Z`).getUTCDay() + 6) % 7];
+    easyDays.set(day, (easyDays.get(day) ?? 0) + 1);
+  }
   if (!weekRuns.length) missing.push("aucune course cette semaine");
   return {
     semaine: `du ${formatDate(weekStart, "medium")} au ${formatDate(weekEnd, "medium")}`,
@@ -135,6 +149,12 @@ export function buildWeeklyDossier(weekStart: string) {
       const status = goalStatus(marker, null, null);
       return `${status.race} en ${status.goal} : ${status.verdict} Repère : ${status.current}.`;
     }),
+    habitudes_8_semaines: {
+      courses: `${habitRuns.length} en 8 semaines`,
+      par_type: [...byType.entries()].map(([label, count]) => `${label} : ${count}`),
+      sorties_faciles_par_jour: [...easyDays.entries()].map(([day, count]) => `${day} : ${count}`),
+    },
+    ecart_objectif: dashboard.goalGaps.length ? dashboard.goalGaps.map((gap) => gap.summary) : "aucun objectif chiffré",
     seances: sessions,
     conseils_du_jour_generes: outlooks.length ? outlooks : "aucun",
     questions_au_coach: exchanges.length ? exchanges : "aucune",

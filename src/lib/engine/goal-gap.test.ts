@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "@/lib/dates";
 import { vouvoyer } from "@/lib/register";
-import { goalGap, type GapRun } from "./goal-gap";
+import { goalGap, nextLongRunKm, type GapRun } from "./goal-gap";
 
 const today = "2026-11-18";
 const half = { distanceKm: 21.0975, targetTimeS: 87 * 60 };
@@ -58,5 +58,14 @@ describe("écart à l'objectif", () => {
     const runs = weeks(1, 9, 11);
     const gap = goalGap({ target: half, runs, today, thresholdSpeedMps: 1000 / 250 });
     expect(vouvoyer(gap?.action ?? "")).toBe("Passez à 2 sorties par semaine : ajoutez un footing facile de 30 à 40 min en Z2 ; ensuite, allongez votre sortie longue de 2 km toutes les 2 semaines (11 → 18 km en 8 semaines).");
+  });
+});
+
+describe("prochaine sortie longue", () => {
+  it("+2 km quand la plus longue a été tenue deux fois en 4 semaines, sinon on consolide ; jamais au-delà du repère", () => {
+    const held = [{ localDate: addDays(today, -4), distanceM: 11000 }, { localDate: addDays(today, -18), distanceM: 10400 }];
+    expect(nextLongRunKm(held, today, 18)).toEqual({ km: 13, step: true, longestKm: 11 });
+    expect(nextLongRunKm([{ localDate: addDays(today, -4), distanceM: 11000 }, { localDate: addDays(today, -18), distanceM: 9000 }], today, 18)).toMatchObject({ km: 11, step: false });
+    expect(nextLongRunKm([{ localDate: addDays(today, -4), distanceM: 17500 }, { localDate: addDays(today, -11), distanceM: 17200 }], today, 18)).toMatchObject({ km: 18 });
   });
 });

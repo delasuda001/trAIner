@@ -66,6 +66,24 @@ export type SuggestionRun = {
   aerobicTrainingEffect: number | null;
   /** Intitulé lisible (« Fractionné long 3 × 2 km »), sinon le type. */
   title?: string;
+  distanceM?: number | null;
+};
+
+/**
+ * Semaine type demandée par l'écart à l'objectif (cf. engine/goal-gap) quand le levier
+ * principal est la fréquence, le volume ou la sortie longue : nombre de sorties visé,
+ * et sortie longue chiffrée en km, progressive.
+ */
+export type WeekPlan = {
+  runsPerWeek: number;
+  longRunKm: number;
+  /** Vrai si la sortie longue gagne 2 km cette fois-ci (sinon on consolide). */
+  longRunStep: boolean;
+  /** Plus longue sortie des 8 dernières semaines (km). */
+  longestKm: number;
+  /** Levier en clair : « la fréquence », « la sortie longue »… */
+  lever: string;
+  race: string;
 };
 
 export type SuggestionGoal = {
@@ -98,7 +116,14 @@ export type SuggestionInput = {
   loadAlert?: LoadAlert | null;
   /** Rythme habituel (cf. engine/rhythm) : écart entre séances de qualité et seuil de charge ; défauts 3 jours et 1,5. */
   rhythm?: Pick<Rhythm, "qualitySpacingDays" | "highLoadRatio"> | null;
+  /** Semaine type alignée sur le levier principal de l'objectif ; sans elle, comportement d'origine. */
+  weekPlan?: WeekPlan | null;
 };
+
+/** Footing ajouté pour la 3e sortie (min). */
+const FOOTING_MIN = 35;
+/** Avec une semaine type, une séance de qualité par semaine : elle revient après 5 jours. */
+const WEEKLY_QUALITY_DAYS = 5;
 
 const HARD_FAMILIES: ReadonlySet<SessionFamily> = new Set(["intervals", "steady"]);
 /** Demi-largeur de la fourchette d'allure affichée en endurance (s/km). */
@@ -135,6 +160,25 @@ function enduranceSession(input: SuggestionInput, durationMin: number, title = "
     ? "En continu et régulier ; les 15 dernières minutes doivent être aussi faciles que les 15 premières."
     : "En continu, en aisance respiratoire : tu dois pouvoir parler en phrases complètes.";
   return { type, title, durationMin, structure, target: easyTarget(input) };
+}
+
+/** Sortie longue chiffrée en km : durée estimée à l'allure facile du moment (6:30/km faute de mieux). */
+function longRunSession(input: SuggestionInput, plan: WeekPlan): SuggestedSession {
+  const target = easyTarget(input);
+  const speed = target.paceFastMps != null && target.paceSlowMps != null ? (target.paceFastMps + target.paceSlowMps) / 2 : 1000 / 390;
+  const durationMin = roundTo5((plan.longRunKm * 1000) / speed / 60);
+  const formatKm = (km: number) => formatNumber(km, Number.isInteger(km) ? 0 : 1);
+  return {
+    type: "long",
+    title: `Sortie longue : ${plan.longRunKm} km`,
+    durationMin,
+    structure: `${plan.longRunKm} km en continu et réguliers (ta plus longue des 8 dernières semaines : ${formatKm(plan.longestKm)} km) ; les 15 dernières minutes aussi faciles que les 15 premières.`,
+    target,
+  };
+}
+
+function footingSession(input: SuggestionInput): SuggestedSession {
+  return { type: "endurance", title: `Footing facile : ${FOOTING_MIN} min`, durationMin: FOOTING_MIN, structure: "Court et vraiment facile, en aisance respiratoire : il ajoute une sortie sans fatiguer.", target: easyTarget(input) };
 }
 
 /** Cible partagée avec les consignes de séance : mêmes allures dans la suggestion et dans l'analyse. */
@@ -259,6 +303,12 @@ function kindOf(type: SuggestionType): { kind: SessionKind; family: SessionFamil
 
 type Core = { primary: SuggestedSession; reason: string; when: string; dates: string[] };
 
+/** Avec une semaine type, une sortie facile assez longue compte comme sortie longue (ses sorties du samedi, par ex.). */
+function isLongRun(run: SuggestionRun, plan: WeekPlan | null): boolean {
+  if (run.family === "long") return true;
+  return plan != null && run.family === "easy" && (run.distanceM ?? 0) >= (plan.longRunKm - 2.5) * 1000;
+}
+
 function decide(input: SuggestionInput, labelToday: string): Core & { facts: Suggestion["facts"] } {
   const { today, runs, load, recovery } = input;
   const goal = input.goal ?? null;
@@ -267,14 +317,26 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
   const qualitySpacing = input.rhythm?.qualitySpacingDays ?? DEFAULT_QUALITY_SPACING_DAYS;
   const highLoadRatio = input.rhythm?.highLoadRatio ?? HIGH_LOAD_RATIO;
   const lastQuality = [...runs].reverse().find((run) => run.family === "intervals" || run.family === "steady") ?? null;
-  const lastLong = [...runs].reverse().find((run) => run.family === "long") ?? null;
+  const plan = input.weekPlan ?? null;
+  const lastLong = [...runs].reverse().find((run) => isLongRun(run, plan)) ?? null;
   const since = (run: SuggestionRun | null) => (run ? daysBetween(run.localDate, today) : null);
 
   const daysSinceLastRun = since(lastRun);
   const daysSinceLastQuality = since(lastQuality);
   const daysSinceLastLong = since(lastLong);
   const highShare = load.intensity28d?.high ?? null;
-  const plannedRunsPerWeek = goal?.runsPerWeek ?? Math.max(1, Math.round(load.runsPerWeek8w));
+  const plannedRunsPerWeek = plan?.runsPerWeek ?? goal?.runsPerWeek ?? Math.max(1, Math.round(load.runsPerWeek8w));
+  const qualityEveryDays = plan ? WEEKLY_QUALITY_DAYS : 8;
+  const longEveryDays = plan ? 6 : 14;
+  const longSession = (): SuggestedSession => (plan ? longRunSession(input, plan) : enduranceSession(input, roundTo5(Math.min(120, Math.max(70, longest8w * 1.1))), "Sortie longue", "long"));
+  const longReason = (): string => {
+    if (!plan) return daysSinceLastLong == null ? "Pas de sortie longue récente : c'est le meilleur levier d'endurance." : `Ta dernière sortie longue date de ${daysSinceLastLong} jours et la qualité est faite : allonge en restant en Z2.`;
+    return plan.longRunStep
+      ? `Pour le ${plan.race}, ton levier principal est ${plan.lever} : ta plus longue sortie est tenue, elle gagne 2 km (${plan.longRunKm} km), en Z2.`
+      : `Pour le ${plan.race}, ton levier principal est ${plan.lever} : on consolide ta plus longue sortie (${plan.longRunKm} km) avant de l'allonger de 2 km.`;
+  };
+  // Après une séance dure, avec une semaine type à 3 sorties : footing court au plus tôt, la longue suit.
+  let skipHabit = false;
   const daysToEvent = goal?.eventDate ? daysBetween(today, goal.eventDate) : null;
 
   const recent8w = runs.filter((run) => daysBetween(run.localDate, today) < 56);
@@ -312,6 +374,10 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
     primary = enduranceSession(input, roundTo5(Math.min(50, typicalEasyMin)));
     const why = input.loadAlert?.reasons.length ? `, avec ${input.loadAlert.reasons.join(", ")}` : "";
     reason = `Ta charge des 7 derniers jours vaut ${formatNumber(load.ratio, 1)} fois ta moyenne${why} : on absorbe avec une séance facile.`;
+  } else if (lastHard && lastRun === lastHard && daysBetween(lastHard.localDate, today) < qualitySpacing && plan && plan.runsPerWeek >= 3) {
+    primary = footingSession(input);
+    skipHabit = true;
+    reason = `Pour le ${plan.race}, ton levier principal est ${plan.lever} : ${plan.runsPerWeek} sorties par semaine. Après ${lowerFirst(lastHard.title ?? SESSION_KIND_LABELS[lastHard.kind])}, un footing court et facile ajoute une sortie sans fatiguer, si ton planning le permet ; la sortie longue suit.`;
   } else if (lastHard && lastRun === lastHard && daysBetween(lastHard.localDate, today) < qualitySpacing) {
     primary = enduranceSession(input, easyDuration);
     reason = `Ta dernière course (${lowerFirst(lastHard.title ?? SESSION_KIND_LABELS[lastHard.kind])}) était exigeante : la suivante reste facile pour que le travail paie.`;
@@ -321,13 +387,13 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
   } else if (plannedRunsPerWeek <= 1 && lastRun && lastRun.family !== "intervals" && lastRun.family !== "steady") {
     ({ session: primary, why: reason } = qualitySession());
   } else if (plannedRunsPerWeek <= 1 && (daysSinceLastLong == null || daysSinceLastLong >= 14)) {
-    primary = enduranceSession(input, roundTo5(Math.min(120, Math.max(70, longest8w * 1.1))), "Sortie longue", "long");
+    primary = longSession();
     reason = "Une sortie par semaine : on alterne qualité et sortie longue, et c'est le tour de la longue.";
-  } else if (daysSinceLastQuality == null || daysSinceLastQuality >= 8) {
+  } else if (daysSinceLastQuality == null || daysSinceLastQuality >= qualityEveryDays) {
     ({ session: primary, why: reason } = qualitySession());
-  } else if (daysSinceLastLong == null || daysSinceLastLong >= 14) {
-    primary = enduranceSession(input, roundTo5(Math.min(120, Math.max(70, longest8w * 1.1))), "Sortie longue", "long");
-    reason = daysSinceLastLong == null ? "Pas de sortie longue récente : c'est le meilleur levier d'endurance." : `Ta dernière sortie longue date de ${daysSinceLastLong} jours et la qualité est faite : allonge en restant en Z2.`;
+  } else if (daysSinceLastLong == null || daysSinceLastLong >= longEveryDays) {
+    primary = longSession();
+    reason = longReason();
   } else {
     primary = enduranceSession(input, easyDuration);
     reason = "Qualité et sortie longue récentes déjà faites : une endurance facile entretient sans fatiguer.";
@@ -351,7 +417,7 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
   const explicitDays = goal?.preferredDays ?? [];
   const days = explicitDays.length ? explicitDays : habitualDays(runs, today, habitCategory(primary.type));
   let start = earliest;
-  if (primary.type !== "race") {
+  if (primary.type !== "race" && !skipHabit) {
     const habitual = snapToPreferredDay(earliest, days);
     if (explicitDays.length || daysBetween(earliest, habitual) <= MAX_WAIT_DAYS) start = habitual;
   }
@@ -403,7 +469,7 @@ export function suggestNextSession(input: SuggestionInput): Suggestion {
   let then: Suggestion["then"] = null;
   if (primary.type !== "race") {
     const shape = kindOf(primary.type);
-    const simulatedRun: SuggestionRun = { localDate: core.when, kind: shape.kind, family: shape.family, movingTimeS: primary.durationMin * 60, aerobicTrainingEffect: shape.hard ? 4.2 : 2.8 };
+    const simulatedRun: SuggestionRun = { localDate: core.when, kind: shape.kind, family: shape.family, movingTimeS: primary.durationMin * 60, aerobicTrainingEffect: shape.hard ? 4.2 : 2.8, distanceM: primary.type === "long" && input.weekPlan ? input.weekPlan.longRunKm * 1000 : null };
     const neutralRecovery: RecoverySignals = { ...recovery, flags: [], state: "unknown" };
     const next = decide({ ...input, today: core.when, runs: [...input.runs, simulatedRun], load: { ...input.load, ratio: null }, loadAlert: null, recovery: neutralRecovery }, input.today);
     // Rythme visé : pas plus de N séances par semaine.

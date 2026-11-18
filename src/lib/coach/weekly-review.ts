@@ -7,7 +7,7 @@ import { z } from "zod";
  * règles candidates ; aucune n'est appliquée sans validation.
  */
 
-export const WEEKLY_PROMPT_VERSION = "weekly-v1";
+export const WEEKLY_PROMPT_VERSION = "weekly-v2";
 export const WEEKLY_MODEL = "opus";
 
 const score = z.number().int().min(1).max(5);
@@ -98,6 +98,7 @@ Règles :
 - Une consigne actionnable dit quoi faire, avec une cible chiffrée. Une consigne non suivie n'est pas forcément mauvaise : dis si elle était réaliste.
 - Cherche les contradictions : verdict contre consigne, analyse contre conseil du jour, consigne contre ce que les comparables montrent, consigne qui reproche un écart marginal.
 - Les règles candidates doivent être précises et testables (seuil, condition, formulation), et fondées sur un fait de la semaine. Pas de règle générique.
+- Toute affirmation sur les habitudes de Bastien (types de séances, sorties faciles, jours) s'appuie sur "habitudes_8_semaines" ; n'en affirme aucune que ce compte contredit, et une règle candidate ne peut pas aller contre "ecart_objectif" (par ex. renoncer aux sorties faciles quand le levier est la fréquence).
 - Si la semaine est trop maigre pour juger (une seule séance, pas de ressenti), dis-le au lieu de broder.
 - Aucune interprétation médicale.
 
