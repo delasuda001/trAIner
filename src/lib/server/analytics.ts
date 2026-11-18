@@ -10,7 +10,7 @@ import { computeActivityMetrics, METRICS_VERSION, sessionTitle, type ActivityMet
 import { computeDeltas, selectComparables, type ComparisonDeltas, type RunForComparison } from "@/lib/engine/comparable";
 import { isRun, loadAlert, loadFigure, summarizeLoad, type LoadAlert, type LoadFigure, type LoadSummary } from "@/lib/engine/load";
 import { trainingCalendar, type TrainingCalendar } from "@/lib/engine/calendar";
-import { computeProgression, referenceHeartRate, type Progression } from "@/lib/engine/progression";
+import { computeProgression, easyRunHeartRates, personalReferenceHeartRate, type Progression } from "@/lib/engine/progression";
 import { assessRecovery, type RecoverySignals } from "@/lib/engine/recovery";
 import { runningRhythm, type Rhythm } from "@/lib/engine/rhythm";
 import { median, present } from "@/lib/engine/stats";
@@ -374,11 +374,11 @@ function computeOutlook(context: Context): Outlook {
   const lastFeeling = lastRun ? createFeelingRepository().get(lastRun.id) : null;
   const rhythm = runningRhythm(runs.map((run) => ({ localDate: run.localDate, family: run.metrics.family })), today);
   const alert = loadAlert(load, { recoveryFlags: recovery.flags, perceivedEffort: lastFeeling?.perceivedEffort ?? null }, rhythm.highLoadRatio);
-  const referenceHr = referenceHeartRate(profile.zones.floors);
+  const progressionRuns = runs.map((run) => ({ id: run.id, localDate: run.localDate, distanceM: run.distanceM, metrics: run.metrics, sport: run.sport }));
   const progression = computeProgression({
-    runs: runs.map((run) => ({ id: run.id, localDate: run.localDate, distanceM: run.distanceM, metrics: run.metrics, sport: run.sport })),
+    runs: progressionRuns,
     today,
-    fallbackReferenceHeartRateBpm: referenceHr,
+    reference: personalReferenceHeartRate({ zones: profile.zones, zonesFromWatch: profile.zonesFromWatch, easyRunHeartRates: easyRunHeartRates(progressionRuns, today) }),
     vo2maxSeries: present(wellness.map((day) => (day.vo2max != null ? { date: day.date, value: day.vo2max } : null))),
   });
 

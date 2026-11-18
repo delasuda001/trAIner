@@ -1,4 +1,5 @@
 import { addDays, daysBetween } from "@/lib/dates";
+import type { HeartRateZones } from "@/lib/source/types";
 import type { ActivityMetrics } from "./activity-metrics";
 import { median, present, round, standardDeviation } from "./stats";
 
@@ -37,6 +38,8 @@ export type Progression = {
   state: ProgressionState;
   confidence: Confidence | null;
   referenceHeartRateBpm: number;
+  /** D'où vient la FC de référence (propre au profil, jamais une valeur fixe). */
+  referenceSource: ReferenceHrSource;
   windowWeeks: number;
   recent: PeriodSummary;
   previous: PeriodSummary;
@@ -88,15 +91,14 @@ function summarize(runs: ProgressionRun[], allRuns: ProgressionRun[], start: str
 export function computeProgression(input: {
   runs: ProgressionRun[];
   today: string;
-  /** FC de repère par défaut si l'historique ne permet pas d'en déduire une. */
-  fallbackReferenceHeartRateBpm: number;
+  /** FC de référence du profil (voir `personalReferenceHeartRate`). */
+  reference: ReferenceHeartRate;
   vo2maxSeries: Array<{ date: string; value: number }>;
 }): Progression {
   const { today } = input;
   const qualifying = input.runs.filter(qualifies);
-  // FC de repère = FC typique de ses sorties faciles récentes : on extrapole le moins possible.
-  const typical = median(present(qualifying.filter((run) => daysBetween(run.localDate, today) < 7 * 16).map((run) => run.metrics.aerobic?.heartRateBpm)));
-  const referenceHr = typical != null ? Math.round(typical / 5) * 5 : input.fallbackReferenceHeartRateBpm;
+  const referenceHr = input.reference.bpm;
+  const referenceSource = input.reference.source;
 
   let windowWeeks = 6;
   let recent = summarize(qualifying, input.runs, addDays(today, -41), today, referenceHr, 6);
@@ -124,7 +126,7 @@ export function computeProgression(input: {
 
   if (recent.runs < MIN_RUNS_PER_PERIOD || previous.runs < MIN_RUNS_PER_PERIOD || !recent.speedAtReferenceHr || !previous.speedAtReferenceHr) {
     caveats.push(`Il faut au moins ${MIN_RUNS_PER_PERIOD} sorties faciles avec ${MIN_AEROBIC_MINUTES} min stables en Z2–Z3 par période ; il y en a ${recent.runs} sur la période récente et ${previous.runs} sur la précédente.`);
-    return { state: "insufficient", confidence: null, referenceHeartRateBpm: referenceHr, windowWeeks, recent: strip(recent), previous: strip(previous), paceGainSPerKm: null, changePct: null, runToRunSpreadSPerKm: null, vo2max, points, caveats };
+    return { state: "insufficient", confidence: null, referenceHeartRateBpm: referenceHr, referenceSource, windowWeeks, recent: strip(recent), previous: strip(previous), paceGainSPerKm: null, changePct: null, runToRunSpreadSPerKm: null, vo2max, points, caveats };
   }
 
   const changePct = round((recent.speedAtReferenceHr / previous.speedAtReferenceHr - 1) * 100, 1);
@@ -147,6 +149,7 @@ export function computeProgression(input: {
     state,
     confidence: state === "stable" ? (z < 1 && minRuns >= 4 ? "moderate" : "low") : confidence,
     referenceHeartRateBpm: referenceHr,
+    referenceSource,
     windowWeeks,
     recent: strip(recent),
     previous: strip(previous),
@@ -163,7 +166,35 @@ export function computeProgression(input: {
   };
 }
 
-/** FC de référence : milieu de la Z2–Z3 (aérobie sous le seuil), arrondi à 5 bpm. */
-export function referenceHeartRate(zoneFloors: [number, number, number, number, number]): number {
-  return Math.round((zoneFloors[1] + zoneFloors[3]) / 2 / 5) * 5;
+export type ReferenceHrSource = "watch_z2" | "threshold" | "easy_runs" | "zones_z2";
+export type ReferenceHeartRate = { bpm: number; source: ReferenceHrSource };
+
+/** Part de la FC seuil prise comme FC de footing quand la montre ne donne pas ses zones. */
+export const EASY_SHARE_OF_THRESHOLD = 0.8;
+const MIN_EASY_RUNS_FOR_REFERENCE = 3;
+
+/**
+ * FC de référence de l'indicateur, propre à chaque profil :
+ * 1. milieu de la zone 2 de la montre (zones Garmin de l'athlète) ;
+ * 2. sinon ~80 % de la FC seuil connue ;
+ * 3. sinon la FC médiane de ses sorties faciles récentes, ramenée dans sa Z2 ;
+ * 4. sinon le milieu de la Z2 de ses zones (déduites ou provisoires).
+ */
+export function personalReferenceHeartRate(input: { zones: HeartRateZones; zonesFromWatch: boolean; easyRunHeartRates: number[] }): ReferenceHeartRate {
+  const { floors, lactateThresholdHeartRateBpm: lthr } = input.zones;
+  const z2Low = floors[1];
+  const z2High = floors[2] - 1;
+  const z2Middle = Math.round((z2Low + z2High) / 2);
+  if (input.zonesFromWatch) return { bpm: z2Middle, source: "watch_z2" };
+  if (lthr != null) return { bpm: Math.round(lthr * EASY_SHARE_OF_THRESHOLD), source: "threshold" };
+  const easy = input.easyRunHeartRates.filter((value) => value > 0);
+  if (easy.length >= MIN_EASY_RUNS_FOR_REFERENCE) {
+    return { bpm: Math.min(z2High, Math.max(z2Low, Math.round(median(easy) as number))), source: "easy_runs" };
+  }
+  return { bpm: z2Middle, source: "zones_z2" };
+}
+
+/** FC des portions aérobies de ses sorties faciles qualifiantes des 16 dernières semaines. */
+export function easyRunHeartRates(runs: ProgressionRun[], today: string): number[] {
+  return present(runs.filter((run) => qualifies(run) && run.localDate <= today && daysBetween(run.localDate, today) < 7 * 16).map((run) => run.metrics.aerobic?.heartRateBpm));
 }

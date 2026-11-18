@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 18 novembre 2026 (nuit, carte aérobie et calendrier).
+Dernière mise à jour : 18 novembre 2026 (après-midi, FC de référence par profil sur la carte aérobie).
 
 ## En deux phrases
 
@@ -419,6 +419,18 @@ aux autres outils ; analyses jugées ; priorités). Points 1 à 4 validés par l
   167 = convention Garmin, présentée « seuil à la limite Z4/Z5 »). La charge utile séance écrit aussi
   « 169 bpm (limite Z4–Z5) » (`thresholdAtZ4Z5Boundary`, accepté par le garde-fou de zones) ; les
   analyses en cache passent « à mettre à jour », sans appel automatique.
+
+- 18 nov., après-midi : FC de référence de la carte aérobie propre au profil (`personalReferenceHeartRate`
+  dans `engine/progression.ts`) : milieu de la Z2 montre (Bastien 128–148 → 138 bpm, avant 135 = médiane
+  des FC de footing arrondie à 5) ; sinon ~80 % de la FC seuil ; sinon FC médiane des sorties faciles
+  ramenée dans la Z2 du profil ; sinon milieu de la Z2 déduite. `Progression.referenceSource`.
+  Carte : allure en gros + badge de verdict sur la même ligne (`.aerobic-head`, badge non absolu),
+  « Pas assez de données » au lieu de « Pas encore de tendance », une seule phrase d'action reliée au
+  levier de l'objectif (`progressionAction`, « tes objectifs » si plusieurs objectifs au même levier),
+  écart chiffré et source de la FC dans « Comment c'est calculé ? » (`progressionExplanation`).
+  `vouvoyer` conjugue « tu cours / courais / tiens / fais / as / es » (« vous cours » corrigé).
+  La FC de référence entre dans la charge utile du conseil du jour : il passe « à mettre à jour »,
+  aucun appel fait.
 
 ## État
 

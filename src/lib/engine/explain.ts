@@ -1,6 +1,7 @@
 import { formatDuration, formatNumber, formatPace, formatSigned } from "@/lib/formatters";
 import type { LoadAlert, LoadSummary } from "./load";
-import type { Progression } from "./progression";
+import type { GoalGap } from "./goal-gap";
+import type { Progression, ReferenceHrSource } from "./progression";
 import type { RecoverySignals } from "./recovery";
 
 /**
@@ -25,7 +26,7 @@ const VERDICT_HEADLINES: Record<Progression["state"], string> = {
   progressing: "Ça progresse",
   stable: "C'est stable",
   regressing: "Ça recule",
-  insufficient: "Pas encore de tendance",
+  insufficient: "Pas assez de données",
 };
 
 /**
@@ -58,6 +59,57 @@ export function progressionVerdict(progression: Progression): ProgressionVerdict
     reason: `${amount} s/km plus ${faster ? "vite" : "lent"} qu'il y a ${windowWeeks} semaines, à cœur égal.`,
     caution,
   };
+}
+
+/** Le levier de l'objectif, en action courte (sans les chiffres de planification détaillés). */
+function leverAction(gap: GoalGap | null): string | null {
+  switch (gap?.main) {
+    case "frequency": return `ajoute un footing facile en Z2 pour passer à ${gap.nextRunsPerWeek} sorties par semaine`;
+    case "volume": return "monte le volume peu à peu, 10 % par semaine au plus";
+    case "long_run": return "allonge ta sortie longue de 2 km toutes les 2 semaines, en Z2";
+    case "threshold": return "garde une séance au seuil par semaine";
+    default: return null;
+  }
+}
+
+/**
+ * Une seule phrase d'action sous le verdict de la carte aérobie, reliée au levier
+ * principal de l'objectif (fréquence, volume, sortie longue, seuil). Pas de marge chiffrée.
+ * Plusieurs objectifs au même levier : « tes objectifs » plutôt qu'une course au hasard.
+ */
+export function progressionAction(progression: Progression, gaps: GoalGap[]): string {
+  const withLever = gaps.filter((entry) => entry.main != null);
+  const gap = withLever[0] ?? gaps[0] ?? null;
+  const lever = leverAction(gap);
+  const sameLever = withLever.length > 1 && withLever.every((entry) => entry.main === gap?.main);
+  const race = gap ? (sameLever ? "tes objectifs" : `ton ${gap.race}`) : null;
+  switch (progression.state) {
+    case "insufficient": {
+      const missing = Math.max(1, 3 - Math.min(progression.recent.runs, progression.previous.runs));
+      return `Ajoute des footings faciles d'au moins 30 min : il en faut ${missing} de plus pour dégager une tendance.`;
+    }
+    case "progressing":
+      return lever ? `Continue sur cette lancée ; pour ${race}, le prochain pas : ${lever}.` : "Continue sur cette lancée : garde la même régularité.";
+    case "stable":
+      return lever ? `Pour la faire progresser${race ? ` vers ${race}` : ""} : ${lever}.` : "Pour la faire progresser : ajoute un footing facile par semaine.";
+    case "regressing":
+      return lever ? `Pour la relancer : ${lever}, en gardant les footings vraiment faciles.` : "Pour la relancer : garde des footings réguliers et vraiment faciles.";
+  }
+}
+
+const REFERENCE_SOURCES: Record<ReferenceHrSource, string> = {
+  watch_z2: "le milieu de ta zone 2, selon ta montre",
+  threshold: "environ 80 % de ta FC seuil",
+  easy_runs: "ta FC habituelle en footing",
+  zones_z2: "le milieu de ta zone 2",
+};
+
+/** Explication dépliable : d'où vient la FC de référence, comment on compare, et l'écart mesuré. */
+export function progressionExplanation(progression: Progression): string {
+  const { referenceHeartRateBpm: hr, windowWeeks } = progression;
+  const verdict = progressionVerdict(progression);
+  const how = `Sur tes sorties faciles, on mesure l'allure que tu tiens par battement de cœur, ramenée à ${hr} bpm (${REFERENCE_SOURCES[progression.referenceSource]}), puis on compare tes ${windowWeeks} dernières semaines aux ${windowWeeks} précédentes.`;
+  return [how, verdict.reason, verdict.caution].filter(Boolean).join(" ");
 }
 
 export function progressionSentence(progression: Progression): string {

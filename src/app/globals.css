@@ -553,6 +553,8 @@ a.welcome-stat:hover { transform: translate(-1px, -1px); }
 .verdict-mark.progressing { background: var(--sl-ok); }
 .verdict-mark.regressing { background: var(--sl-warn); }
 .verdict-mark.stable { background: var(--sl-yellow); }
+.aerobic-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 14px; }
+.card-progress .state-badge { position: static; transform: rotate(-3deg); }
 .aerobic-label { margin-top: 8px; font-family: var(--font-data); font-size: 12px; color: var(--sl-ink-muted); }
 .verdict-reason { margin-top: 12px; font-size: 15px; }
 .how-to { margin-top: 12px; }
@@ -568,7 +570,7 @@ a.welcome-stat:hover { transform: translate(-1px, -1px); }
   .home-hero .card-progress { order: 2; }
   .home-hero .cal-card { order: 3; }
   .card-progress .big-number { font-size: 60px; }
-  .card-progress .state-badge { top: 16px; right: 14px; font-size: 14px; }
+  .card-progress .state-badge { font-size: 14px; }
 }
 
 /* ---------- Calendrier des séances ---------- */

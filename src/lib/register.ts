@@ -22,6 +22,7 @@ export function say(register: Register, tu: string, vous: string): string {
 const IMPERATIVES: Record<string, string> = {
   absorbe: "absorbez",
   ajoute: "ajoutez",
+  continue: "continuez",
   allonge: "allongez",
   coupe: "coupez",
   décale: "décalez",
@@ -46,6 +47,12 @@ const IMPERATIVES: Record<string, string> = {
 /** Expressions figées à convertir telles quelles (avant les règles mot à mot). */
 const PHRASES: Array<[RegExp, string]> = [
   [/\btu dois\b/g, "vous devez"],
+  [/\btu cours\b/g, "vous courez"],
+  [/\btu courais\b/g, "vous couriez"],
+  [/\btu tiens\b/g, "vous tenez"],
+  [/\btu fais\b/g, "vous faites"],
+  [/\btu as\b/g, "vous avez"],
+  [/\btu es\b/g, "vous êtes"],
   [/\bTu dois\b/g, "Vous devez"],
   [/\btu peux\b/g, "vous pouvez"],
   [/\bTu peux\b/g, "Vous pouvez"],

@@ -14,7 +14,7 @@ import type { OutlookCoachOutput } from "@/lib/coach/outlook-coach";
 import type { SessionCoachOutput } from "@/lib/coach/session-coach";
 import { daysBetween } from "@/lib/dates";
 import { sessionTitle } from "@/lib/engine/activity-metrics";
-import { hrvCompare, hrvMeaning, loadMeaning, progressionVerdict, restingHrCompare, restingHrMeaning, sleepCompare, sleepMeaning, type Tone } from "@/lib/engine/explain";
+import { hrvCompare, hrvMeaning, loadMeaning, progressionAction, progressionExplanation, progressionVerdict, restingHrCompare, restingHrMeaning, sleepCompare, sleepMeaning, type Tone } from "@/lib/engine/explain";
 import { SPORT_LABELS, VERDICT_TONES } from "@/lib/engine/labels";
 import { VERDICT_LABELS } from "@/lib/engine/verdict";
 import { formatDate, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
@@ -131,20 +131,20 @@ export function ProgressionCard({ dashboard }: { dashboard: Dashboard }) {
   const toPace = (speed: number | null) => (speed ? 1000 / speed : null);
   return (
     <section className="card card-hero card-progress card-collapsible" aria-labelledby="progress-title">
-      <span className={`state-badge ${progression.state}`}><VerdictMark state={progression.state} />{verdict.headline}</span>
       <div className="card-eyebrow"><Gauge size={13} /> Forme aérobie</div>
       <h2 id="progress-title" className="sr-only">Forme aérobie : {verdict.headline}</h2>
-      {progression.state !== "insufficient" ? (
-        <>
-          <div className="big-number" style={{ marginTop: 14 }}>{formatPace(progression.recent.speedAtReferenceHr).replace("/km", "")}<span className="unit">/km</span></div>
-          <div className="aerobic-label"><Say tu={`ton allure quand tu cours à ${hr} bpm`} /></div>
-        </>
-      ) : null}
-      <p className="verdict-reason"><Say tu={verdict.reason} />{verdict.caution ? <span className="muted"> {verdict.caution}</span> : null}</p>
+      <div className="aerobic-head">
+        {progression.state !== "insufficient" ? (
+          <div className="big-number">{formatPace(progression.recent.speedAtReferenceHr).replace("/km", "")}<span className="unit">/km</span></div>
+        ) : null}
+        <span className={`state-badge ${progression.state}`}><VerdictMark state={progression.state} />{verdict.headline}</span>
+      </div>
+      {progression.state !== "insufficient" ? <div className="aerobic-label"><Say tu={`ton allure quand tu cours à ${hr} bpm`} /></div> : null}
+      <p className="verdict-reason"><Say tu={progressionAction(progression, dashboard.goalGaps)} /></p>
       <div className="card-more">
         <details className="more how-to">
           <summary><ChevronRight size={14} className="chev" /> Comment c&apos;est calculé ?</summary>
-          <p className="more-body small"><Say tu={`Sur tes sorties faciles, on mesure l'allure que tu tiens par battement de cœur, ramenée à ${hr} bpm (ta FC habituelle en footing), puis on compare tes ${progression.windowWeeks} dernières semaines aux ${progression.windowWeeks} précédentes.`} /></p>
+          <p className="more-body small"><Say tu={progressionExplanation(progression)} /></p>
         </details>
         <ProgressionChart
           points={progression.points.map((point) => ({ date: point.date, secondsPerKm: 1000 / point.speedAtReferenceHr }))}
