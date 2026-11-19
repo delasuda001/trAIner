@@ -66,6 +66,8 @@ function spans(text: string): Span[] {
   // Une consigne porte un chiffre ou une zone ; un mot de séance seul (« la sortie longue ») ne suffit pas.
   return result
     .map((span) => trimSpan(text, span))
+    // « ton 10 km », « le semi » : le nom d'une course, pas une consigne.
+    .filter((span) => !(span.tokens === 1 && /^\d+(?:[,.]\d+)? ?km$/.test(text.slice(span.start, span.end)) && /\b(?:ton|votre|le|du|un|ce)\s+$/i.test(text.slice(0, span.start))))
     .filter((span) => span.numeric && !PAST_RE.test(text.slice(Math.max(0, span.start - 50), span.start)) && !STEP_AFTER_RE.test(text.slice(span.end)) && !/→\s*$/.test(text.slice(0, span.start)));
 }
 

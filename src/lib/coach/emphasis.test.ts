@@ -38,6 +38,10 @@ describe("consigne clé mise en évidence", () => {
     expect(keys("Passe à 2 sorties par semaine : ajoute un footing facile de 30 à 40 min en Z2 ; ensuite, allonge ta sortie longue de 2 km toutes les 2 semaines (11 → 18 km en 8 semaines).")).toEqual(["footing facile de 30 à 40 min en Z2"]);
   });
 
+  it("carte forme aérobie : la séance à ajouter", () => {
+    expect(keys("Continue sur cette lancée ; pour ton 10 km, le prochain pas : ajoute un footing facile en Z2 pour passer à 2 sorties par semaine.")).toEqual(["footing facile en Z2"]);
+  });
+
   it("le texte reste identique une fois recollé", () => {
     const text = "Pour le semi, avec 2 sorties par semaine : une de qualité, une longue. C'est le tour de la sortie longue (13 km), en Z2.";
     expect(emphasize(text).map((part) => part.text).join("")).toBe(text);

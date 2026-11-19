@@ -140,7 +140,7 @@ export function ProgressionCard({ dashboard }: { dashboard: Dashboard }) {
         <span className={`state-badge ${progression.state}`}><VerdictMark state={progression.state} />{verdict.headline}</span>
       </div>
       {progression.state !== "insufficient" ? <div className="aerobic-label"><Say tu={`ton allure quand tu cours à ${hr} bpm`} /></div> : null}
-      <p className="verdict-reason"><Say tu={progressionAction(progression, dashboard.goalGaps)} /></p>
+      <p className="verdict-reason"><CoachText text={progressionAction(progression, dashboard.goalGaps)} voice /></p>
       <div className="card-more">
         {/* Le graphique des sorties faciles est l'explication du chiffre : replié avec elle. */}
         <details className="more how-to">
