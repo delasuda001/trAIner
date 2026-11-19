@@ -15,6 +15,9 @@ import { paceSeconds } from "./activity-metrics";
  * - terrain roulant (≤ 10 m de D+ par km).
  * Le seuil observé (moyenne des 3 plus récentes) ne remplace celui de la montre
  * que s'il est plus rapide d'au moins 8 s/km. Sinon, la montre reste la référence.
+ *
+ * Montre sans FC seuil (zones en % de FC max) : la bande de FC retenue est la Z4
+ * du profil (début de Z4 à début de Z5 − 1) ; le seuil obtenu est dit indicatif.
  */
 
 export const OBSERVED_WINDOW_DAYS = 56;
@@ -52,8 +55,18 @@ function repLabel(evidence: ThresholdEvidence): string {
   return `${evidence.reps} × ${distance}`;
 }
 
-export function thresholdEvidence(runs: ThresholdRun[], today: string, thresholdHeartRateBpm: number | null): ThresholdEvidence[] {
-  if (thresholdHeartRateBpm == null) return [];
+/** Bande de FC d'un travail au seuil : autour de la FC seuil, sinon la Z4 du profil. */
+export type ThresholdBand = { low: number; high: number; fromZones: boolean };
+
+export function thresholdBand(thresholdHeartRateBpm: number | null, zoneFloors?: number[] | null): ThresholdBand | null {
+  if (thresholdHeartRateBpm != null) return { low: thresholdHeartRateBpm - HR_BELOW, high: thresholdHeartRateBpm + HR_ABOVE, fromZones: false };
+  if (zoneFloors && zoneFloors.length >= 5) return { low: zoneFloors[3], high: zoneFloors[4] - 1, fromZones: true };
+  return null;
+}
+
+export function thresholdEvidence(runs: ThresholdRun[], today: string, thresholdHeartRateBpm: number | null, zoneFloors?: number[] | null): ThresholdEvidence[] {
+  const band = thresholdBand(thresholdHeartRateBpm, zoneFloors);
+  if (band == null) return [];
   const from = addDays(today, -OBSERVED_WINDOW_DAYS);
   return runs
     .filter((run) => run.localDate > from && run.localDate <= today)
@@ -64,15 +77,16 @@ export function thresholdEvidence(runs: ThresholdRun[], today: string, threshold
       if (!longEnough || work.reps * work.averageDurationS < MIN_WORK_S) return [];
       if ((run.metrics.elevationGainPerKm ?? 0) > MAX_ELEVATION_PER_KM) return [];
       const hr = work.averageHeartRateBpm;
-      if (hr < thresholdHeartRateBpm - HR_BELOW || hr > thresholdHeartRateBpm + HR_ABOVE) return [];
+      if (hr < band.low || hr > band.high) return [];
       return [{ localDate: run.localDate, reps: work.reps, repDistanceM: work.averageDistanceM, repDurationS: work.averageDurationS, speedMps: work.averageSpeedMps, heartRateBpm: Math.round(hr) }];
     })
     .sort((a, b) => b.localDate.localeCompare(a.localDate))
     .slice(0, MAX_SESSIONS);
 }
 
-export function estimateThreshold(input: { runs: ThresholdRun[]; today: string; watchSpeedMps: number | null; thresholdHeartRateBpm: number | null }): ThresholdEstimate {
-  const evidence = thresholdEvidence(input.runs, input.today, input.thresholdHeartRateBpm);
+export function estimateThreshold(input: { runs: ThresholdRun[]; today: string; watchSpeedMps: number | null; thresholdHeartRateBpm: number | null; zoneFloors?: number[] | null }): ThresholdEstimate {
+  const evidence = thresholdEvidence(input.runs, input.today, input.thresholdHeartRateBpm, input.zoneFloors);
+  const indicative = input.thresholdHeartRateBpm == null;
   const watch = input.watchSpeedMps;
   // Moyenne des allures (s/km), pas des vitesses : c'est ce que lit un coureur.
   const observedPaceS = evidence.length ? Math.round(evidence.reduce((sum, entry) => sum + paceSeconds(entry.speedMps), 0) / evidence.length) : null;
@@ -85,7 +99,7 @@ export function estimateThreshold(input: { runs: ThresholdRun[]; today: string; 
       watchSpeedMps: watch,
       observedSpeedMps: observed,
       evidence,
-      basis: `seuil observé ${pace(observed)} (${proof})${watch != null ? `, la montre l'estime à ${pace(watch)}` : ""}`,
+      basis: `seuil observé ${pace(observed)} (${proof})${watch != null ? `, la montre l'estime à ${pace(watch)}` : ""}${indicative ? " ; indicatif : la montre ne donne pas de FC seuil, répétitions retenues en Z4" : ""}`,
     };
   }
   if (watch != null) {

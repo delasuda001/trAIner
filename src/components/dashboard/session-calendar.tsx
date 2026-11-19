@@ -9,7 +9,7 @@ import { formatDate, formatNumber } from "@/lib/formatters";
 const DAY_LETTERS = ["L", "M", "M", "J", "V", "S", "D"];
 
 /**
- * Calendrier des séances, 8 semaines : une case par jour, couleur de la zone dominante
+ * Calendrier des séances, 8 semaines : une case par jour, couleur de l'intensité (zone du travail pour une qualité, zone dominante sinon)
  * (même code que partout), séance proposée en pointillé rose. À droite, les sorties de
  * la semaine face à la cible : des pastilles pleines pour ce qui est fait, jamais de rouge.
  */
@@ -37,7 +37,7 @@ export function SessionCalendar({ calendar, zonesNote }: { calendar: TrainingCal
         <span><span className="cal-swatch-other" />autre sport</span>
         <span><span className="cal-swatch-planned" />proposée</span>
       </div>
-      <p className="cal-zones"><Say tu={`Couleur = zone FC dominante. ${zonesNote}`} /></p>
+      <p className="cal-zones"><Say tu={`Couleur = intensité : zone du travail pour un fractionné ou un tempo, zone dominante sinon. ${zonesNote}`} /></p>
     </section>
   );
 }

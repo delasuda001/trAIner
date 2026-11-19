@@ -54,3 +54,20 @@ describe("seuil observé en séance", () => {
     expect(estimateThreshold({ runs: [], today, watchSpeedMps: null, thresholdHeartRateBpm: 169 })).toMatchObject({ source: "none", speedMps: null });
   });
 });
+
+describe("seuil observé sans FC seuil de la montre (zones en % de FC max)", () => {
+  const floors = [120, 134, 148, 161, 176];
+
+  it("retient des répétitions longues courues en Z4 du profil, avec une mention indicative", () => {
+    const estimate = estimateThreshold({ runs: [run("2026-11-13", { averageSpeedMps: 1000 / 300, averageHeartRateBpm: 168 })], today, watchSpeedMps: null, thresholdHeartRateBpm: null, zoneFloors: floors });
+    expect(estimate.source).toBe("observed");
+    expect(Math.round(1000 / (estimate.speedMps as number))).toBe(300);
+    expect(estimate.basis).toContain("indicatif : la montre ne donne pas de FC seuil");
+  });
+
+  it("écarte des répétitions en Z3 ou en Z5 ; sans zones, rien", () => {
+    const runs = [run("2026-11-10", { averageHeartRateBpm: 158 }), run("2026-11-12", { averageHeartRateBpm: 178 })];
+    expect(thresholdEvidence(runs, today, null, floors)).toEqual([]);
+    expect(estimateThreshold({ runs: [run("2026-11-13", { averageHeartRateBpm: 168 })], today, watchSpeedMps: null, thresholdHeartRateBpm: null }).source).toBe("none");
+  });
+});

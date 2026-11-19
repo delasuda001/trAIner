@@ -470,6 +470,17 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
     rythme (`decideOn`). Avec une semaine type à 2 sorties : après une qualité, la sortie suivante est la longue si
     elle est due (sinon la longue ne venait jamais), puis la qualité. Bastien : suggestion et « ensuite » identiques.
 - Forme aérobie « pas assez de données » (invitée à 1 sortie par semaine) : la carte compare deux périodes de 8 semaines (3 sorties faciles avec séries par période) ; les séries des invités ne couvraient que 12 semaines, la période précédente n'avait donc que 2 sorties exploitables. Fenêtre de séries portée à 16 semaines (`GUEST_DETAIL_WEEKS`) : se complète à la prochaine synchro (Garmin, sans jeton). Si une période reste sous 3 sorties, la carte reste honnête.
+- Objectif et retours de l'invitée (19 nov., nuit) :
+  - Page Objectif / carte Progression : la section n'apparaissait que s'il existait un repère d'allure (`goalMarkers`) ;
+    sans seuil montre ni répétitions VO2max, rien, même pas les leviers. `GoalStatusList` affiche maintenant les écarts
+    sans repère, avec une phrase qui dit pourquoi l'allure n'est pas estimable et quelle séance la donnera.
+  - Seuil observé sans FC seuil montre (`thresholdBand`) : bande = Z4 du profil, mention « indicatif ». La séance
+    « Seuil 3 × 10 min » que le moteur lui propose (FC en Z4) donnera donc un seuil observé, puis les estimations.
+    Bastien (FC seuil connue) : inchangé.
+  - Calendrier : couleur = zone du travail pour une séance de qualité (`calendarZone` : tempo 3, seuil 4, VO2/court 5),
+    zone dominante sinon. Un fractionné ne passe plus pour une endurance (échauffement et récupérations dominaient).
+  - Retour « interface dense, peu ludique, je ne sais pas comment tout utiliser » : non traité dans le code, à arbitrer
+    par Bastien (vue essentielle par profil, guide de démarrage).
 - Reste à vérifier : écart « à FC égale » en endurance face à des comparables à FC très dispersées (`comparable.ts`).
 
 ## État

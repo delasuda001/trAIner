@@ -1,3 +1,4 @@
+import type { SessionKind } from "./activity-metrics";
 import { addDays, daysBetween, startOfIsoWeek } from "@/lib/dates";
 
 /**
@@ -72,4 +73,21 @@ export function trainingCalendar(input: CalendarInput): TrainingCalendar {
     weeksAtTarget: input.target == null ? 0 : completed.filter((week) => week.runs >= (input.target as number)).length,
     completedWeeks: completed.length,
   };
+}
+
+/** Zone d'intensité de chaque type de séance de qualité (couleur du calendrier). */
+const QUALITY_ZONE: Partial<Record<SessionKind, number>> = { intervals_short: 5, intervals_vo2: 5, intervals_threshold: 4, threshold: 4, intervals_tempo: 3, tempo: 3 };
+
+/**
+ * Couleur d'une course dans le calendrier : pour une séance de qualité, l'intensité du travail (un fractionné
+ * passe la plupart de son temps en échauffement et récupération, sa zone dominante le ferait passer pour une
+ * endurance) ; sinon la zone dominante du temps passé.
+ */
+export function calendarZone(kind: SessionKind | null, zoneShares: number[] | null | undefined): number | null {
+  const quality = kind ? QUALITY_ZONE[kind] : undefined;
+  if (quality != null) return quality;
+  if (!zoneShares || !zoneShares.some((value) => value > 0)) return null;
+  let best = 0;
+  zoneShares.forEach((value, index) => { if (value > zoneShares[best]) best = index; });
+  return best + 1;
 }

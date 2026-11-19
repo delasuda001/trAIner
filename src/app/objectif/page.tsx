@@ -26,7 +26,7 @@ function renderGoalPage(member: Member) {
           <p className="page-sub">{say(register, "Le coach s'en sert pour choisir la prochaine séance et juger tes séances. Tout est facultatif.", "Le coach s'en sert pour choisir la prochaine séance et juger vos séances. Tout est facultatif.")}</p>
         </div>
       </div>
-      {dashboard.goalMarkers.length ? (
+      {dashboard.goalMarkers.length || dashboard.goalGaps.length ? (
         <section className="card" style={{ marginBottom: 16 }}>
           <h2 className="section-title">{say(register, "Où tu en es", "Où vous en êtes")}</h2>
           <p className="muted small" style={{ margin: "4px 0 0" }}>{say(register, "Repère du moment : fourchette entre l'estimation tirée de ton seuil (celui de la montre, ou celui de tes répétitions longues au seuil des 8 dernières semaines s'il est nettement plus rapide) et celle tirée de tes répétitions VO2max des 12 dernières semaines. Dessous, ce qui te sépare de l'objectif.", "Repère du moment : fourchette entre l'estimation tirée de votre seuil (celui de la montre, ou celui de vos répétitions longues au seuil des 8 dernières semaines s'il est nettement plus rapide) et celle tirée de vos répétitions VO2max des 12 dernières semaines. Dessous, ce qui vous sépare de l'objectif.")}</p>

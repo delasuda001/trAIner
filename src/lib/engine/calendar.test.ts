@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { trainingCalendar, type CalendarInput } from "./calendar";
+import { calendarZone, trainingCalendar, type CalendarInput } from "./calendar";
 
 const today = "2026-11-18"; // mercredi
 const run = (id: string, date: string, distanceM = 8000): CalendarInput["activities"][number] => ({ id, date, run: true, zone: 2, family: "easy", title: "Endurance", distanceM });
@@ -41,5 +41,18 @@ describe("trainingCalendar", () => {
     const calendar = trainingCalendar({ today, weeks: 2, target: null, activities: [run("a", "2026-11-10")], planned: [] });
     expect(calendar.weeksAtTarget).toBe(0);
     expect(calendar.averageRunsPerWeek).toBe(1);
+  });
+});
+
+describe("couleur d'une séance dans le calendrier", () => {
+  it("un fractionné prend la zone de son travail, pas sa zone dominante (échauffement, récupérations)", () => {
+    expect(calendarZone("intervals_tempo", [0.13, 0.41, 0.2, 0.26, 0])).toBe(3);
+    expect(calendarZone("intervals_vo2", [0.2, 0.5, 0.1, 0.1, 0.1])).toBe(5);
+    expect(calendarZone("threshold", null)).toBe(4);
+  });
+
+  it("une sortie facile garde sa zone dominante ; sans données, pas de zone", () => {
+    expect(calendarZone("endurance", [0.11, 0.6, 0.25, 0.04, 0])).toBe(2);
+    expect(calendarZone(null, null)).toBeNull();
   });
 });

@@ -9,7 +9,7 @@ import type { ActivityRow, WellnessRow } from "@/lib/db/types";
 import { computeActivityMetrics, METRICS_VERSION, sessionTitle, type ActivityMetrics } from "@/lib/engine/activity-metrics";
 import { computeDeltas, selectComparables, type ComparisonDeltas, type RunForComparison } from "@/lib/engine/comparable";
 import { isRun, loadAlert, loadFigure, summarizeLoad, type LoadAlert, type LoadFigure, type LoadSummary } from "@/lib/engine/load";
-import { trainingCalendar, type TrainingCalendar } from "@/lib/engine/calendar";
+import { calendarZone, trainingCalendar, type TrainingCalendar } from "@/lib/engine/calendar";
 import { computeProgression, easyRunHeartRates, personalReferenceHeartRate, type Progression } from "@/lib/engine/progression";
 import { assessRecovery, type RecoverySignals } from "@/lib/engine/recovery";
 import { runningRhythm, type Rhythm } from "@/lib/engine/rhythm";
@@ -117,7 +117,7 @@ export function loadContext(): Context {
     runs.push({ id: row.id, startTimeUtc: row.startTimeUtc, localDate: row.localDate, name: row.name, sport: row.sport, movingTimeS: row.movingTimeS, distanceM: row.distanceM, averageTemperatureC: row.averageTemperatureC, metrics, row });
   }
   // Seuil du moment : la montre, sauf si ses répétitions longues récentes à la FC du seuil disent nettement plus rapide.
-  const threshold = estimateThreshold({ runs, today, watchSpeedMps: profile.lactateThresholdSpeedMps, thresholdHeartRateBpm: profile.zones.lactateThresholdHeartRateBpm });
+  const threshold = estimateThreshold({ runs, today, watchSpeedMps: profile.lactateThresholdSpeedMps, thresholdHeartRateBpm: profile.zones.lactateThresholdHeartRateBpm, zoneFloors: profile.zones.floors });
   const withThreshold: Profile = { ...profile, lactateThresholdSpeedMps: threshold.speedMps, threshold };
   return { today, rows, runs, wellness, profile: withThreshold, goal: readGoal() };
 }
@@ -349,13 +349,6 @@ export type Dashboard = {
 const CALENDAR_WEEKS = 8;
 
 /** Zone FC dominante (1 à 5) d'une répartition de temps par zone. */
-function dominantZoneOf(shares: number[] | null | undefined): number | null {
-  if (!shares || !shares.some((value) => value > 0)) return null;
-  let best = 0;
-  shares.forEach((value, index) => { if (value > shares[best]) best = index; });
-  return best + 1;
-}
-
 /** Types de séance réalisés qui correspondent à une suggestion (pour reprendre la consigne de la dernière fois). */
 const SAME_TYPE_KINDS: Partial<Record<Suggestion["primary"]["type"], string[]>> = {
   threshold: ["intervals_threshold", "threshold"],
@@ -459,7 +452,7 @@ export function getDashboard(): Dashboard {
       target: weekPlanFor(goal, goalGapsFor(goal, runs, today, profile.lactateThresholdSpeedMps), runs, today)?.runsPerWeek ?? goal?.runsPerWeek ?? null,
       activities: rows.filter((row) => row.localDate >= addDays(startOfIsoWeek(today), -7 * (CALENDAR_WEEKS - 1))).map((row) => {
         const run = runById.get(row.id);
-        return { id: row.id, date: row.localDate, run: isRun(row.sport), zone: dominantZoneOf(run?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null)), family: run?.metrics.family ?? "other", title: run ? sessionTitle(run.metrics) : row.name, distanceM: row.distanceM };
+        return { id: row.id, date: row.localDate, run: isRun(row.sport), zone: calendarZone(run?.metrics.kind ?? null, run?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null)), family: run?.metrics.family ?? "other", title: run ? sessionTitle(run.metrics) : row.name, distanceM: row.distanceM };
       }),
       planned: [
         ...suggestion.when.dates.map((date, index) => ({ date, type: suggestion.primary.type, alternative: index > 0 })),
