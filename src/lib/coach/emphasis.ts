@@ -63,12 +63,23 @@ function spans(text: string): Span[] {
       result.push({ start: match.start, end: match.end, tokens: 1, session: match.session, numeric: !match.session });
     }
   }
-  // Une consigne porte un chiffre ou une zone ; un mot de séance seul (« la sortie longue ») ne suffit pas.
+  // Une consigne porte un chiffre ou une zone ; un mot de séance seul ne compte que faute de mieux (cf. fallbackSession).
   return result
     .map((span) => trimSpan(text, span))
     // « ton 10 km », « le semi » : le nom d'une course, pas une consigne.
     .filter((span) => !(span.tokens === 1 && /^\d+(?:[,.]\d+)? ?km$/.test(text.slice(span.start, span.end)) && /\b(?:ton|votre|le|du|un|ce)\s+$/i.test(text.slice(0, span.start))))
-    .filter((span) => span.numeric && !PAST_RE.test(text.slice(Math.max(0, span.start - 50), span.start)) && !STEP_AFTER_RE.test(text.slice(span.end)) && !/(?:→|\bdure|\bdurait)\s*$/.test(text.slice(0, span.start)));
+    .filter((span) => !PAST_RE.test(text.slice(Math.max(0, span.start - 50), span.start)) && !STEP_AFTER_RE.test(text.slice(span.end)) && !/(?:→|\bdure|\bdurait)\s*$/.test(text.slice(0, span.start)))
+    .filter((span, _, all) => span.numeric || (!all.some((other) => other.numeric) && fallbackSession(text, span)));
+}
+
+/**
+ * Sans aucune consigne chiffrée (« on récupère avec une sortie facile »), le type de séance proposé
+ * suffit : en deux mots au moins (« sortie facile », « footing court »), jamais « seuil » seul ni la
+ * séance d'un jour cité (« la sortie longue de samedi »).
+ */
+function fallbackSession(text: string, span: Span): boolean {
+  const words = text.slice(span.start, span.end);
+  return /\s/.test(words) && !/^\s*(?:de|du)\s+(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)/i.test(text.slice(span.end));
 }
 
 /** Retire la ponctuation de bord (« , », parenthèse ouvrante sans fermante). */

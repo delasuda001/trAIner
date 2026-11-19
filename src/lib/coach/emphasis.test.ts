@@ -50,6 +50,11 @@ describe("consigne clé mise en évidence", () => {
     expect(keys("Ta plus longue sortie récente dure 44 min : vise 55 min, tout en aisance.")).toEqual(["55 min"]);
   });
 
+  it("sans chiffre : le type de séance proposé, en deux mots au moins", () => {
+    expect(keys("Ta semaine a été nettement plus chargée que d'habitude, et ta VFC est basse : on récupère avec une sortie facile.")).toEqual(["sortie facile"]);
+    expect(keys("Pour progresser sans se mettre dans le rouge : un peu de vitesse en jouant, le reste en aisance. Le seuil et la VO2max viendront plus tard.")).toEqual([]);
+  });
+
   it("le texte reste identique une fois recollé", () => {
     const text = "Pour le semi, avec 2 sorties par semaine : une de qualité, une longue. C'est le tour de la sortie longue (13 km), en Z2.";
     expect(emphasize(text).map((part) => part.text).join("")).toBe(text);
