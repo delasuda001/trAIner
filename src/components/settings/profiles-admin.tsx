@@ -23,6 +23,8 @@ export type ProfileView = {
   invitationUntil: string | null;
   onboarded: boolean;
   hasCode: boolean;
+  /** Code personnel (6 chiffres) d'un invité, null pour un ancien code long ou l'administrateur. */
+  guestCode: string | null;
   /** Ton profil invité de test (copie de ta base). */
   isTest: boolean;
   /** Préparation avant la première ouverture (invités). */
@@ -38,7 +40,7 @@ const STAGE_LABELS: Record<PrepareStatus["stage"], string> = {
   error: "Interrompu",
 };
 
-/** Préparer un invité avant de lui envoyer son lien : tout est calculé, 2 séances déjà analysées. */
+/** Préparer un invité avant de lui envoyer son code : tout est calculé, 2 séances déjà analysées. */
 function PreparePanel({ profile, estimate }: { profile: ProfileView; estimate: number }) {
   const router = useRouter();
   const [status, setStatus] = useState<PrepareStatus | null>(profile.prepare);
@@ -70,7 +72,7 @@ function PreparePanel({ profile, estimate }: { profile: ProfileView; estimate: n
   const blocked = !profile.garminPresent ? "Ajoute d'abord sa clé Garmin." : profile.prepareGuard && !profile.prepareGuard.allowed ? profile.prepareGuard.message : null;
   return (
     <div className="prepare-panel">
-      <div className="fact-label">Préparer son espace (avant d&apos;envoyer le lien)</div>
+      <div className="fact-label">Préparer son espace (avant de lui envoyer son code)</div>
       {status ? (
         <p className="small" style={{ margin: "4px 0" }}>
           <strong>{STAGE_LABELS[status.stage]}</strong>
@@ -271,9 +273,19 @@ function ProfileCard({ profile, onSecret, prepareEstimate, testCoachSimulated }:
 
       {profile.isTest ? <TestPanel exists simulated={testCoachSimulated} onSecret={onSecret} /> : guest ? <PreparePanel profile={profile} estimate={prepareEstimate} /> : null}
 
+      {guest && !profile.isTest ? (
+        <div className="guest-access">
+          <div className="fact-label">Connexion</div>
+          <p className="small" style={{ margin: "4px 0" }}>Prénom <strong>{profile.name}</strong> · code {profile.guestCode ? <code className="secret-value">{profile.guestCode}</code> : <span className="muted">ancien code long (non affichable) : génère un code à 6 chiffres</span>}</p>
+        </div>
+      ) : null}
       <div className="profile-actions">
-        <button type="button" className="btn" onClick={() => void act({ action: "invitation" }, (json) => onSecret({ title: `Lien d'invitation de ${profile.name}`, lines: [{ label: "Lien", value: String(json?.link ?? "") }], note: "À usage unique, valable 7 jours : il ouvre la session sur l'appareil où il est ouvert (à ouvrir dans Safari sur iPhone). Il remplace le lien précédent. Il ne sera plus affiché." }))}><Link2 size={14} /> Nouveau lien d&apos;invitation</button>
-        <button type="button" className="btn btn-ghost" onClick={() => void act({ action: "code" }, (json) => onSecret({ title: `Code de secours de ${profile.name}`, lines: [{ label: "Code", value: String(json?.code ?? "") }], note: "Sert si l'application installée sur l'écran d'accueil redemande la connexion. Les appareils déjà connectés le restent. Il ne sera plus affiché." }))}><KeyRound size={14} /> {profile.hasCode ? "Nouveau code" : "Créer un code"}</button>
+        {profile.isTest ? <button type="button" className="btn" onClick={() => void act({ action: "invitation" }, (json) => onSecret({ title: `Lien d'invitation de ${profile.name}`, lines: [{ label: "Lien", value: String(json?.link ?? "") }], note: "À usage unique, valable 7 jours. Il ne sera plus affiché." }))}><Link2 size={14} /> Nouveau lien d&apos;invitation</button> : null}
+        {guest && !profile.isTest ? (
+          <button type="button" className="btn" onClick={() => { if (window.confirm(`Nouveau code pour ${profile.name} ? L'ancien ne marchera plus pour un nouvel appareil (ses appareils déjà connectés le restent).`)) void act({ action: "code" }); }}><KeyRound size={14} /> {profile.guestCode ? "Régénérer le code" : "Code à 6 chiffres"}</button>
+        ) : !guest ? (
+          <button type="button" className="btn btn-ghost" onClick={() => void act({ action: "code" }, (json) => onSecret({ title: `Ton code de connexion`, lines: [{ label: "Code", value: String(json?.code ?? "") }], note: "À taper avec ton prénom sur un nouvel appareil. Les appareils déjà connectés le restent. Il ne sera plus affiché." }))}><KeyRound size={14} /> Nouveau code</button>
+        ) : null}
         {profile.devices.length ? <button type="button" className="btn btn-ghost" onClick={() => void act({ action: "revoke-all" })}>Déconnecter tous ses appareils</button> : null}
         {guest ? <button type="button" className="btn btn-ghost" onClick={() => void act({ action: profile.disabled ? "enable" : "disable" })}><ShieldOff size={14} /> {profile.disabled ? "Réactiver" : "Désactiver"}</button> : null}
       </div>
@@ -295,8 +307,8 @@ export function ProfilesAdmin({ profiles, publicUrlConfigured, prepareEstimate, 
       const json = await post("/api/profiles", { name });
       setSecret({
         title: `Profil « ${String(json?.name ?? name)} » créé`,
-        lines: [{ label: "Lien d'invitation", value: String(json?.link ?? "") }, { label: "Code de secours", value: String(json?.code ?? "") }],
-        note: `Ajoute sa clé Garmin (${String(json?.garminEnvVar ?? "")}=… dans .env.local), clique sur « Préparer le profil », puis envoie-lui le lien quand c'est prêt (usage unique, 7 jours). Garde le code pour le cas où l'application installée redemande la connexion. Ni le lien ni le code ne seront réaffichés.`,
+        lines: [{ label: "Adresse", value: String(json?.url ?? "") }, { label: "Prénom", value: String(json?.name ?? name) }, { label: "Code", value: String(json?.code ?? "") }],
+        note: `Ajoute sa clé Garmin (${String(json?.garminEnvVar ?? "")}=… dans .env.local), clique sur « Préparer le profil », puis envoie-lui l'adresse (la même pour tous), son prénom et son code. Le code reste visible sur sa carte.`,
       });
       setName("");
       router.refresh();

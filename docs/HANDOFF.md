@@ -546,3 +546,9 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
   chiffres ni médiane ; `outlook-v5` (règle : pas de charge brute, ratio ni médiane dans suggestionWhy). Demander au coach :
   choix d'une séance (12 dernières, celles qui correspondent à la question en tête), `seance_choisie` (~300 tokens, résumé,
   consignes, ressenti, ce que le coach en a dit) en tête du contexte, `chat-v3` ; lien depuis la page d'une séance.
+- (19 nov., nuit, branche `claude/proposition-connexion-19nov`) Connexion : une adresse pour tous (l'adresse publique), prénom
+  + code personnel. Invités : code à 6 chiffres (`generateGuestCode`), gardé lisible dans le registre (`guest_code`, migration 4)
+  pour que Bastien le voie et le régénère ; vérifié par empreinte comme avant. `findByNameAndCode` (prénom sans accents ni casse,
+  le code départage deux prénoms identiques). Sans prénom, seul un code long passe (anciens codes). Freinage inchangé. Anciens
+  liens d'invitation encore valides ; lien déjà servi → /connexion « plus nécessaire ». Paramètres : code affiché sur la carte de
+  l'invité (« Régénérer le code ») ; côté invité, « Ouvrir Sillage sur un autre appareil » (adresse, prénom, code).

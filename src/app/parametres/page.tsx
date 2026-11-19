@@ -96,6 +96,7 @@ async function adminSections() {
       invitationUntil: registry.pendingInvitation(record.id)?.expiresAt ?? null,
       onboarded: record.onboardedAt != null,
       hasCode: record.hasCode,
+      guestCode: record.guestCode,
       isTest: record.testOf != null,
       prepare: record.role === "guest" ? readPrepareStatus(record.id) : null,
       prepareGuard: record.role === "guest" ? preparationAllowed(toMember(record)) : null,
@@ -144,6 +145,8 @@ async function adminSections() {
 function renderGuest(member: Member) {
   const registry = getRegistry();
   const devices = registry.listSessions(member.id).map((session) => ({ id: session.id, device: session.device, lastSeenAt: session.lastSeenAt }));
+  const record = registry.find(member.id);
+  const address = publicUrl("").url;
   return (
     <>
       <div className="page-head">
@@ -168,6 +171,10 @@ function renderGuest(member: Member) {
         <section className="card">
           <h2 className="section-title">Vos appareils connectés</h2>
           <MyDevices devices={devices} />
+          <div className="other-device">
+            <div className="fact-label">Ouvrir Sillage sur un autre appareil</div>
+            <p className="small" style={{ margin: "4px 0 0" }}>Allez sur {address ? <strong className="mono">{address.replace(/^https?:\/\//, "")}</strong> : "la même adresse"}, puis entrez votre prénom <strong>{member.name}</strong> et votre code {record?.guestCode ? <strong className="mono">{record.guestCode}</strong> : "(demandez-le à Bastien)"}. Une seule fois par appareil.</p>
+          </div>
           <p className="muted small" style={{ marginTop: 10 }}>Un appareil perdu ? Déconnectez-le ici, ou prévenez Bastien. <Link href="/bienvenue">Revoir l&apos;accueil du test</Link></p>
         </section>
       </div>

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { z } from "zod";
-import { hashCode, INVITATION_TTL_MS, SESSION_TTL_S, tokenDigest, verifyCode } from "./credentials";
+import { hashCode, INVITATION_TTL_MS, normalizeName, SESSION_TTL_S, tokenDigest, verifyCode } from "./credentials";
 import { DEFAULT_GUEST_DAILY_CAP, DEFAULT_GUEST_WEEKLY_CAP, garminEnvVarFor, MEMBER_ID_PATTERN, type MemberRecord } from "./types";
 
 /**
@@ -70,6 +70,8 @@ const MIGRATIONS: string[] = [
   CREATE INDEX login_events_at_idx ON login_events(at);`,
   // Profil invité de test de Bastien : copie de sa base, réinitialisable (`test_of` = profil copié).
   `ALTER TABLE profiles ADD COLUMN test_of TEXT;`,
+  // Code personnel court des invités, gardé lisible pour que Bastien puisse le redonner (le registre reste sur son Mac).
+  `ALTER TABLE profiles ADD COLUMN guest_code TEXT;`,
 ];
 
 export const ADMIN_ID = "bastien";
@@ -89,6 +91,7 @@ const profileRowSchema = z.object({
   onboarded_at: z.string().nullable(),
   disabled_at: z.string().nullable(),
   test_of: z.string().nullable().default(null),
+  guest_code: z.string().nullable().default(null),
 });
 type ProfileRow = z.infer<typeof profileRowSchema>;
 
@@ -106,6 +109,7 @@ function toRecord(row: ProfileRow): MemberRecord {
     onboardedAt: row.onboarded_at,
     disabledAt: row.disabled_at,
     testOf: row.test_of,
+    guestCode: row.role === "guest" ? row.guest_code : null,
   };
 }
 
@@ -242,6 +246,25 @@ export function createRegistry(connection: Database.Database, clock: () => Date 
     setCode(id: string, code: string): void {
       const { hash, salt } = hashCode(code);
       connection.prepare("UPDATE profiles SET code_hash = ?, code_salt = ? WHERE id = ?").run(hash, salt, id);
+    },
+
+    /** Code personnel court d'un invité : vérifié comme les autres (empreinte), gardé lisible pour Bastien. */
+    setGuestCode(id: string, code: string): void {
+      const { hash, salt } = hashCode(code);
+      connection.prepare("UPDATE profiles SET code_hash = ?, code_salt = ?, guest_code = ? WHERE id = ? AND role = 'guest'").run(hash, salt, code, id);
+    },
+
+    /**
+     * Connexion par prénom + code : le prénom est tapé (aucune liste de profils n'est montrée sur la page
+     * publique). Plusieurs profils au même prénom (Bastien et son profil de test) : le code départage.
+     */
+    findByNameAndCode(name: string, code: string): MemberRecord | null {
+      const wanted = normalizeName(name);
+      if (!wanted) return null;
+      for (const row of z.array(profileRowSchema).parse(connection.prepare("SELECT * FROM profiles WHERE disabled_at IS NULL AND code_hash IS NOT NULL").all())) {
+        if (normalizeName(row.name) === wanted && row.code_hash && row.code_salt && verifyCode(code, row.code_hash, row.code_salt)) return toRecord(row);
+      }
+      return null;
     },
 
     /** Profil actif dont le code correspond (connexion par code seul : aucun nom de profil n'est exposé). */

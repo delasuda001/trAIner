@@ -22,14 +22,34 @@ export function generateAccessCode(): string {
   return groups.join("-");
 }
 
+/** Longueur du code personnel d'un invité : court, en chiffres, facile à taper sur téléphone. */
+export const GUEST_CODE_LENGTH = 6;
+
+/**
+ * Code personnel d'un invité : 6 chiffres. Toujours demandé avec le prénom ; les essais en série
+ * sont freinés (5 échecs par adresse → 15 min, 20 échecs par heure au total → 30 min), soit des
+ * années pour balayer le million de combinaisons d'un seul prénom.
+ */
+export function generateGuestCode(): string {
+  let code = "";
+  for (let index = 0; index < GUEST_CODE_LENGTH; index += 1) code += String(randomInt(10));
+  return code;
+}
+
+/** Prénom saisi à la connexion : sans accents, casse ni espaces de bord (« Benoît » = « benoit »). */
+export function normalizeName(name: string): string {
+  return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 /** Normalise la saisie (majuscules, espaces, tirets oubliés). */
 export function normalizeCode(code: string): string {
   return code.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/** Un code saisi trop court n'est même pas comparé. */
+/** Un code d'une autre longueur n'est même pas comparé : code invité (6 chiffres) ou code long (administrateur, anciens invités). */
 export function plausibleCode(code: string): boolean {
-  return normalizeCode(code).length === CODE_GROUPS * CODE_GROUP_LENGTH;
+  const normalized = normalizeCode(code);
+  return normalized.length === CODE_GROUPS * CODE_GROUP_LENGTH || /^\d{6}$/.test(normalized);
 }
 
 export function hashCode(code: string, salt = randomBytes(16).toString("hex")): { hash: string; salt: string } {

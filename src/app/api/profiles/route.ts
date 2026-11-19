@@ -13,6 +13,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Prénom de 2 à 30 caractères." }, { status: 400 });
   return apiAsAdmin(() => {
     const created = createGuestProfile(parsed.data.name, publicUrl(new URL(request.url).origin).url);
-    return NextResponse.json({ id: created.record.id, name: created.record.name, garminEnvVar: created.record.garminEnvVar, code: created.code, link: created.link, expiresAt: created.expiresAt });
+    if (!created.record) return NextResponse.json({ error: "Création impossible." }, { status: 500 });
+    return NextResponse.json({ id: created.record.id, name: created.record.name, garminEnvVar: created.record.garminEnvVar, code: created.code, url: created.url });
   });
 }

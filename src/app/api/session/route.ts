@@ -1,19 +1,22 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { deviceLabel, looksLikeToken, plausibleCode, SESSION_COOKIE } from "@/lib/profiles/credentials";
+import { deviceLabel, GUEST_CODE_LENGTH, looksLikeToken, normalizeCode, plausibleCode, SESSION_COOKIE } from "@/lib/profiles/credentials";
 import { getRegistry } from "@/lib/profiles/context";
 import { clientAddress, guestsSuspended } from "@/lib/profiles/request";
 import { loginThrottle, openSession } from "@/lib/profiles/session-http";
 
 export const dynamic = "force-dynamic";
 
-const loginSchema = z.object({ code: z.string().max(80) });
+const loginSchema = z.object({ name: z.string().max(40).optional(), code: z.string().max(80) });
 
 /** Message unique pour tout refus : aucun indice sur l'existence d'un profil. */
-const REFUSED = "Code non reconnu.";
+const REFUSED = "Prénom ou code non reconnu.";
 
-/** Connexion par code de secours (le lien d'invitation, lui, ne demande rien à taper). */
+/**
+ * Connexion : prénom + code personnel (6 chiffres pour un invité, code long pour Bastien). Sans prénom, seul
+ * un code long est accepté (anciens codes de secours) : un code à 6 chiffres seul serait trop facile à deviner.
+ */
 export async function POST(request: Request) {
   const address = clientAddress(request.headers);
   const device = deviceLabel(request.headers.get("user-agent"));
@@ -25,7 +28,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Trop d'essais : merci de réessayer dans ${Math.ceil(locked / 60_000)} min.` }, { status: 429 });
   }
   const parsed = loginSchema.safeParse(await request.json().catch(() => null));
-  const record = parsed.success && plausibleCode(parsed.data.code) ? registry.findByCode(parsed.data.code) : null;
+  const name = parsed.success ? parsed.data.name?.trim() ?? "" : "";
+  const code = parsed.success ? parsed.data.code : "";
+  const longCode = normalizeCode(code).length > GUEST_CODE_LENGTH;
+  const record = !parsed.success || !plausibleCode(code) ? null : name ? registry.findByNameAndCode(name, code) : longCode ? registry.findByCode(code) : null;
   if (!record || (record.role === "guest" && guestsSuspended())) {
     loginThrottle.fail(address, now);
     registry.logLogin({ profileId: null, method: "code", outcome: "refused", address, device });

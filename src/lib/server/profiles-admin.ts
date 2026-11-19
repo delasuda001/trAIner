@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { generateAccessCode, generateToken } from "@/lib/profiles/credentials";
+import { generateAccessCode, generateGuestCode, generateToken } from "@/lib/profiles/credentials";
 import { getRegistry } from "@/lib/profiles/context";
 import { memberIdFromName } from "@/lib/profiles/types";
 
@@ -23,16 +23,18 @@ export function invitationLink(base: string, token: string): string {
   return `${base}/api/session/invitation?t=${token}`;
 }
 
-/** Crée un invité ; renvoie son lien et son code UNE fois (ils ne sont jamais relisibles). */
+/**
+ * Crée un invité : une adresse commune à tous (`base`), son prénom et un code à 6 chiffres. Le code
+ * reste visible pour Bastien dans Paramètres (il peut le redonner ou le régénérer).
+ */
 export function createGuestProfile(name: string, base: string) {
   const registry = getRegistry();
   let id = memberIdFromName(name);
   for (let suffix = 2; registry.find(id); suffix += 1) id = `${memberIdFromName(name).slice(0, 20)}${suffix}`;
-  const code = generateAccessCode();
-  const record = registry.createGuest({ id, name, code });
-  const token = generateToken();
-  const { expiresAt } = registry.createInvitation(id, token);
-  return { record, code, link: invitationLink(base, token), expiresAt };
+  const code = generateGuestCode();
+  registry.createGuest({ id, name, code });
+  registry.setGuestCode(id, code);
+  return { record: registry.find(id), code, url: base };
 }
 
 export function newInvitation(id: string, base: string) {
@@ -41,8 +43,15 @@ export function newInvitation(id: string, base: string) {
   return { link: invitationLink(base, token), expiresAt };
 }
 
+/** Nouveau code : 6 chiffres pour un invité (les appareils déjà connectés le restent), code long pour Bastien. */
 export function newCode(id: string) {
+  const registry = getRegistry();
+  if (registry.find(id)?.role === "guest") {
+    const code = generateGuestCode();
+    registry.setGuestCode(id, code);
+    return { code };
+  }
   const code = generateAccessCode();
-  getRegistry().setCode(id, code);
+  registry.setCode(id, code);
   return { code };
 }

@@ -32,7 +32,7 @@ export function InstallHint() {
       </ol>
     );
   }
-  return <p className="small">Sur téléphone, ouvrez ce même lien et ajoutez la page à l&apos;écran d&apos;accueil : Sillage s&apos;ouvrira comme une application.</p>;
+  return <p className="small">Sur un autre appareil (téléphone, ordinateur), ouvrez la même adresse et entrez votre prénom et votre code, une seule fois. Sur téléphone, ajoutez ensuite la page à l&apos;écran d&apos;accueil : Sillage s&apos;ouvrira comme une application.</p>;
 }
 
 export function WelcomeDone({ hasGoal }: { hasGoal: boolean }) {

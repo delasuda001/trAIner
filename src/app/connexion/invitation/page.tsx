@@ -20,7 +20,7 @@ export default async function InvitationPage({ searchParams }: { searchParams: P
       <div className="card login-card">
         <p className="eyebrow">{BRAND.name}</p>
         <h1 className="page-title" style={{ fontSize: 30 }}>Bienvenue</h1>
-        <p className="page-sub">Votre lien personnel est prêt. Il ne sert qu&apos;une fois : ouvrez-le sur l&apos;appareil où vous utiliserez {BRAND.name}.</p>
+        <p className="page-sub">Votre lien personnel est prêt : il ouvre {BRAND.name} sur cet appareil. Pour vos autres appareils, plus besoin de lien : la même adresse, votre prénom et votre code suffisent.</p>
         <form method="post" action="/api/session/invitation" style={{ marginTop: 16 }}>
           <input type="hidden" name="t" value={token} />
           <button className="btn btn-primary" type="submit">Ouvrir {BRAND.name} sur cet appareil</button>

@@ -123,3 +123,39 @@ describe("identifiants", () => {
     expect(() => value.resetFirstVisit("marie")).toThrow();
   });
 });
+
+describe("connexion par prénom et code court", () => {
+  it("prénom (sans accents ni casse) + code à 6 chiffres ; le code seul ne suffit pas à le retrouver", async () => {
+    const { generateGuestCode, plausibleCode } = await import("./credentials");
+    const value = registry();
+    const code = generateGuestCode();
+    expect(code).toMatch(/^\d{6}$/);
+    expect(plausibleCode(code)).toBe(true);
+    value.createGuest({ id: "benoit", name: "Benoît", code: generateAccessCode() });
+    value.setGuestCode("benoit", code);
+    expect(value.find("benoit")?.guestCode).toBe(code);
+    expect(value.findByNameAndCode(" benoit ", code)?.id).toBe("benoit");
+    expect(value.findByNameAndCode("BENOÎT", code)?.id).toBe("benoit");
+    expect(value.findByNameAndCode("Marie", code)).toBeNull();
+    expect(value.findByNameAndCode("Benoît", "000000" === code ? "111111" : "000000")).toBeNull();
+  });
+
+  it("deux profils au même prénom : le code départage ; un ancien code long marche encore avec le prénom", () => {
+    const value = registry();
+    const long = generateAccessCode();
+    value.createGuest({ id: "marie", name: "Marie", code: long });
+    value.createGuest({ id: "marie2", name: "Marie", code: generateAccessCode() });
+    value.setGuestCode("marie2", "123456");
+    expect(value.findByNameAndCode("marie", long)?.id).toBe("marie");
+    expect(value.findByNameAndCode("marie", "123456")?.id).toBe("marie2");
+    expect(value.find("marie")?.guestCode).toBeNull();
+  });
+
+  it("profil désactivé : refusé même avec le bon code", () => {
+    const value = registry();
+    value.createGuest({ id: "charles", name: "Charles", code: generateAccessCode() });
+    value.setGuestCode("charles", "654321");
+    value.setDisabled("charles", true);
+    expect(value.findByNameAndCode("Charles", "654321")).toBeNull();
+  });
+});

@@ -29,6 +29,8 @@ export type MemberRecord = Member & {
   disabledAt: string | null;
   /** Profil de test : identifiant du profil dont il copie la base (sinon null). */
   testOf: string | null;
+  /** Code personnel court (6 chiffres) d'un invité, lisible par Bastien ; null pour l'administrateur ou un ancien code long. */
+  guestCode: string | null;
 };
 
 /** Profil invité de test de Bastien (copie de sa base, réinitialisable). */

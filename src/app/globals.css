@@ -707,3 +707,7 @@ mark.key-reco { background: var(--sl-yellow); color: var(--fixed-ink); font-weig
 .chat-sessions .chips { gap: 6px; }
 .chip.chip-hint { border-style: dashed; border-color: var(--sl-pink); }
 .chat-about { display: inline-block; margin-bottom: 4px; padding: 1px 8px; border-radius: var(--sl-radius-pill); border: 1.5px solid currentColor; font-family: var(--font-data); font-size: 11px; opacity: 0.85; }
+
+.link-button { justify-self: start; background: none; border: 0; padding: 0; font: inherit; font-size: 12.5px; color: var(--sl-ink-muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.other-device { margin-top: 12px; padding-top: 10px; border-top: 1.5px solid var(--sl-grid); }
+.guest-access { margin: 6px 0 4px; }
