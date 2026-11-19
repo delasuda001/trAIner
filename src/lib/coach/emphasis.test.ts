@@ -46,6 +46,10 @@ describe("consigne clé mise en évidence", () => {
     expect(keys("Prochain palier : 7 km d'une traite, en facile (1 km de plus que ta plus longue).")).toEqual(["7 km"]);
   });
 
+  it("durée passée non marquée, durée visée marquée", () => {
+    expect(keys("Ta plus longue sortie récente dure 44 min : vise 55 min, tout en aisance.")).toEqual(["55 min"]);
+  });
+
   it("le texte reste identique une fois recollé", () => {
     const text = "Pour le semi, avec 2 sorties par semaine : une de qualité, une longue. C'est le tour de la sortie longue (13 km), en Z2.";
     expect(emphasize(text).map((part) => part.text).join("")).toBe(text);

@@ -118,6 +118,11 @@ export type SuggestionInput = {
   rhythm?: Pick<Rhythm, "qualitySpacingDays" | "highLoadRatio"> | null;
   /** Semaine type alignée sur le levier principal de l'objectif ; sans elle, comportement d'origine. */
   weekPlan?: WeekPlan | null;
+  /**
+   * Coureur débutant (cf. engine/athlete-level) : ni seuil ni VO2max. Une sortie sur deux est ludique
+   * (accélérations, fartlek, footing progressif), l'autre un peu plus longue, toujours facile.
+   */
+  beginner?: boolean;
 };
 
 /** Footing ajouté pour la 3e sortie (min). */
@@ -175,6 +180,17 @@ function longRunSession(input: SuggestionInput, plan: WeekPlan): SuggestedSessio
     structure: `${plan.longRunKm} km en continu et réguliers (ta plus longue des 8 dernières semaines : ${formatKm(plan.longestKm)} km) ; les 15 dernières minutes aussi faciles que les 15 premières.`,
     target,
   };
+}
+
+/** Séances ludiques du débutant, à tour de rôle : de l'allure sans séance au seuil ni VO2max. */
+function playfulSession(input: SuggestionInput, durationMin: number, turn: number): SuggestedSession {
+  const target = easyTarget(input);
+  const sessions: Array<Pick<SuggestedSession, "title" | "structure">> = [
+    { title: "Footing + accélérations", structure: `${durationMin - 5} min faciles, puis 6 accélérations de 20 s, relâchées, sans sprinter (1 min de marche ou de trot entre), et 5 min tranquilles pour finir.` },
+    { title: "Fartlek ludique", structure: `10 min faciles, puis 6 fois : 1 min un peu plus vite (on peut encore parler par mots) et 2 min faciles ; finir en trottinant jusqu'à ${durationMin} min.` },
+    { title: "Footing progressif", structure: `${durationMin} min : les deux premiers tiers en aisance, le dernier tiers un peu plus vite, sans jamais être essoufflé.` },
+  ];
+  return { type: "endurance", durationMin, target, ...sessions[turn % sessions.length] };
 }
 
 function footingSession(input: SuggestionInput): SuggestedSession {
@@ -386,6 +402,18 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
   } else if (lastHard && lastRun === lastHard && daysBetween(lastHard.localDate, today) < qualitySpacing) {
     primary = enduranceSession(input, easyDuration);
     reason = `Ta dernière course (${lowerFirst(lastHard.title ?? SESSION_KIND_LABELS[lastHard.kind])}) était exigeante : la suivante reste facile pour que le travail paie.`;
+  } else if (input.beginner) {
+    // Débutant : une sortie ludique, puis une sortie un peu plus longue (10 min de plus que sa plus longue, 90 min au plus).
+    const beginnerEasy = roundTo5(Math.min(45, Math.max(25, typicalEasyMin)));
+    const lastWasLongest = lastRun != null && (lastRun.movingTimeS ?? 0) >= 0.9 * longest8w * 60;
+    if (lastWasLongest || longest8w === 0) {
+      primary = playfulSession(input, beginnerEasy, Math.floor(recent8w.length / 2));
+      reason = "Pour progresser sans se mettre dans le rouge : un peu de vitesse en jouant, le reste en aisance. Le seuil et la VO2max viendront plus tard.";
+    } else {
+      const longer = roundTo5(Math.min(90, Math.max(30, longest8w + 10)));
+      primary = enduranceSession(input, longer, "Sortie un peu plus longue", "long");
+      reason = `Ta plus longue sortie récente dure ${Math.round(longest8w)} min : vise ${longer} min, tout en aisance. C'est ce qui construit l'endurance.`;
+    }
   } else if (highShare != null && highShare >= 0.4 && lastRun && lastRun.family !== "easy") {
     primary = enduranceSession(input, easyDuration);
     reason = `${formatNumber(highShare * 100)} % de ton temps des 4 dernières semaines était en Z4–Z5 : une vraie séance en Z2 rééquilibre.`;

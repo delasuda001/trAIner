@@ -389,7 +389,9 @@ function computeOutlook(context: Context): Outlook {
   // Efficacité de ses sorties faciles récentes : sert à traduire la FC cible en allure réaliste.
   const recentPerBeat = present(recentRuns.map((run) => (run.metrics.aerobic && (run.metrics.family === "easy" || run.metrics.family === "long") ? run.metrics.aerobic.speedPerBeat : null)));
   const goal = context.goal;
+  const beginner = detectLevel(runs.map((run) => ({ localDate: run.localDate, distanceM: run.distanceM, family: run.metrics.family })), today).level === "beginner";
   const suggestion = suggestNextSession({
+    beginner,
     today,
     runs: runs.filter((run) => run.localDate >= addDays(today, -60)).map((run) => ({ localDate: run.localDate, kind: run.metrics.kind, family: run.metrics.family, movingTimeS: run.movingTimeS, aerobicTrainingEffect: run.row.aerobicTrainingEffect, title: sessionTitle(run.metrics), distanceM: run.distanceM })),
     zones: profile.zones,

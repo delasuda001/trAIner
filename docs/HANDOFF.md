@@ -537,3 +537,6 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
   (ancienneté, mois actifs, séances structurées), pas le volume : Bastien = confirmé. Débutant en vue essentielle : régularité
   d'abord, pas de carte forme aérobie, zones dites en mots (facile/soutenu/intense), pas de seuil ni d'allure du moment.
   Profil fictif `debutant` (« Léa », 21 courses synthétiques, objectif « Courir mon premier 10 km ») sur le serveur d'essai.
+- (même branche) Séances du débutant (`suggestion.ts`, `beginner`) : ni seuil ni VO2max ; alternance sortie ludique (footing +
+  accélérations, fartlek ludique, footing progressif, à tour de rôle) / sortie un peu plus longue (+10 min sur la plus longue,
+  90 min au plus). Vérifié : photographie de Bastien identique, suggestion de Marie identique (niveau confirmé).

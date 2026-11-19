@@ -234,3 +234,21 @@ describe("semaine type alignée sur le levier de l'objectif", () => {
     expect(["threshold", "vo2max"]).toContain(result.then?.type);
   });
 });
+
+describe("débutant : ni seuil ni VO2max", () => {
+  const beginnerRuns = [run(18, "endurance", "easy", 30), run(14, "endurance", "easy", 40), run(11, "endurance", "easy", 32), run(7, "endurance", "easy", 42), run(4, "endurance", "easy", 33)];
+  it("même situation qu'un seuil chez un coureur confirmé : une sortie un peu plus longue après une sortie courte, en aisance", () => {
+    expect(suggestNextSession(input(beginnerRuns)).primary.type).toBe("threshold");
+    const result = suggestNextSession(input(beginnerRuns, { beginner: true }));
+    expect(result.primary).toMatchObject({ type: "long", title: "Sortie un peu plus longue", durationMin: 50 });
+    expect(result.primary.target?.zone).toBe("Z2");
+    expect(result.then?.type).toBe("endurance");
+  });
+  it("après sa plus longue : une sortie ludique (accélérations, fartlek ou progressif), jamais une séance dure", () => {
+    const result = suggestNextSession(input([...beginnerRuns, run(2, "endurance", "easy", 45)], { beginner: true }));
+    expect(["Footing + accélérations", "Fartlek ludique", "Footing progressif"]).toContain(result.primary.title);
+    expect(result.primary.type).toBe("endurance");
+    expect(result.reason).toContain("Le seuil et la VO2max viendront plus tard");
+    expect(result.then?.type).not.toMatch(/threshold|vo2max/);
+  });
+});
