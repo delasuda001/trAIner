@@ -42,6 +42,10 @@ describe("consigne clé mise en évidence", () => {
     expect(keys("Continue sur cette lancée ; pour ton 10 km, le prochain pas : ajoute un footing facile en Z2 pour passer à 2 sorties par semaine.")).toEqual(["footing facile en Z2"]);
   });
 
+  it("palier de distance : la distance visée, pas l'incrément", () => {
+    expect(keys("Prochain palier : 7 km d'une traite, en facile (1 km de plus que ta plus longue).")).toEqual(["7 km"]);
+  });
+
   it("le texte reste identique une fois recollé", () => {
     const text = "Pour le semi, avec 2 sorties par semaine : une de qualité, une longue. C'est le tour de la sortie longue (13 km), en Z2.";
     expect(emphasize(text).map((part) => part.text).join("")).toBe(text);

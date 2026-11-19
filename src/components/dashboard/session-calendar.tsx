@@ -13,7 +13,8 @@ const DAY_LETTERS = ["L", "M", "M", "J", "V", "S", "D"];
  * (même code que partout), séance proposée en pointillé rose. À droite, les sorties de
  * la semaine face à la cible : des pastilles pleines pour ce qui est fait, jamais de rouge.
  */
-export function SessionCalendar({ calendar, zonesNote }: { calendar: TrainingCalendar; zonesNote: string }) {
+/** `plain` : légende en trois mots (facile, soutenu, intense) et sans la phrase sur les zones (vue débutant). */
+export function SessionCalendar({ calendar, zonesNote, plain = false }: { calendar: TrainingCalendar; zonesNote: string; plain?: boolean }) {
   const { target } = calendar;
   return (
     <section className="card cal-card" aria-labelledby="cal-title">
@@ -33,11 +34,13 @@ export function SessionCalendar({ calendar, zonesNote }: { calendar: TrainingCal
         <Say tu={summary(calendar)} />
       </p>
       <div className="legend cal-legend">
-        {([1, 2, 3, 4, 5] as Zone[]).map((zone) => <span key={zone}><span className="legend-swatch" style={{ background: zoneColor(zone) }} />{ZONE_NAMES[zone].split(" ").slice(1).join(" ")}</span>)}
+        {plain
+          ? ([[[1, 2], "facile"], [[3], "soutenu"], [[4, 5], "intense"]] as Array<[Zone[], string]>).map(([zones, name]) => <span key={name}>{zones.map((zone) => <span key={zone} className="legend-swatch" style={{ background: zoneColor(zone) }} />)}{name}</span>)
+          : ([1, 2, 3, 4, 5] as Zone[]).map((zone) => <span key={zone}><span className="legend-swatch" style={{ background: zoneColor(zone) }} />{ZONE_NAMES[zone].split(" ").slice(1).join(" ")}</span>)}
         <span><span className="cal-swatch-other" />autre sport</span>
         <span><span className="cal-swatch-planned" />proposée</span>
       </div>
-      <p className="cal-zones"><Say tu={`Couleur = intensité : zone du travail pour un fractionné ou un tempo, zone dominante sinon. ${zonesNote}`} /></p>
+      {plain ? null : <p className="cal-zones"><Say tu={`Couleur = intensité : zone du travail pour un fractionné ou un tempo, zone dominante sinon. ${zonesNote}`} /></p>}
     </section>
   );
 }

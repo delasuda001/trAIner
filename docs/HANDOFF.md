@@ -531,3 +531,9 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
 - Consigne clé surlignée (`lib/coach/emphasis.ts`, `CoachText`) : déterministe, au plus 2 segments, exclut passé,
   comparaisons, projections, pas de progression ; aucun changement de prompt.
 - `classifyKind` (`METRICS_VERSION` 13) : sans FC seuil montre, fractionné « tempo » seulement 5 bpm sous la Z4 estimée.
+- (même branche, 19 nov. soir) Carte objectif à pages (`engine/goal-pages.ts`, `dashboard/goal-carousel.tsx`) : chrono
+  (leviers), distance sans temps (plus longue sortie, +1 km), régularité (série de semaines à la cible, palier 2/4/8/12/26/52) ;
+  « prochain palier » sur chaque page (chrono atteint : −2 %). Niveau déduit (`engine/athlete-level.ts`) sur l'expérience
+  (ancienneté, mois actifs, séances structurées), pas le volume : Bastien = confirmé. Débutant en vue essentielle : régularité
+  d'abord, pas de carte forme aérobie, zones dites en mots (facile/soutenu/intense), pas de seuil ni d'allure du moment.
+  Profil fictif `debutant` (« Léa », 21 courses synthétiques, objectif « Courir mon premier 10 km ») sur le serveur d'essai.

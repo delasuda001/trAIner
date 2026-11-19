@@ -31,7 +31,7 @@ const CONNECTOR_RE = /^(?:\s|,|\(|\)|·|de|d'|en|à|et|entre|avec|sur|:)*$/i;
 /** Contexte juste avant le segment qui en fait un fait passé ou une comparaison. */
 const PAST_RE = /(?:après (?:ton|ta|tes|votre|vos)|comme (?:ton|ta|tes|votre|vos)|contre|depuis|plus longue des|ta dernière|votre dernière|est faite|était)\s+(?:\S+\s+){0,4}\(?$/i;
 /** « 11 → 18 km » : une projection entre parenthèses, pas la consigne ; « juste après » : un pas de progression (« de 2 km toutes les 2 semaines »), pas une séance. */
-const STEP_AFTER_RE = /^\s*toutes les/i;
+const STEP_AFTER_RE = /^\s*(?:toutes les|de plus)/i;
 const MAX_KEYS = 2;
 
 type Match = { start: number; end: number; session: boolean };

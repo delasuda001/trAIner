@@ -12,7 +12,7 @@ import { readOutlookCoach, readSessionCoach } from "@/lib/server/coach-service";
 import { registerForRole, say } from "@/lib/register";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { GoalGauge } from "@/components/dashboard/essential";
+import { GoalPages } from "@/components/dashboard/essential";
 import { StartGuide } from "@/components/dashboard/start-guide";
 import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
 import { resolveViewMode, VIEW_MODE_KEY, viewModeSchema } from "@/lib/view-mode";
@@ -57,15 +57,18 @@ function renderHome(member: Member, query: string | null) {
       </div>
     </div>
   );
+  // Débutant, vue essentielle : régularité et palier suivant d'abord, sans zones ni allure à FC de référence
+  // (la vue détaillée montre tout). Le conseil, lui, est le même.
+  const plain = view === "essential" && dashboard.level.level === "beginner";
   const hero = (
-    <div className="grid grid-2 home-hero">
+    <div className={`grid grid-2 home-hero${plain ? " plain" : ""}`}>
       <div className="stack">
-        <SuggestionCard dashboard={dashboard} coach={outlook} />
-        <SessionCalendar calendar={dashboard.calendar} zonesNote={zonesNote} />
+        <SuggestionCard dashboard={dashboard} coach={outlook} plain={plain} />
+        <SessionCalendar calendar={dashboard.calendar} zonesNote={zonesNote} plain={plain} />
       </div>
       <div className="stack">
-        <ProgressionCard dashboard={dashboard} />
-        <GoalGauge gaps={dashboard.goalGaps} markers={dashboard.goalMarkers} />
+        {plain ? null : <ProgressionCard dashboard={dashboard} />}
+        <GoalPages pages={dashboard.goalPages} level={view === "essential" ? dashboard.level.level : "confirmed"} />
       </div>
     </div>
   );

@@ -10,6 +10,8 @@ import { computeActivityMetrics, METRICS_VERSION, sessionTitle, type ActivityMet
 import { computeDeltas, selectComparables, type ComparisonDeltas, type RunForComparison } from "@/lib/engine/comparable";
 import { isRun, loadAlert, loadFigure, summarizeLoad, type LoadAlert, type LoadFigure, type LoadSummary } from "@/lib/engine/load";
 import { calendarZone, trainingCalendar, type TrainingCalendar } from "@/lib/engine/calendar";
+import { detectLevel, type LevelAssessment } from "@/lib/engine/athlete-level";
+import { goalPages, type GoalPage } from "@/lib/engine/goal-pages";
 import { computeProgression, easyRunHeartRates, personalReferenceHeartRate, type Progression } from "@/lib/engine/progression";
 import { assessRecovery, type RecoverySignals } from "@/lib/engine/recovery";
 import { runningRhythm, type Rhythm } from "@/lib/engine/rhythm";
@@ -345,6 +347,10 @@ export type Dashboard = {
   week: Array<{ date: string; done: Array<{ kind: string | null; sport: string }>; planned: string | null }>;
   /** Calendrier des 8 dernières semaines (séances, cible de sorties par semaine). */
   calendar: TrainingCalendar;
+  /** Niveau déduit des données : règle le ton et les indicateurs de la vue essentielle, jamais le conseil. */
+  level: LevelAssessment;
+  /** Pages de la carte objectif (chrono, distance, régularité), dans l'ordre du niveau. */
+  goalPages: GoalPage[];
 };
 
 const CALENDAR_WEEKS = 8;
@@ -430,7 +436,12 @@ export function getDashboard(): Dashboard {
   const sameRun = [...runs].reverse().find((run) => sameKinds.includes(run.metrics.kind) && run.localDate >= addDays(today, -60));
   const sameAnalysis = sameRun ? analyzeSession(sameRun.id, context) : null;
   const runById = new Map(runs.map((run) => [run.id, run]));
+  const level = voiceDeep(detectLevel(runs.map((run) => ({ localDate: run.localDate, distanceM: run.distanceM, family: run.metrics.family })), today), currentRegister());
+  const goalGaps = voiceDeep(goalGapsFor(goal, runs, today, profile.lactateThresholdSpeedMps), currentRegister());
+  const goalMarkers = (goal?.raceTargets ?? []).map((target) => goalMarker(goal?.raceTargets ?? [], target.distanceKm, { lactateThresholdSpeedMps: profile.lactateThresholdSpeedMps, thresholdLabel: thresholdLabel(profile), efforts: recentEfforts(runs, addDays(today, 1)) })).filter((marker): marker is GoalMarker => marker != null);
   return {
+    level,
+    goalPages: voiceDeep(goalPages({ level: level.level, gaps: goalGaps, markers: goalMarkers, runs: runs.map((run) => ({ localDate: run.localDate, distanceM: run.distanceM })), today, goal: goal ? { distanceKm: goal.distanceKm, targetTimeS: goal.targetTimeS, runsPerWeek: goal.runsPerWeek } : null, habitualRunsPerWeek: rhythm.runsPerWeek12w }), currentRegister()),
     rhythm,
     today,
     profile,
@@ -440,8 +451,8 @@ export function getDashboard(): Dashboard {
     suggestion,
     lastRun: last ? analyzeSession(last.id, context) : null,
     loadAlert: currentLoadAlert,
-    goalMarkers: (goal?.raceTargets ?? []).map((target) => goalMarker(goal?.raceTargets ?? [], target.distanceKm, { lactateThresholdSpeedMps: profile.lactateThresholdSpeedMps, thresholdLabel: thresholdLabel(profile), efforts: recentEfforts(runs, addDays(today, 1)) })).filter((marker): marker is GoalMarker => marker != null),
-    goalGaps: voiceDeep(goalGapsFor(goal, runs, today, profile.lactateThresholdSpeedMps), currentRegister()),
+    goalMarkers,
+    goalGaps,
     lastSameType: sameRun && sameAnalysis ? { id: sameRun.id, localDate: sameRun.localDate, title: sessionTitle(sameRun.metrics), prescription: sameAnalysis.prescription } : null,
     recent: [...rows].reverse().slice(0, 10).map((row) => ({ id: row.id, name: row.name, sport: row.sport, localDate: row.localDate, startTimeLocal: row.startTimeLocal, distanceM: row.distanceM, movingTimeS: row.movingTimeS, averageSpeedMps: row.averageSpeedMps, averageHeartRateBpm: row.averageHeartRateBpm, kind: runById.get(row.id)?.metrics.kind ?? null, title: runById.get(row.id) ? sessionTitle((runById.get(row.id) as AnalyzedRun).metrics) : null, zoneShares: runById.get(row.id)?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null) })),
     activityCount: rows.length,

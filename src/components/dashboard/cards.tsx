@@ -50,7 +50,14 @@ function stickerText(dates: string[], label: string, today: string): string {
 }
 
 /* ---------- Prochaine séance : la carte jaune ---------- */
-export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coach: CoachResult<OutlookCoachOutput> }) {
+/** Zone dite en mots pour un débutant : « facile », « soutenu », « intense ». */
+function plainZone(zone: string): string {
+  const first = /Z(\d)/.exec(zone)?.[1];
+  if (!first) return zone;
+  return Number(first) <= 2 ? "facile" : Number(first) === 3 ? "soutenu" : "intense";
+}
+
+export function SuggestionCard({ dashboard, coach, plain = false }: { dashboard: Dashboard; coach: CoachResult<OutlookCoachOutput>; plain?: boolean }) {
   const { suggestion, goal, today } = dashboard;
   const { primary, facts } = suggestion;
   const zone = SUGGESTION_ZONE[primary.type];
@@ -68,7 +75,7 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
       <h2 id="next-title" className="card-title">{primary.title}</h2>
       <div className="target">
         {primary.durationMin ? <span className="pill">{formatDuration(primary.durationMin * 60)}</span> : null}
-        {target ? <span className="pill"><ZoneDot zone={zone} />{target.zone} · {target.heartRateLow}–{target.heartRateHigh} bpm</span> : null}
+        {target ? <span className="pill"><ZoneDot zone={zone} />{plain ? plainZone(target.zone) : target.zone} · {target.heartRateLow}–{target.heartRateHigh} bpm</span> : null}
         {paceCenter ? <span className="pill" title={`${formatPace(target?.paceSlowMps)} à ${formatPace(target?.paceFastMps)}`}>≈ {formatPace(paceCenter)}</span> : null}
       </div>
       {primary.type !== "endurance" && primary.type !== "long" ? <p className="structure">{primary.structure}</p> : null}
