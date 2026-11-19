@@ -141,7 +141,7 @@ function TestPanel({ exists, simulated, onSecret }: { exists: boolean; simulated
         <input type="checkbox" checked={simulated} onChange={(event) => void toggle(event.target.checked)} />
         Coach simulé : aucun appel à Claude, consommation fictive (plafonds et jauge bougent quand même)
       </label>
-      <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void reset()}>{exists ? <RotateCcw size={14} /> : <FlaskConical size={14} />} {busy ? "Copie en cours…" : exists ? "Réinitialiser et nouveau lien" : "Créer mon profil test"}</button>
+      <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void reset()}>{exists ? <RotateCcw size={14} /> : <FlaskConical size={14} />} {busy ? "Copie en cours…" : exists ? "Réinitialiser et nouveau code" : "Créer mon profil test"}</button>
       {error ? <p className="form-error">{error}</p> : null}
     </div>
   );
