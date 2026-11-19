@@ -516,3 +516,18 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
     régénérées (2 appels).
   - Le jeu figé du banc date d'avant ces corrections : `npm run bench:freeze` avant la prochaine batterie.
 - Scripts ponctuels hors Next : `npx tsx --conditions=react-server <script>` (la condition contourne `server-only`).
+
+## Proposition du 19 nov. (branche locale `claude/proposition-accueil-19nov`, en attente de validation, non fusionnée)
+
+- Sorties possibles déclarées = plafond (`goalGap(…, availableRunsPerWeek)`) : jamais « passe à 3 » si l'objectif dit 2 ;
+  à 2 sur 2, le levier passe au volume par la durée des sorties ; `availabilityNote` (repère hors agenda, option de revoir
+  l'objectif) ; `possibleShare` (trait sur la barre). Semaine type = sorties déclarées. Bastien : sortie longue 13 km samedi
+  au lieu du footing 35 min ; consignes et verdicts de ses 244 séances identiques.
+- `primaryGap` (jauge, lien à l'objectif, semaine type). Analyse dont seul l'objectif a changé (`goalStale`) ou à mettre
+  à jour : « Pour ton objectif » = action du moteur, plus la phrase périmée du coach.
+- Accueil : mêmes en-tête et cartes du haut dans les deux vues (carte jaune + calendrier ; forme aérobie + jauge) ;
+  graphique des sorties faciles et chiffres dans « Comment c'est calculé ? » ; boutons Guide / coach alignés, détail de
+  la jauge en bulle (0 px de déplacement mesuré). `AerobicLine` supprimée.
+- Consigne clé surlignée (`lib/coach/emphasis.ts`, `CoachText`) : déterministe, au plus 2 segments, exclut passé,
+  comparaisons, projections, pas de progression ; aucun changement de prompt.
+- `classifyKind` (`METRICS_VERSION` 13) : sans FC seuil montre, fractionné « tempo » seulement 5 bpm sous la Z4 estimée.

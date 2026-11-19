@@ -9,7 +9,7 @@ import { zoneOf, type ZoneIndex } from "./zones";
  * découlent : le LLM ne calcule rien.
  */
 
-export const METRICS_VERSION = 12;
+export const METRICS_VERSION = 13;
 
 export type SessionKind =
   | "recovery"
@@ -440,8 +440,16 @@ const LONG_REP_S = 360;
 const LONG_REP_M = 1600;
 const LONG_REP_VO2_MARGIN_BPM = 8;
 
+/**
+ * Sans FC seuil mesurée par la montre, le plancher de Z4 vient d'un % de FC max : une estimation
+ * à quelques bpm près. Un fractionné n'est alors « tempo » que nettement en dessous (5 bpm), sinon
+ * deux séances identiques à 4 bpm d'écart changent de type et de couleur.
+ */
+const GENERIC_ZONES_TEMPO_MARGIN_BPM = 5;
+
 export function classifyKind(input: { work: WorkBlock | null; zoneShares: ActivityMetrics["zoneShares"]; movingTimeS: number | null; distanceM: number | null; zones: HeartRateZones; trainingEffectLabel?: string | null }): SessionKind {
   const { work, zoneShares, zones } = input;
+  const tempoBelow = zones.floors[3] - (zones.lactateThresholdHeartRateBpm == null ? GENERIC_ZONES_TEMPO_MARGIN_BPM : 0);
   if (work) {
     if (work.averageDurationS < 75) return "intervals_short";
     // Répétitions longues (≥ 6 min ou ≥ 1 600 m) : format de seuil (« cruise intervals »), jugé sur la FC seuil de la montre
@@ -449,13 +457,13 @@ export function classifyKind(input: { work: WorkBlock | null; zoneShares: Activi
     if ((work.averageDurationS >= LONG_REP_S || (work.averageDistanceM ?? 0) >= LONG_REP_M) && work.averageHeartRateBpm != null) {
       const thresholdHr = zones.lactateThresholdHeartRateBpm ?? zones.floors[4];
       if (work.averageHeartRateBpm > thresholdHr + LONG_REP_VO2_MARGIN_BPM) return "intervals_vo2";
-      if (work.averageHeartRateBpm >= zones.floors[3]) return "intervals_threshold";
+      if (work.averageHeartRateBpm >= tempoBelow) return "intervals_threshold";
       return "intervals_tempo";
     }
     // Répétitions longues : la FC moyenne dit l'intensité ; courtes : la FC atteinte en fin de rep.
     const reference = work.averageDurationS >= 300 ? (work.averageHeartRateBpm ?? work.peakHeartRateBpm) : (work.peakHeartRateBpm ?? work.averageHeartRateBpm);
     if (reference != null && reference >= zones.floors[4]) return "intervals_vo2";
-    if (reference != null && reference >= zones.floors[3]) return "intervals_threshold";
+    if (reference != null && reference >= tempoBelow) return "intervals_threshold";
     return "intervals_tempo";
   }
   const duration = input.movingTimeS ?? 0;

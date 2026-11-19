@@ -2,6 +2,7 @@ import { ArrowRight, ThumbsUp, Wrench } from "lucide-react";
 import type { SessionCoachOutput } from "@/lib/coach/session-coach";
 import type { Prescription, PrescriptionTarget } from "@/lib/engine/prescription";
 import { formatClock, formatPace } from "@/lib/formatters";
+import { CoachText } from "@/components/ui/coach-text";
 
 /** Cible mise en avant : allure (ou FC) et récupération, calculées par le moteur. */
 function targetChip(target: PrescriptionTarget, recoveryS: number | null): string {
@@ -25,19 +26,19 @@ export function SessionPoints({ ready, prescription, fallbackKeep }: { ready: Se
   if (!keep && !shouldHave && !nextTime) return null;
   return (
     <div className={shouldHave ? "three-points" : "two-points"}>
-      {keep ? <div className="point point-good"><div className="point-label"><ThumbsUp size={12} /> À reproduire</div>{keep}</div> : null}
+      {keep ? <div className="point point-good"><div className="point-label"><ThumbsUp size={12} /> À reproduire</div><CoachText text={keep} /></div> : null}
       {shouldHave ? (
         <div className="point point-work">
           <div className="point-label"><Wrench size={12} /> Aurait dû</div>
           {ok ? <div className="point-target">{targetChip(ok.target, null)}</div> : null}
-          {shouldHave}
+          <CoachText text={shouldHave} />
         </div>
       ) : null}
       {nextTime ? (
         <div className="point point-next">
           <div className="point-label"><ArrowRight size={12} /> Prochaine fois</div>
           {ok ? <div className="point-target">{ok.next.format} · {targetChip(ok.next.target, ok.next.recoveryS)}</div> : null}
-          {nextTime}
+          <CoachText text={nextTime} />
         </div>
       ) : null}
     </div>

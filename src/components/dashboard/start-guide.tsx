@@ -48,7 +48,7 @@ export function StartGuide() {
 
   return (
     <>
-      <button type="button" className="chip guide-open" onClick={() => setOpen(true)}><CircleHelp size={14} /> Guide</button>
+      <button type="button" className="btn guide-open" onClick={() => setOpen(true)}><CircleHelp size={14} /> Guide</button>
       {open ? (
         <div className="guide-backdrop" role="dialog" aria-modal="true" aria-labelledby="guide-title">
           <div className="card guide-card" style={{ ["--shadow-color" as string]: current.color }}>

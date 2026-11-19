@@ -1,7 +1,6 @@
 import { ArrowRight, ChevronRight, Gauge, HeartPulse, Moon, Target, Waves } from "lucide-react";
 import Link from "next/link";
 import { SessionPoints } from "@/components/activity/session-points";
-import { GoalStatusList } from "@/components/goal/goal-status";
 import { CoachRequest } from "@/components/coach-request";
 import { ExpandToggle } from "./expand-toggle";
 import { RateCoach } from "@/components/feedback/rate-coach";
@@ -19,6 +18,7 @@ import { SPORT_LABELS, VERDICT_TONES } from "@/lib/engine/labels";
 import { VERDICT_LABELS } from "@/lib/engine/verdict";
 import { formatDate, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import { Say } from "@/components/ui/register";
+import { CoachText } from "@/components/ui/coach-text";
 import type { Progression } from "@/lib/engine/progression";
 import type { Dashboard } from "@/lib/server/analytics";
 import type { CoachResult } from "@/lib/server/coach-service";
@@ -73,8 +73,8 @@ export function SuggestionCard({ dashboard, coach }: { dashboard: Dashboard; coa
       </div>
       {primary.type !== "endurance" && primary.type !== "long" ? <p className="structure">{primary.structure}</p> : null}
       <div className="coach-lines">
-        <p className="coach-line"><span className="coach-tag">Pourquoi</span><span>{ready ? ready.suggestionWhy : suggestion.reason}</span></p>
-        <p className="coach-line card-more"><span className="coach-tag">Comment</span><span>{ready ? ready.executionTip : primary.structure}</span></p>
+        <p className="coach-line"><span className="coach-tag">Pourquoi</span><span><CoachText text={ready ? ready.suggestionWhy : suggestion.reason} /></span></p>
+        <p className="coach-line card-more"><span className="coach-tag">Comment</span><span><CoachText text={ready ? ready.executionTip : primary.structure} /></span></p>
       </div>
       <div className="card-more">
         {coach.status === "ready" ? <div style={{ marginTop: 6 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Avis" /><RateCoach subjectKind="outlook" subjectId={coach.createdAt} label="Ce conseil t'est utile ?" /></div> : null}
@@ -142,28 +142,28 @@ export function ProgressionCard({ dashboard }: { dashboard: Dashboard }) {
       {progression.state !== "insufficient" ? <div className="aerobic-label"><Say tu={`ton allure quand tu cours à ${hr} bpm`} /></div> : null}
       <p className="verdict-reason"><Say tu={progressionAction(progression, dashboard.goalGaps)} /></p>
       <div className="card-more">
+        {/* Le graphique des sorties faciles est l'explication du chiffre : replié avec elle. */}
         <details className="more how-to">
           <summary><ChevronRight size={14} className="chev" /> Comment c&apos;est calculé ?</summary>
           <p className="more-body small"><Say tu={progressionExplanation(progression)} /></p>
+          <ProgressionChart
+            points={progression.points.map((point) => ({ date: point.date, secondsPerKm: 1000 / point.speedAtReferenceHr }))}
+            recentStart={progression.recent.start}
+            recentLevel={toPace(progression.recent.speedAtReferenceHr)}
+            previousLevel={toPace(progression.previous.speedAtReferenceHr)}
+            referenceHr={hr}
+          />
+          <div className="legend" style={{ marginTop: 4 }}>
+            <span><span className="legend-swatch" style={{ background: "var(--sl-highlight)" }} />{progression.windowWeeks} dernières semaines</span>
+            <span><span className="legend-swatch" style={{ background: "var(--sl-past)", borderColor: "transparent" }} />avant</span>
+            <span>1 point = 1 sortie facile, plus haut = plus rapide</span>
+          </div>
+          <div className="facts" style={{ marginTop: 12 }}>
+            <Fact label="VO2max (montre)" value={formatNumber(progression.vo2max.latest, 1)} sub={progression.vo2max.delta != null ? `${progression.vo2max.delta >= 0 ? "+" : "−"}${formatNumber(Math.abs(progression.vo2max.delta), 1)} en ${progression.windowWeeks} sem.` : undefined} />
+            <Fact label="Volume course" value={formatNumber(progression.recent.runKmPerWeek, 1)} unit="km/sem" sub={`avant : ${formatNumber(progression.previous.runKmPerWeek, 1)}`} />
+            <Fact label="Sorties faciles mesurées" value={String(progression.recent.runs)} sub={`contre ${progression.previous.runs} avant`} />
+          </div>
         </details>
-        <ProgressionChart
-          points={progression.points.map((point) => ({ date: point.date, secondsPerKm: 1000 / point.speedAtReferenceHr }))}
-          recentStart={progression.recent.start}
-          recentLevel={toPace(progression.recent.speedAtReferenceHr)}
-          previousLevel={toPace(progression.previous.speedAtReferenceHr)}
-          referenceHr={hr}
-        />
-        <div className="legend" style={{ marginTop: 4 }}>
-          <span><span className="legend-swatch" style={{ background: "var(--sl-highlight)" }} />{progression.windowWeeks} dernières semaines</span>
-          <span><span className="legend-swatch" style={{ background: "var(--sl-past)", borderColor: "transparent" }} />avant</span>
-          <span>1 point = 1 sortie facile, plus haut = plus rapide</span>
-        </div>
-        <div className="facts" style={{ marginTop: 12 }}>
-          <Fact label="VO2max (montre)" value={formatNumber(progression.vo2max.latest, 1)} sub={progression.vo2max.delta != null ? `${progression.vo2max.delta >= 0 ? "+" : "−"}${formatNumber(Math.abs(progression.vo2max.delta), 1)} en ${progression.windowWeeks} sem.` : undefined} />
-          <Fact label="Volume course" value={formatNumber(progression.recent.runKmPerWeek, 1)} unit="km/sem" sub={`avant : ${formatNumber(progression.previous.runKmPerWeek, 1)}`} />
-          <Fact label="Sorties faciles mesurées" value={String(progression.recent.runs)} sub={`contre ${progression.previous.runs} avant`} />
-        </div>
-        <GoalStatusList markers={dashboard.goalMarkers} gaps={dashboard.goalGaps} goal={dashboard.goal} today={dashboard.today} compact />
       </div>
       <ExpandToggle />
     </section>

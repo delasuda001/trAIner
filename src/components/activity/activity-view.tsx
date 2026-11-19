@@ -2,6 +2,8 @@ import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { ComparisonChart, SessionStreamCharts } from "@/components/charts";
 import { CoachRequest } from "@/components/coach-request";
+import { CoachText } from "@/components/ui/coach-text";
+import { primaryGap } from "@/lib/engine/goal-gap";
 import { CoachStamp } from "@/components/ui/coach-stamp";
 import { RateCoach } from "@/components/feedback/rate-coach";
 import { FeelingForm } from "./feeling-form";
@@ -38,6 +40,11 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
   const previous = coach?.status === "missing" ? coach.previous ?? null : null;
   const shown = coach?.status === "ready" ? coach : previous;
   const ready = shown ? shown.output : null;
+  // Phrase du coach sur l'objectif reprise telle quelle seulement si l'analyse est à jour, objectif compris ; sinon
+  // (objectif changé, analyse à mettre à jour) l'action du moteur, à jour, pour ne jamais contredire la jauge.
+  const gap = primaryGap(analysis.goalGaps);
+  const goalCurrent = coach?.status === "ready" && !coach.goalStale;
+  const goalLink = goalCurrent ? ready?.goalLink || null : ready?.goalLink ? gap?.action ?? gap?.summary ?? null : null;
   const endpoint = `/api/activities/${encodeURIComponent(activity.id)}/coach`;
   return (
     <section className="card card-hero" style={{ ["--shadow-color" as string]: "var(--sl-pink)" }} aria-label="Verdict du coach">
@@ -56,7 +63,7 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
         {(ready ? ready.bullets : verdict.signals.map((signal) => signal.label).filter((label) => label !== verdict.wentWell && label !== verdict.toWork)).map((line) => <li key={line}>{line}</li>)}
       </ul>
       <SessionPoints ready={ready} prescription={analysis.prescription} fallbackKeep={verdict.wentWell} />
-      {ready?.goalLink ? <p className="goal-link"><strong><Say tu="Pour ton objectif" vous="Pour votre objectif" /> :</strong> {ready.goalLink}</p> : null}
+      {goalLink ? <p className="goal-link"><strong><Say tu="Pour ton objectif" vous="Pour votre objectif" /> :</strong> <CoachText text={goalLink} /></p> : null}
       {ready ? (
         <details className="more">
           <summary><ChevronRight size={14} className="chev" /> Analyse détaillée</summary>

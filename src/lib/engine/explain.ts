@@ -65,7 +65,7 @@ export function progressionVerdict(progression: Progression): ProgressionVerdict
 function leverAction(gap: GoalGap | null): string | null {
   switch (gap?.main) {
     case "frequency": return `ajoute un footing facile en Z2 pour passer à ${gap.nextRunsPerWeek} sorties par semaine`;
-    case "volume": return "monte le volume peu à peu, 10 % par semaine au plus";
+    case "volume": return gap.availabilityNote ? "allonge tes sorties plutôt que d'en ajouter, 10 % de volume par semaine au plus" : "monte le volume peu à peu, 10 % par semaine au plus";
     case "long_run": return "allonge ta sortie longue de 2 km toutes les 2 semaines, en Z2";
     case "threshold": return "garde une séance au seuil par semaine";
     default: return null;

@@ -47,6 +47,10 @@ export type GoalLever = {
   /** Part du repère atteinte (1 = atteint). */
   share: number;
   met: boolean;
+  /** Fréquence : le repère dépasse les sorties possibles déclarées (le levier est plafonné par l'agenda). */
+  capped?: boolean;
+  /** Fréquence plafonnée : part du repère que l'agenda permet (2 possibles sur 3 → 0,67). */
+  possibleShare?: number;
 };
 
 export type GoalGap = {
@@ -64,6 +68,11 @@ export type GoalGap = {
   distanceKm: number;
   /** Temps visé tel que saisi (l'allure arrondie ne le redonne pas exactement). */
   targetTimeS: number;
+  /**
+   * Repère de fréquence hors de portée de l'agenda déclaré (« sorties possibles ») :
+   * une phrase qui dit comment on compense, et que l'objectif peut se revoir. Null sinon.
+   */
+  availabilityNote: string | null;
 };
 
 function decimal(value: number): string {
@@ -74,7 +83,12 @@ function pace(seconds: number): string {
   return formatPace(1000 / seconds);
 }
 
-export function goalGap(input: { target: RaceTarget; runs: GapRun[]; today: string; thresholdSpeedMps: number | null; eventDate?: string | null }): GoalGap | null {
+/**
+ * `availableRunsPerWeek` : sorties possibles déclarées dans l'objectif. C'est un plafond :
+ * le moteur ne conseille jamais plus de sorties que l'agenda n'en permet, il compense par
+ * la durée des sorties (sortie longue, volume) et le dit.
+ */
+export function goalGap(input: { target: RaceTarget; runs: GapRun[]; today: string; thresholdSpeedMps: number | null; eventDate?: string | null; availableRunsPerWeek?: number | null }): GoalGap | null {
   const goalPaceS = Math.round(input.target.targetTimeS / input.target.distanceKm);
   const bench = benchmarks(input.target.distanceKm, goalPaceS);
   if (!bench) return null;
@@ -84,8 +98,11 @@ export function goalGap(input: { target: RaceTarget; runs: GapRun[]; today: stri
   const kmPerWeek = recent.reduce((sum, run) => sum + (run.distanceM ?? 0), 0) / 1000 / GAP_WINDOW_WEEKS;
   const longestKm = Math.max(0, ...recent.map((run) => (run.distanceM ?? 0) / 1000));
 
+  const available = input.availableRunsPerWeek ?? null;
+  const capped = available != null && available < bench.runsPerWeek;
+  const ceiling = capped ? (available as number) : bench.runsPerWeek;
   const levers: GoalLever[] = [
-    { key: "frequency", label: "Sorties par semaine", current: decimal(runsPerWeek), needed: `${bench.runsPerWeek} au moins`, share: Math.min(1, runsPerWeek / bench.runsPerWeek), met: runsPerWeek >= bench.runsPerWeek - 0.25 },
+    { key: "frequency", label: "Sorties par semaine", current: decimal(runsPerWeek), needed: capped ? `${bench.runsPerWeek} (${available} possible${(available as number) > 1 ? "s" : ""})` : `${bench.runsPerWeek} au moins`, share: Math.min(1, runsPerWeek / bench.runsPerWeek), met: runsPerWeek >= bench.runsPerWeek - 0.25, ...(capped ? { capped: true, possibleShare: (available as number) / bench.runsPerWeek } : {}) },
     { key: "volume", label: "Volume", current: `${Math.round(kmPerWeek)} km/sem`, needed: `${bench.weeklyKm} km/sem`, share: Math.min(1, kmPerWeek / bench.weeklyKm), met: kmPerWeek >= bench.weeklyKm * 0.9 },
     { key: "long_run", label: "Plus longue sortie", current: `${decimal(longestKm)} km`, needed: `${bench.longRunKm} km`, share: Math.min(1, longestKm / bench.longRunKm), met: longestKm >= bench.longRunKm - 1 },
   ];
@@ -104,20 +121,26 @@ export function goalGap(input: { target: RaceTarget; runs: GapRun[]; today: stri
   const longRun = levers[2];
   const threshold = levers.find((lever) => lever.key === "threshold") ?? null;
 
-  // Une sortie de plus à la fois : la semaine type passe de N à N + 1 sorties.
-  const nextRuns = Math.min(bench.runsPerWeek, Math.max(1, Math.ceil(runsPerWeek - 0.25)) + (frequency.met ? 0 : 1));
+  // Une sortie de plus à la fois : la semaine type passe de N à N + 1 sorties, jamais au-delà des sorties possibles.
+  const atCeiling = runsPerWeek >= ceiling - 0.25;
+  const nextRuns = Math.min(ceiling, Math.max(1, Math.ceil(runsPerWeek - 0.25)) + (atCeiling ? 0 : 1));
+  // La fréquence n'est un levier que si l'agenda laisse de la place pour une sortie de plus.
+  const frequencyOpen = !frequency.met && !atCeiling;
   let main: GoalLever["key"] | null = null;
   let action: string | null = null;
   const longKm = Math.max(1, Math.round(longestKm));
   const longSteps = Math.ceil(Math.max(0, bench.longRunKm - longKm) / LONG_STEP_KM);
   const longPlan = longSteps > 0 ? `allonge ta sortie longue de ${LONG_STEP_KM} km toutes les ${LONG_STEP_WEEKS} semaines (${longKm} → ${bench.longRunKm} km en ${longSteps * LONG_STEP_WEEKS} semaines)` : null;
 
-  if ((!frequency.met && frequency.share < STRUCTURAL_SHORTFALL) || (!volume.met && volume.share < STRUCTURAL_SHORTFALL)) {
-    main = !frequency.met ? "frequency" : "volume";
+  if ((frequencyOpen && frequency.share < STRUCTURAL_SHORTFALL) || (!volume.met && volume.share < STRUCTURAL_SHORTFALL)) {
+    main = frequencyOpen ? "frequency" : "volume";
     const step = Math.max(1, Math.round(kmPerWeek * VOLUME_WEEKLY_GROWTH));
-    action = !frequency.met
-      ? `Passe à ${nextRuns} sorties par semaine : ajoute un footing facile de 30 à 40 min en Z2${longPlan ? ` ; ensuite, ${longPlan}` : ""}.`
-      : `Monte le volume de ${step} km par semaine au plus (${Math.round(kmPerWeek)} → ${bench.weeklyKm} km/sem)${longPlan ? ` ; ${longPlan}` : ""}.`;
+    const maximum = capped && nextRuns === available ? " (le maximum que tu as indiqué)" : "";
+    action = frequencyOpen
+      ? `Passe à ${nextRuns} sorties par semaine${maximum} : ajoute un footing facile de 30 à 40 min en Z2${longPlan ? ` ; ensuite, ${longPlan}` : ""}.`
+      : capped
+        ? `Avec ${available} sorties par semaine, le volume vient de leur durée : ${longPlan ?? "allonge tes sorties faciles de 10 min"}, sans dépasser +${step} km par semaine (${Math.round(kmPerWeek)} → ${bench.weeklyKm} km/sem).`
+        : `Monte le volume de ${step} km par semaine au plus (${Math.round(kmPerWeek)} → ${bench.weeklyKm} km/sem)${longPlan ? ` ; ${longPlan}` : ""}.`;
   } else if (!longRun.met) {
     main = "long_run";
     action = `${longPlan ? longPlan.charAt(0).toUpperCase() + longPlan.slice(1) : "Allonge ta sortie longue"}, en Z2.`;
@@ -139,7 +162,11 @@ export function goalGap(input: { target: RaceTarget; runs: GapRun[]; today: stri
   const summary = mainLever && action
     ? `Levier principal pour le ${bench.race} : ${mainLever.label.toLowerCase()} (${mainLever.current}, repère ${mainLever.needed}). ${action}${timing}`
     : `Pour le ${bench.race}, fréquence, volume, sortie longue et seuil sont au niveau des repères : garde la régularité.`;
-  return { race: bench.race, levers, main, action, summary, nextRunsPerWeek: nextRuns, goalPaceS, distanceKm: input.target.distanceKm, targetTimeS: input.target.targetTimeS };
+  // Repère hors de l'agenda : dit une fois, comme un choix possible, jamais comme un reproche.
+  const availabilityNote = capped && !frequency.met
+    ? `Le repère courant pour le ${bench.race} est de ${bench.runsPerWeek} sorties par semaine, pour ${available} possible${(available as number) > 1 ? "s" : ""} dans ton agenda : le plan n'en ajoute pas et compense par la sortie longue et la qualité. Si l'écart reste grand, une ${bench.runsPerWeek}e sortie (même 30 min) ou un temps visé revu sont les deux options.`
+    : null;
+  return { race: bench.race, levers, main, action, summary: availabilityNote ? `${summary} ${availabilityNote}` : summary, nextRunsPerWeek: nextRuns, goalPaceS, distanceKm: input.target.distanceKm, targetTimeS: input.target.targetTimeS, availabilityNote };
 }
 
 /** Le levier demande-t-il de changer la semaine type (fréquence, volume, sortie longue) ? */
@@ -164,4 +191,13 @@ export function nextLongRunKm(runs: GapRun[], today: string, benchmarkKm: number
   const held = recent.filter((run) => run.localDate > addDays(today, -28) && (run.distanceM ?? 0) / 1000 >= longestKm - 0.7).length;
   const step = held >= 2 && base < benchmarkKm;
   return { km: Math.min(benchmarkKm, step ? base + LONG_STEP_KM : base), step, longestKm: Math.round(longestKm * 10) / 10 };
+}
+
+/**
+ * L'écart qui décide (jauge, lien d'une analyse à l'objectif) : le même que la semaine type,
+ * soit l'objectif le plus long dont le levier est structurel, sinon le premier avec un levier.
+ */
+export function primaryGap(gaps: GoalGap[]): GoalGap | null {
+  const structural = [...gaps].filter(structuralLever).sort((a, b) => b.distanceKm - a.distanceKm)[0];
+  return structural ?? gaps.find((gap) => gap.main != null) ?? gaps[0] ?? null;
 }

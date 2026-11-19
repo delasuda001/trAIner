@@ -17,7 +17,7 @@ import { median, present } from "@/lib/engine/stats";
 import { goalMarker, prescribe, type GoalMarker, type Prescription, type RecentEffort } from "@/lib/engine/prescription";
 import { suggestNextSession, type Suggestion, type WeekPlan } from "@/lib/engine/suggestion";
 import { estimateThreshold, type ThresholdEstimate } from "@/lib/engine/threshold";
-import { goalGap, longRunBenchmarkKm, nextLongRunKm, structuralLever, type GoalGap } from "@/lib/engine/goal-gap";
+import { goalGap, longRunBenchmarkKm, nextLongRunKm, primaryGap, structuralLever, type GoalGap } from "@/lib/engine/goal-gap";
 import { classifyVerdict, type SessionVerdict } from "@/lib/engine/verdict";
 import { fallbackZones, zonesFromHistory, type ZonesSource } from "@/lib/engine/zones";
 import { activeMember } from "@/lib/profiles/context";
@@ -210,7 +210,7 @@ function goalGapsFor(goal: Goal | null, runs: AnalyzedRun[], today: string, thre
   if (!goal?.raceTargets.length) return [];
   const history = runs.filter((run) => run.localDate <= today).map((run) => ({ localDate: run.localDate, distanceM: run.distanceM }));
   return goal.raceTargets
-    .map((target) => goalGap({ target, runs: history, today, thresholdSpeedMps, eventDate: goal.distanceKm && Math.abs(goal.distanceKm - target.distanceKm) < 0.05 ? goal.eventDate : null }))
+    .map((target) => goalGap({ target, runs: history, today, thresholdSpeedMps, eventDate: goal.distanceKm && Math.abs(goal.distanceKm - target.distanceKm) < 0.05 ? goal.eventDate : null, availableRunsPerWeek: goal.runsPerWeek }))
     .filter((gap): gap is GoalGap => gap != null);
 }
 
@@ -219,15 +219,16 @@ const LEVER_WORDS: Record<string, string> = { frequency: "la fréquence", volume
 /**
  * Semaine type alignée sur l'écart à l'objectif : seulement si le levier principal est
  * structurel (fréquence, volume, sortie longue). L'objectif le plus long décide (la sortie
- * longue y compte le plus). Les sorties par semaine déclarées restent un plancher.
+ * longue y compte le plus). Les sorties par semaine déclarées fixent la semaine type : jamais plus.
  */
 function weekPlanFor(goal: Goal | null, gaps: GoalGap[], runs: AnalyzedRun[], today: string): WeekPlan | null {
-  const gap = [...gaps].filter(structuralLever).sort((a, b) => b.distanceKm - a.distanceKm)[0] ?? null;
-  if (!gap) return null;
+  const gap = primaryGap(gaps);
+  if (!gap || !structuralLever(gap)) return null;
   const benchmark = longRunBenchmarkKm(gap.distanceKm, gap.goalPaceS);
   if (benchmark == null) return null;
   const long = nextLongRunKm(runs.map((run) => ({ localDate: run.localDate, distanceM: run.distanceM })), today, benchmark);
-  return { runsPerWeek: Math.max(goal?.runsPerWeek ?? 1, gap.nextRunsPerWeek), longRunKm: long.km, longRunStep: long.step, longestKm: long.longestKm, lever: LEVER_WORDS[gap.main as string] ?? "la fréquence", race: gap.race };
+  // Sorties possibles déclarées = plafond de la semaine type (l'écart à l'objectif ne propose jamais plus).
+  return { runsPerWeek: goal?.runsPerWeek ?? gap.nextRunsPerWeek, longRunKm: long.km, longRunStep: long.step, longestKm: long.longestKm, lever: LEVER_WORDS[gap.main as string] ?? "la fréquence", race: gap.race };
 }
 
 /** Registre du profil actif : les phrases du moteur sont vouvoyées pour un invité, inchangées pour Bastien. */

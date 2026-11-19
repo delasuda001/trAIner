@@ -45,7 +45,7 @@ function useLocalTime(iso: string | null): string | null {
  * dernière analyse du jour) ne s'ouvre qu'au toucher, ou quand l'invité vient
  * d'appuyer sur un bouton du coach (`reveal`).
  */
-export function CoachGaugeLine({ reveal = false }: { reveal?: boolean }) {
+export function CoachGaugeLine({ reveal = false, popover = false }: { reveal?: boolean; popover?: boolean }) {
   const gauge = useCoachGauge();
   const [open, setOpen] = useState(false);
   const reset = useLocalTime(gauge && gauge.level !== "large" ? gauge.resetsAt : null);
@@ -54,7 +54,7 @@ export function CoachGaugeLine({ reveal = false }: { reveal?: boolean }) {
   const filled = gauge.level === "large" ? 1 : gauge.level === "menager" ? 2 : 3;
   const shown = open || (reveal && (gauge.level !== "large" || (gauge.left != null && gauge.left <= 1)));
   return (
-    <div className={`coach-gauge gauge-${gauge.level}`}>
+    <div className={`coach-gauge gauge-${gauge.level}${popover ? " gauge-popover" : ""}`}>
       <button type="button" className="gauge-head" aria-expanded={shown} onClick={() => setOpen((value) => !value)} title="L'abonnement Claude de Bastien, partagé entre les testeurs">
         <span className="gauge-bars" aria-hidden>{[1, 2, 3].map((index) => <span key={index} className={index <= filled ? "on" : ""} />)}</span>
         <span>Abonnement de Bastien : <strong>{level.label}</strong></span>

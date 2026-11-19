@@ -15,11 +15,19 @@ export function storedFingerprint(promptVersion: string, payload: unknown, goalF
   return goalFreePayload == null ? full : `${full}~${hashPayload(promptVersion, goalFreePayload)}`;
 }
 
+/**
+ * « full » : l'empreinte complète correspond ; « goal-free » : seul l'objectif (ou l'écart à
+ * l'objectif) a changé, la sortie reste valable sauf ce qui parle de l'objectif ; null : périmée.
+ */
+export function fingerprintMatch(stored: string, promptVersion: string, payload: unknown, goalFreePayload?: () => unknown): "full" | "goal-free" | null {
+  const [full, goalFree] = stored.split("~");
+  if (full === hashPayload(promptVersion, payload)) return "full";
+  if (!goalFree || !goalFreePayload) return null;
+  const free = goalFreePayload();
+  return free != null && goalFree === hashPayload(promptVersion, free) ? "goal-free" : null;
+}
+
 /** À jour si l'empreinte complète correspond, ou si seul l'objectif a changé (seconde empreinte identique). */
 export function fingerprintIsCurrent(stored: string, promptVersion: string, payload: unknown, goalFreePayload?: () => unknown): boolean {
-  const [full, goalFree] = stored.split("~");
-  if (full === hashPayload(promptVersion, payload)) return true;
-  if (!goalFree || !goalFreePayload) return false;
-  const free = goalFreePayload();
-  return free != null && goalFree === hashPayload(promptVersion, free);
+  return fingerprintMatch(stored, promptVersion, payload, goalFreePayload) != null;
 }

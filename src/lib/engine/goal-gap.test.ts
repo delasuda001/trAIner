@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "@/lib/dates";
 import { vouvoyer } from "@/lib/register";
-import { goalGap, nextLongRunKm, type GapRun } from "./goal-gap";
+import { goalGap, nextLongRunKm, primaryGap, type GapRun } from "./goal-gap";
 
 const today = "2026-11-18";
 const half = { distanceKm: 21.0975, targetTimeS: 87 * 60 };
@@ -61,11 +61,58 @@ describe("écart à l'objectif", () => {
   });
 });
 
+describe("sorties possibles déclarées (plafond de l'agenda)", () => {
+  it("1,5 sortie par semaine, 2 possibles : on vise 2 (le maximum indiqué), jamais 3, et on le dit", () => {
+    const runs = weeks(1, 9, 11).concat(weeks(1, 9).filter((_, index) => index % 2 === 0).map((run) => ({ ...run, localDate: addDays(run.localDate, -3) })));
+    const gap = goalGap({ target: half, runs, today, thresholdSpeedMps: 1000 / 250, availableRunsPerWeek: 2 });
+    if (!gap) throw new Error("attendu");
+    expect(gap.nextRunsPerWeek).toBe(2);
+    expect(gap.main).toBe("frequency");
+    expect(gap.action).toBe("Passe à 2 sorties par semaine (le maximum que tu as indiqué) : ajoute un footing facile de 30 à 40 min en Z2 ; ensuite, allonge ta sortie longue de 2 km toutes les 2 semaines (11 → 18 km en 8 semaines).");
+    expect(gap.levers[0]).toMatchObject({ needed: "3 (2 possibles)", capped: true, met: false });
+    expect(gap.levers[0].possibleShare).toBeCloseTo(2 / 3, 3);
+    expect(gap.availabilityNote).toContain("pour 2 possibles dans ton agenda : le plan n'en ajoute pas");
+    expect(vouvoyer(gap.availabilityNote as string)).toContain("pour 2 possibles dans votre agenda : le plan n'en ajoute pas");
+    expect(vouvoyer(gap.availabilityNote as string)).not.toMatch(/\b(tu|ton|ta|tes|t')\b/);
+    expect(gap.summary).toContain(gap.availabilityNote as string);
+    expect(gap.summary).not.toMatch(/Passe à 3/);
+  });
+
+  it("déjà à 2 sorties sur 2 possibles : la fréquence n'est plus le levier, le volume vient de la durée des sorties", () => {
+    const gap = goalGap({ target: half, runs: weeks(2, 7, 10), today, thresholdSpeedMps: 1000 / 250, availableRunsPerWeek: 2 });
+    if (!gap) throw new Error("attendu");
+    expect(gap.nextRunsPerWeek).toBe(2);
+    expect(gap.main).toBe("volume");
+    expect(gap.action).toBe("Avec 2 sorties par semaine, le volume vient de leur durée : allonge ta sortie longue de 2 km toutes les 2 semaines (10 → 18 km en 8 semaines), sans dépasser +1 km par semaine (14 → 40 km/sem).");
+    expect(gap.action).not.toMatch(/sorties par semaine :|Passe à/);
+  });
+
+  it("assez de sorties possibles : rien ne change (repère de 3, une de plus à la fois)", () => {
+    const runs = weeks(1, 9, 11);
+    const withAgenda = goalGap({ target: half, runs, today, thresholdSpeedMps: 1000 / 250, availableRunsPerWeek: 4 });
+    const without = goalGap({ target: half, runs, today, thresholdSpeedMps: 1000 / 250 });
+    expect(withAgenda).toEqual(without);
+    expect(withAgenda?.availabilityNote).toBeNull();
+  });
+});
+
 describe("prochaine sortie longue", () => {
   it("+2 km quand la plus longue a été tenue deux fois en 4 semaines, sinon on consolide ; jamais au-delà du repère", () => {
     const held = [{ localDate: addDays(today, -4), distanceM: 11000 }, { localDate: addDays(today, -18), distanceM: 10400 }];
     expect(nextLongRunKm(held, today, 18)).toEqual({ km: 13, step: true, longestKm: 11 });
     expect(nextLongRunKm([{ localDate: addDays(today, -4), distanceM: 11000 }, { localDate: addDays(today, -18), distanceM: 9000 }], today, 18)).toMatchObject({ km: 11, step: false });
     expect(nextLongRunKm([{ localDate: addDays(today, -4), distanceM: 17500 }, { localDate: addDays(today, -11), distanceM: 17200 }], today, 18)).toMatchObject({ km: 18 });
+  });
+});
+
+describe("écart qui décide", () => {
+  it("l'objectif le plus long au levier structurel, sinon le premier avec un levier", () => {
+    const structural = goalGap({ target: half, runs: weeks(1, 9, 11), today, thresholdSpeedMps: 1000 / 250 });
+    const fiveKGap = goalGap({ target: fiveK, runs: weeks(1, 9, 11), today, thresholdSpeedMps: 1000 / 250 });
+    if (!structural || !fiveKGap) throw new Error("attendu");
+    expect(primaryGap([fiveKGap, structural])?.race).toBe("semi");
+    const thresholdOnly = goalGap({ target: half, runs: weeks(4, 11, 18), today, thresholdSpeedMps: 1000 / 250 });
+    expect(primaryGap(thresholdOnly ? [thresholdOnly] : [])?.main).toBe("threshold");
+    expect(primaryGap([])).toBeNull();
   });
 });

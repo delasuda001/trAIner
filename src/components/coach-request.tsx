@@ -15,7 +15,8 @@ type CoachResponse = { status: "ready" | "missing" | "error"; message?: string }
  * Hors ligne (Mac éteint), la demande est mise en file et part au retour du Mac ;
  * `queueLabel` dit ce qui partira (« Analyse de la séance du 12 nov. »).
  */
-export function CoachRequest({ endpoint, label, initialError, queueLabel }: { endpoint: string; label: string; initialError?: string | null; queueLabel?: string }) {
+/** `gaugePopover` : dans une barre de boutons (en-tête), le détail de la jauge s'ouvre par-dessus, sans pousser la page. */
+export function CoachRequest({ endpoint, label, initialError, queueLabel, gaugePopover = false }: { endpoint: string; label: string; initialError?: string | null; queueLabel?: string; gaugePopover?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
@@ -74,12 +75,12 @@ export function CoachRequest({ endpoint, label, initialError, queueLabel }: { en
   }
 
   return (
-    <div>
+    <div className={gaugePopover ? "coach-request-inline" : undefined}>
       <button type="button" className="btn" onClick={() => void request()} disabled={busy || (paused && !offline)}>
         {offline ? <Clock size={14} /> : <Sparkles size={14} className={busy ? "spin" : undefined} />}
         {busy ? "Le coach réfléchit… (10 à 20 s)" : offline ? "Mettre en file pour le coach" : label}
       </button>
-      <CoachGaugeLine reveal={pressed} />
+      <CoachGaugeLine reveal={pressed} popover={gaugePopover} />
       {error && !paused ? <p className="notice notice-error">{error}</p> : null}
     </div>
   );

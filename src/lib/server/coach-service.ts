@@ -14,13 +14,14 @@ import { buildSessionPayload, buildSessionPrompt, normalizeSessionOutput, SESSIO
 import { createCoachOutputRepository } from "@/lib/db/repositories/coach-output-repository";
 import { requireActiveMember } from "@/lib/profiles/context";
 import { systemPromptFor } from "@/lib/coach/athlete";
-import { fingerprintIsCurrent, hashPayload, storedFingerprint } from "@/lib/coach/fingerprint";
+import { fingerprintMatch, hashPayload, storedFingerprint } from "@/lib/coach/fingerprint";
 import { checkQuota } from "./quota";
 import { recordFailure, recordUsage } from "./usage";
 import { analyzeSession, getDashboard, loadContext, type Dashboard, type SessionAnalysis } from "./analytics";
 
 export type CoachResult<T> =
-  | { status: "ready"; output: T; model: string; createdAt: string }
+  /** `goalStale` : seul l'objectif a changé depuis ; ce que la sortie dit de l'objectif (goalLink) n'est plus à jour. */
+  | { status: "ready"; output: T; model: string; createdAt: string; goalStale?: boolean }
   | { status: "missing"; previous?: { output: T; model: string; createdAt: string; promptVersion: string } }
   | { status: "error"; kind: LlmFailureKind; message: string };
 
@@ -64,8 +65,9 @@ function cached<T>(job: Job<T>): CoachResult<T> {
   const output = job.normalize ? job.normalize(raw) : (raw as T);
   if (output == null) return { status: "missing" };
   // Données modifiées depuis (ressenti, nouvelles séances…) : on garde l'ancienne analyse sous la main pour l'afficher comme « à mettre à jour ».
-  if (!fingerprintIsCurrent(latest.inputHash, job.promptVersion, job.payload, job.goalFreePayload)) return { status: "missing", previous: { output, model: latest.model, createdAt: latest.createdAt, promptVersion: latest.promptVersion } };
-  return { status: "ready", output, model: latest.model, createdAt: latest.createdAt };
+  const match = fingerprintMatch(latest.inputHash, job.promptVersion, job.payload, job.goalFreePayload);
+  if (!match) return { status: "missing", previous: { output, model: latest.model, createdAt: latest.createdAt, promptVersion: latest.promptVersion } };
+  return { status: "ready", output, model: latest.model, createdAt: latest.createdAt, ...(match === "goal-free" ? { goalStale: true } : {}) };
 }
 
 /** `preparation` : appel lancé par Bastien pour préparer un invité (compté à part, hors plafonds personnels). */

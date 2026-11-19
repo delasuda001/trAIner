@@ -97,6 +97,21 @@ describe("classifyKind, répétitions longues", () => {
   });
 });
 
+describe("classifyKind, zones sans FC seuil mesurée (% de FC max)", () => {
+  const generic: HeartRateZones = { floors: [123, 136, 150, 163, 179], maxHeartRateBpm: 192, lactateThresholdHeartRateBpm: null, method: "HR_MAX" };
+  const kmReps = (heartRate: number) => ({ reps: 3, averageDurationS: 330, averageDistanceM: 1000, averageSpeedMps: 3.03, averageHeartRateBpm: heartRate, peakHeartRateBpm: heartRate + 5, speedCvPct: 1, fadePct: 0, paceSpreadSPerKm: 6, fadeSPerKm: 0, averageRecoveryS: 120, repsDetail: [] });
+  it("deux 3 × 1 km à 165 et 161 bpm (Z4 estimée dès 163) : même type, pas l'un seuil et l'autre tempo", () => {
+    expect(classifyKind({ work: kmReps(165), zoneShares: null, movingTimeS: 1800, distanceM: 4700, zones: generic })).toBe("intervals_threshold");
+    expect(classifyKind({ work: kmReps(161), zoneShares: null, movingTimeS: 2100, distanceM: 5900, zones: generic })).toBe("intervals_threshold");
+  });
+  it("nettement sous la Z4 estimée (5 bpm et plus) : tempo", () => {
+    expect(classifyKind({ work: kmReps(157), zoneShares: null, movingTimeS: 2100, distanceM: 5900, zones: generic })).toBe("intervals_tempo");
+  });
+  it("FC seuil de la montre connue : plancher de Z4 tel quel (Bastien inchangé)", () => {
+    expect(classifyKind({ work: { ...kmReps(157), averageDistanceM: 2000, averageDurationS: 500 }, zoneShares: null, movingTimeS: 2850, distanceM: 10100, zones })).toBe("intervals_tempo");
+  });
+});
+
 describe("computeActivityMetrics", () => {
   it("mesure ralentissement, dérive cardiaque et efficacité aérobie sur une sortie continue", () => {
     const streams = steadyStreams(3600, (t) => (t < 1800 ? 2.8 : 2.7), (t) => (t < 1800 ? 135 : 140));
