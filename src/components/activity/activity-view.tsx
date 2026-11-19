@@ -70,6 +70,7 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
           <p className="more-body">{ready.detail}</p>
         </details>
       ) : null}
+      <p className="small" style={{ marginTop: 10 }}><Link href={`/coach?seance=${encodeURIComponent(activity.id)}`}><Say tu="Poser une question au coach sur cette séance" vous="Poser une question au coach sur cette séance" /> →</Link></p>
       {ready && coach?.status === "ready" ? <RateCoach subjectKind="session" subjectId={activity.id} promptVersion={SESSION_PROMPT_VERSION} label="Cette analyse t'est utile ?" /> : null}
       {ready ? null : (
         <div style={{ marginTop: 16 }}>

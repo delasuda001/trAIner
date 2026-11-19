@@ -38,7 +38,10 @@ export type Suggestion = {
    * (« Mardi ou mercredi », « Aujourd'hui »).
    */
   when: { date: string; label: string; dates: string[] };
+  /** Le pourquoi en langage de coureur (pas de charge brute, de ratio ni de médiane). */
   reason: string;
+  /** Les chiffres derrière le pourquoi, pour « Le détail » (charge, ratio) ; absent si le pourquoi se suffit. */
+  reasonDetail?: string;
   /** Proposée quand les signaux de récupération sont dégradés. */
   alternative: (SuggestedSession & { reason: string }) | null;
   /** La séance d'après, si la prochaine est faite comme prévu. */
@@ -317,7 +320,7 @@ function kindOf(type: SuggestionType): { kind: SessionKind; family: SessionFamil
   return { kind: "endurance", family: "easy", hard: false };
 }
 
-type Core = { primary: SuggestedSession; reason: string; when: string; dates: string[] };
+type Core = { primary: SuggestedSession; reason: string; reasonDetail?: string; when: string; dates: string[] };
 
 /** Avec une semaine type, une sortie facile assez longue compte comme sortie longue (ses sorties du samedi, par ex.). */
 function isLongRun(run: SuggestionRun, plan: WeekPlan | null): boolean {
@@ -376,6 +379,7 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
 
   let primary: SuggestedSession;
   let reason: string;
+  let reasonDetail: string | undefined;
 
   if (daysToEvent === 0) {
     primary = { type: "race", title: "Jour de course", durationMin: 0, structure: "Échauffement de 15 min avec quelques accélérations, puis départ prudent les 2 premiers kilomètres.", target: goal?.targetPaceMps ? { zone: "allure objectif", heartRateLow: zoneRange(4, input.zones)[0], heartRateHigh: zoneRange(5, input.zones)[1], ...paceAround(goal.targetPaceMps, 2) } : null };
@@ -388,8 +392,18 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
     reason = daysSinceLastRun == null ? "Aucune course récente : on repart sur une base aérobie facile." : `Ta dernière course date de ${daysSinceLastRun} jours : on reprend en endurance avant de remettre de l'intensité.`;
   } else if (load.ratio != null && load.ratio >= highLoadRatio && (input.loadAlert == null || input.loadAlert.actionable)) {
     primary = enduranceSession(input, roundTo5(Math.min(50, typicalEasyMin)));
-    const why = input.loadAlert?.reasons.length ? `, avec ${input.loadAlert.reasons.join(", ")}` : "";
-    reason = `Ta charge des 7 derniers jours vaut ${formatNumber(load.ratio, 1)} fois ta moyenne${why} : on absorbe avec une séance facile.`;
+    // En langage de coureur : la semaine, et ce qui confirme qu'elle pèse ; les chiffres vont dans le détail.
+    const reasons = input.loadAlert?.reasons ?? [];
+    const signals = [
+      reasons.some((entry) => entry.startsWith("VFC")) ? "ta VFC est basse" : null,
+      reasons.some((entry) => entry.startsWith("FC de repos")) ? "ta FC de repos est haute" : null,
+      reasons.some((entry) => entry.startsWith("nuit")) ? "tes nuits sont courtes" : null,
+      reasons.some((entry) => entry.startsWith("effort perçu")) ? "ta dernière sortie t'a paru dure" : null,
+    ].filter((entry): entry is string => entry != null);
+    const also = signals.length ? `, et ${signals.length > 1 ? `${signals.slice(0, -1).join(", ")} et ${signals.at(-1)}` : signals[0]}` : "";
+    reason = `Ta semaine a été nettement plus chargée que d'habitude${also} : on récupère avec une sortie facile.`;
+    const typical = input.loadAlert?.typicalWeekLoad ?? null;
+    reasonDetail = `Charge Garmin des 7 derniers jours : ${formatNumber(load.ratio, 1)} fois ta moyenne des 4 dernières semaines${typical != null ? ` (semaine habituelle sur 12 semaines : ${typical})` : ""}.`;
   } else if (lastHard && lastRun === lastHard && daysBetween(lastHard.localDate, today) < qualitySpacing && plan && plan.runsPerWeek >= 3) {
     primary = footingSession(input);
     skipHabit = true;
@@ -416,7 +430,8 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
     }
   } else if (highShare != null && highShare >= 0.4 && lastRun && lastRun.family !== "easy") {
     primary = enduranceSession(input, easyDuration);
-    reason = `${formatNumber(highShare * 100)} % de ton temps des 4 dernières semaines était en Z4–Z5 : une vraie séance en Z2 rééquilibre.`;
+    reason = "Beaucoup d'intensité ces dernières semaines : une vraie sortie facile rééquilibre.";
+    reasonDetail = `${formatNumber(highShare * 100)} % de ton temps des 4 dernières semaines en Z4–Z5.`;
   } else if (plannedRunsPerWeek <= 1 && lastRun && lastRun.family !== "intervals" && lastRun.family !== "steady") {
     ({ session: primary, why: reason } = qualitySession());
   } else if (plannedRunsPerWeek <= 1 && (daysSinceLastLong == null || daysSinceLastLong >= 14)) {
@@ -466,6 +481,7 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
   return {
     primary,
     reason,
+    ...(reasonDetail ? { reasonDetail } : {}),
     when: start,
     dates,
     facts: {
@@ -519,5 +535,5 @@ export function suggestNextSession(input: SuggestionInput): Suggestion {
     then = { title: next.primary.title, durationMin: next.primary.durationMin, type: next.primary.type, when: { date, label: whenLabel(date, input.today) } };
   }
 
-  return { primary, when: { date: core.when, label: windowLabel(core.dates, input.today), dates: core.dates }, reason: core.reason, alternative, then, facts: core.facts };
+  return { primary, when: { date: core.when, label: windowLabel(core.dates, input.today), dates: core.dates }, reason: core.reason, ...(core.reasonDetail ? { reasonDetail: core.reasonDetail } : {}), alternative, then, facts: core.facts };
 }

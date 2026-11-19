@@ -111,7 +111,9 @@ describe("hausse de charge et suggestion", () => {
   it("ratio 1,6 corroboré : séance facile, avec la raison", () => {
     const result = suggestNextSession(input(runs, { load: highLoad, loadAlert: alert(true) }));
     expect(result.primary.type).toBe("endurance");
-    expect(result.reason).toContain("VFC sous ta plage habituelle");
+    expect(result.reason).toBe("Ta semaine a été nettement plus chargée que d'habitude, et ta VFC est basse : on récupère avec une sortie facile.");
+    expect(result.reason).not.toMatch(/fois|médiane|\d/);
+    expect(result.reasonDetail).toMatch(/^Charge Garmin des 7 derniers jours : 1,6 fois ta moyenne/);
   });
 });
 

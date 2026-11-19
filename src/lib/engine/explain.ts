@@ -122,15 +122,26 @@ export function progressionSentence(progression: Progression): string {
   return `${formatNumber(Math.abs(gain))} s/km plus ${gain > 0 ? "rapide" : "lent"} à FC égale qu'il y a ${progression.windowWeeks} semaines (${pace}).`;
 }
 
+/** Signal qui confirme une hausse de charge, dit simplement ; la « charge inhabituelle » est déjà dans la phrase. */
+function plainLoadReason(reason: string): string | null {
+  if (reason.startsWith("VFC")) return "une VFC basse";
+  if (reason.startsWith("FC de repos")) return "une FC de repos haute";
+  if (reason.startsWith("nuit")) return "des nuits courtes";
+  if (reason.startsWith("effort perçu")) return "une sortie ressentie dure";
+  return null;
+}
+
 export function loadMeaning(load: LoadSummary, alert?: LoadAlert | null): { text: string; tone: Tone } {
   if (load.ratio == null) return { text: "Pas encore assez d'historique pour situer ta charge.", tone: "neutral" };
   if (load.ratio < 0.8) return { text: "Semaine plus légère que ta moyenne.", tone: "neutral" };
   if (load.ratio <= 1.3) return { text: "Dans ta norme des 4 dernières semaines.", tone: "good" };
   // Hausse non corroborée (récupération, ressenti, charge absolue) : simple repère, pas de consigne.
   if (alert && alert.reasons.length === 0) return { text: "Au-dessus de tes 4 dernières semaines, sans autre signal : simple repère.", tone: "neutral" };
-  const why = alert?.reasons.length ? ` (${alert.reasons.join(", ")})` : "";
-  if (load.ratio <= 1.5) return { text: `Hausse marquée${why} : garde la prochaine séance facile.`, tone: "warning" };
-  return { text: `Pic de charge${why} : absorbe avant de rajouter de l'intensité.`, tone: "critical" };
+  // En langage de coureur : les chiffres sont déjà au-dessus (valeur, moyenne, ratio).
+  const plain = (alert?.reasons ?? []).map(plainLoadReason).filter((entry): entry is string => entry != null);
+  const why = plain.length ? `, avec ${plain.join(", ")}` : "";
+  if (load.ratio <= 1.5) return { text: `Semaine plus chargée que d'habitude${why} : garde la prochaine séance facile.`, tone: "warning" };
+  return { text: `Semaine bien plus chargée que d'habitude${why} : récupère avant de rajouter de l'intensité.`, tone: "critical" };
 }
 
 export function hrvMeaning(recovery: RecoverySignals): { text: string; tone: Tone } {

@@ -10,7 +10,9 @@ import { VERDICT_LABELS } from "@/lib/engine/verdict";
 import { ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import { goalForCoach } from "@/lib/goal/goal";
-import { getDashboard, recentRunSummaries } from "./analytics";
+import { analyzeSession, getDashboard, recentRunSummaries } from "./analytics";
+import { readSessionCoach } from "./coach-service";
+import { sessionTitle } from "@/lib/engine/activity-metrics";
 import { requireActiveMember } from "@/lib/profiles/context";
 import { askerLabel, systemPromptFor } from "@/lib/coach/athlete";
 import { checkQuota } from "./quota";
@@ -65,12 +67,38 @@ export function buildChatContext(dashboard = getDashboard()) {
   };
 }
 
+/**
+ * Séance choisie par l'athlète pour sa question : son résumé compact (jamais de séries ni de GPS),
+ * le verdict, les consignes du moteur, le ressenti et ce que le coach en a déjà dit. Environ 250 tokens.
+ */
+export function chosenSessionContext(activityId: string): Record<string, unknown> | null {
+  const analysis = analyzeSession(activityId);
+  if (!analysis) return null;
+  const { activity, metrics, verdict, prescription, feeling, deltas } = analysis;
+  const coach = readSessionCoach(analysis);
+  const said = coach.status === "ready" ? coach.output : coach.status === "missing" ? coach.previous?.output ?? null : null;
+  return {
+    date: formatDate(activity.localDate, "long"),
+    type: sessionTitle(metrics),
+    distance: formatDistance(activity.distanceM, 2),
+    duree: formatClock(activity.movingTimeS),
+    allure_moyenne: formatPace(activity.averageSpeedMps),
+    fc_moyenne: activity.averageHeartRateBpm ? `${Math.round(activity.averageHeartRateBpm)} bpm` : "—",
+    ...(metrics.work ? { travail: `${metrics.work.reps} répétitions à ${formatPace(metrics.work.averageSpeedMps)}, ${metrics.work.averageHeartRateBpm ? `${Math.round(metrics.work.averageHeartRateBpm)} bpm` : "FC —"}` } : {}),
+    verdict: `${VERDICT_LABELS[verdict.level]} : ${verdict.headline}`,
+    seances_comparables: deltas.count,
+    ...(prescription.status === "ok" ? { consignes: { a_reproduire: prescription.keep, aurait_du: prescription.shouldHave.join(" ") || "rien à corriger", prochaine_fois: prescription.next.cue } } : {}),
+    ...(said ? { analyse_du_coach: { verdict: said.verdict, aurait_du: said.shouldHave, prochaine_fois: said.nextTime } } : {}),
+    ressenti: feeling ? `${feeling.perceivedEffort != null ? `effort ${feeling.perceivedEffort}/10. ` : ""}${feeling.note}` : "non renseigné",
+  };
+}
+
 export type AskResult = { messages: ChatMessage[]; error: { kind: LlmFailureKind; message: string } | null };
 
 /** Une question à la fois par profil. */
 const busyMembers = new Set<string>();
 
-export async function askCoach(question: string): Promise<AskResult> {
+export async function askCoach(question: string, activityId: string | null = null): Promise<AskResult> {
   const repository = createChatRepository();
   const memberId = requireActiveMember().id;
   if (busyMembers.has(memberId)) return { messages: repository.list(), error: { kind: "unavailable", message: "Le coach répond déjà à une question." } };
@@ -79,11 +107,14 @@ export async function askCoach(question: string): Promise<AskResult> {
   busyMembers.add(memberId);
   try {
     const history = repository.list(CHAT_HISTORY_MESSAGES).filter((message) => !message.content.error).map((message) => ({ role: message.role, text: message.content.text }));
-    repository.add("user", { text: question });
+    const chosen = activityId ? chosenSessionContext(activityId) : null;
+    repository.add("user", { text: question, ...(chosen ? { activity: { id: activityId as string, label: `${chosen.type} · ${chosen.date}` } } : {}) });
     const dashboard = getDashboard();
     const athlete = { isAdmin: requireActiveMember().role === "admin", runsPerWeek12w: dashboard.rhythm.runsPerWeek12w };
     const system = systemPromptFor(CHAT_SYSTEM_PROMPT, athlete);
-    const { zoneOf: zoneOfHr, ...context } = buildChatContext(dashboard);
+    const { zoneOf: zoneOfHr, ...base } = buildChatContext(dashboard);
+    // Séance choisie : son résumé passe en tête ; la question porte sur elle.
+    const context = chosen ? { seance_choisie: chosen, ...base } : base;
     const allowed = allowedNumbers({ context, question, history });
     const basePrompt = buildChatPrompt(context, history, question, askerLabel(athlete));
     let prompt = basePrompt;

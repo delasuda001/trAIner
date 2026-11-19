@@ -3,7 +3,7 @@ import { asc, desc } from "drizzle-orm";
 import { getDb, type AppDatabase } from "../client";
 import { coachChatMessages } from "../schema";
 
-export type ChatMessage = { id: string; role: "user" | "coach"; content: { text: string; evidence?: string[]; error?: boolean }; model: string | null; createdAt: string };
+export type ChatMessage = { id: string; role: "user" | "coach"; content: { text: string; evidence?: string[]; error?: boolean; activity?: { id: string; label: string } }; model: string | null; createdAt: string };
 
 function parse(row: typeof coachChatMessages.$inferSelect): ChatMessage {
   return { id: row.id, role: row.role === "coach" ? "coach" : "user", content: JSON.parse(row.contentJson) as ChatMessage["content"], model: row.model, createdAt: row.createdAt };

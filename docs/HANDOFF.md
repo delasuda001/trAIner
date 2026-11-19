@@ -540,3 +540,9 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
 - (même branche) Séances du débutant (`suggestion.ts`, `beginner`) : ni seuil ni VO2max ; alternance sortie ludique (footing +
   accélérations, fartlek ludique, footing progressif, à tour de rôle) / sortie un peu plus longue (+10 min sur la plus longue,
   90 min au plus). Vérifié : photographie de Bastien identique, suggestion de Marie identique (niveau confirmé).
+- (19 nov., 23 h, branche `claude/proposition-retours-19nov`) Surlignage de la consigne : un seul style (fond blanc, trait rose,
+  encre fixe), sans color-mix. « Pourquoi » de la prochaine séance en langage de coureur (« Ta semaine a été nettement plus
+  chargée que d'habitude… ») ; chiffres dans `Suggestion.reasonDetail` (« Le détail ») ; carte charge (`loadMeaning`) sans
+  chiffres ni médiane ; `outlook-v5` (règle : pas de charge brute, ratio ni médiane dans suggestionWhy). Demander au coach :
+  choix d'une séance (12 dernières, celles qui correspondent à la question en tête), `seance_choisie` (~300 tokens, résumé,
+  consignes, ressenti, ce que le coach en a dit) en tête du contexte, `chat-v3` ; lien depuis la page d'une séance.

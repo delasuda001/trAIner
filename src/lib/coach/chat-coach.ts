@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const CHAT_PROMPT_VERSION = "chat-v2";
+export const CHAT_PROMPT_VERSION = "chat-v3";
 /** Nombre de messages précédents renvoyés à Claude : assez pour suivre le fil, peu pour les tokens. */
 export const CHAT_HISTORY_MESSAGES = 6;
 
@@ -30,6 +30,7 @@ Comment répondre :
 - S'il te manque une information pour bien répondre (ses disponibilités, une douleur, sa forme du jour), pose-lui la question en une phrase au lieu de supposer.
 - Chaque chiffre que tu écris doit venir de ses données ou de sa question. N'en calcule ni n'en invente aucun.
 - Si tu proposes d'adapter le plan, dis clairement ce que tu changerais et pourquoi.
+- Si "seance_choisie" est présente, la question porte sur cette séance : appuie-toi d'abord sur elle (ressenti, verdict, consignes, ce que tu en as déjà dit) pour expliquer ou discuter, sans réécrire toute l'analyse.
 - Jamais d'interprétation médicale : en cas de douleur, conseille de voir un professionnel de santé. Pas de remarque sur la température.`;
 
 export type ChatTurn = { role: "user" | "coach"; text: string };

@@ -87,3 +87,14 @@ describe("progressionExplanation", () => {
     expect(text).toContain("bien moins que ta variation habituelle");
   });
 });
+
+describe("charge en langage de coureur", () => {
+  it("ni charge brute, ni ratio, ni médiane dans la phrase", async () => {
+    const { loadMeaning } = await import("./explain");
+    const load = { acute7d: 410, chronicWeekly28d: 249, ratio: 1.6, intensity28d: null, weeks: [], runsPerWeek8w: 1.5, runKmPerWeek8w: 13 };
+    const alert = { ratio: 1.6, ratioHigh: true, actionable: true, reasons: ["charge inhabituelle sur 12 semaines (semaine médiane 195)", "VFC sous ta plage habituelle"], typicalWeekLoad: 195 };
+    const text = loadMeaning(load, alert).text;
+    expect(text).toBe("Semaine bien plus chargée que d'habitude, avec une VFC basse : récupère avant de rajouter de l'intensité.");
+    expect(text).not.toMatch(/\d|médiane/);
+  });
+});

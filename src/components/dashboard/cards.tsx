@@ -84,6 +84,7 @@ export function SuggestionCard({ dashboard, coach, plain = false }: { dashboard:
         <p className="coach-line card-more"><span className="coach-tag">Comment</span><span><CoachText text={ready ? ready.executionTip : primary.structure} /></span></p>
       </div>
       <div className="card-more">
+        {suggestion.reasonDetail ? <p className="muted small" style={{ margin: "4px 0 0" }}><Say tu={suggestion.reasonDetail} /></p> : null}
         {coach.status === "ready" ? <div style={{ marginTop: 6 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Avis" /><RateCoach subjectKind="outlook" subjectId={coach.createdAt} label="Ce conseil t'est utile ?" /></div> : null}
         {suggestion.alternative ? <p className="alt"><strong>Plan B · {suggestion.alternative.title}</strong> ({formatDuration(suggestion.alternative.durationMin * 60)}). {suggestion.alternative.reason}</p> : null}
       </div>
