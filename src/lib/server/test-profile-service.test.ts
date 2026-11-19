@@ -51,9 +51,12 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 describe("profil invité de test", () => {
   it("crée un invité marqué test, sur la clé Garmin de Bastien, avec une copie de sa base sans consommation ni chat", async () => {
     const result = await modules.service.resetTestProfile("https://exemple.ts.net");
-    expect(result.link).toMatch(/^https:\/\/exemple\.ts\.net\/api\/session\/invitation\?t=/);
+    expect(result).toMatchObject({ url: "https://exemple.ts.net", name: "Bastien" });
+    expect(result.code).toMatch(/^\d{6}$/);
     const record = modules.context.getRegistry().find("bastientest");
-    expect(record).toMatchObject({ role: "guest", testOf: "bastien", garminEnvVar: "GARMIN_API_KEY", hasCode: false, onboardedAt: null });
+    expect(record).toMatchObject({ role: "guest", testOf: "bastien", garminEnvVar: "GARMIN_API_KEY", hasCode: true, guestCode: result.code, onboardedAt: null });
+    // Même parcours qu'un invité : prénom + code.
+    expect(modules.context.getRegistry().findByNameAndCode("bastien", result.code)?.id).toBe("bastientest");
     expect(modules.context.runAs(tester, () => modules.appState.createAppStateRepository().get("athlete_goal", zTitle))?.title).toBe("semi en 1:27");
     expect(count(tester, "coach_usage")).toBe(0);
     expect(count(tester, "coach_chat_messages")).toBe(0);

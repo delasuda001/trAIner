@@ -10,7 +10,7 @@ import { ADMIN_ID } from "@/lib/profiles/registry";
 import { TEST_PROFILE_ID } from "@/lib/profiles/types";
 import { loadContext } from "./analytics";
 import { adoptCoachOutputs, currentCoachOutputs } from "./coach-service";
-import { newInvitation } from "./profiles-admin";
+import { newCode } from "./profiles-admin";
 
 /**
  * Profil invité de test de Bastien. Sa base est une COPIE de celle de Bastien
@@ -29,7 +29,7 @@ function currentRunCount(): number {
   return loadContext().runs.length;
 }
 
-export async function resetTestProfile(base: string): Promise<{ link: string; expiresAt: string; runs: number; adopted: number }> {
+export async function resetTestProfile(base: string): Promise<{ url: string; name: string; code: string; runs: number; adopted: number }> {
   if (resetting) throw new Error("Réinitialisation déjà en cours.");
   resetting = true;
   try {
@@ -62,11 +62,11 @@ export async function resetTestProfile(base: string): Promise<{ link: string; ex
     const adopted = runAs(member, () => adoptCoachOutputs(outputs));
     const runs = runAs(member, () => currentRunCount());
 
-    // 4. Profil prêt (pas de « Préparer le profil ») et nouveau lien d'invitation.
+    // 4. Profil prêt (pas de « Préparer le profil ») et nouveau code : même parcours qu'un invité (adresse, prénom, code).
     const now = new Date().toISOString();
     registry.setSetting(`prepare_${record.id}`, { stage: "ready", startedAt: now, updatedAt: now, activities: runs, runs, pendingDetails: 0, analyses: adopted, note: "Copie de ta base, analyses reprises sans appel." });
-    const invitation = newInvitation(record.id, base);
-    return { ...invitation, runs, adopted };
+    const { code } = newCode(record.id);
+    return { url: base, name: record.name, code, runs, adopted };
   } finally {
     resetting = false;
   }

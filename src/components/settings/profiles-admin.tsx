@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, FlaskConical, KeyRound, Link2, RotateCcw, ShieldOff, Smartphone, Sparkles, UserPlus } from "lucide-react";
+import { Copy, FlaskConical, KeyRound, RotateCcw, ShieldOff, Smartphone, Sparkles, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { PrepareStatus } from "@/lib/server/prepare-service";
@@ -108,9 +108,9 @@ function TestPanel({ exists, simulated, onSecret }: { exists: boolean; simulated
     try {
       const json = await post("/api/test-profile", { action: "reset" });
       onSecret({
-        title: "Lien de ton profil invité de test",
-        lines: [{ label: "Lien", value: String(json?.link ?? "") }],
-        note: `Copie fraîche de ta base (${String(json?.runs ?? 0)} courses, ${String(json?.adopted ?? 0)} analyses du coach reprises sans appel). Ouvre-le dans une fenêtre privée ou un autre navigateur : il remplace la session du navigateur où il est ouvert (ton profil d'administrateur s'y déconnecte). Usage unique, 7 jours.`,
+        title: "Ton profil invité de test",
+        lines: [{ label: "Adresse", value: String(json?.url ?? "") }, { label: "Prénom", value: String(json?.name ?? "") }, { label: "Code", value: String(json?.code ?? "") }],
+        note: `Copie fraîche de ta base (${String(json?.runs ?? 0)} courses, ${String(json?.adopted ?? 0)} analyses du coach reprises sans appel). Comme un invité : ouvre l'adresse dans une fenêtre privée ou un autre navigateur (sinon ta session d'administrateur y est remplacée), puis prénom et code. Le code reste affiché sur la carte.`,
       });
       router.refresh();
     } catch (failure) {
@@ -134,7 +134,7 @@ function TestPanel({ exists, simulated, onSecret }: { exists: boolean; simulated
     <div className="prepare-panel">
       <div className="fact-label">Ton parcours d&apos;invité</div>
       <p className="small" style={{ margin: "4px 0" }}>
-        {exists ? "Réinitialiser recopie ta base (la tienne n'est que lue), efface sa consommation et ses échanges avec le coach, déconnecte ses appareils et refait l'accueil de première connexion." : "Un profil invité sur une copie de ta base : lien d'invitation, accueil, vouvoiement, plafonds, jauge, hors ligne. Ta base n'est que lue."}
+        {exists ? "Réinitialiser recopie ta base (la tienne n'est que lue), efface sa consommation et ses échanges avec le coach, déconnecte ses appareils et refait l'accueil de première connexion." : "Un profil invité sur une copie de ta base : connexion par prénom et code, accueil, vouvoiement, plafonds, jauge, hors ligne. Ta base n'est que lue."}
         {" "}Pas de « Préparer le profil » : tes analyses à jour sont reprises sans appel (rédigées au « tu »).
       </p>
       <label className="row small" style={{ gap: 6, margin: "6px 0" }}>
@@ -273,15 +273,14 @@ function ProfileCard({ profile, onSecret, prepareEstimate, testCoachSimulated }:
 
       {profile.isTest ? <TestPanel exists simulated={testCoachSimulated} onSecret={onSecret} /> : guest ? <PreparePanel profile={profile} estimate={prepareEstimate} /> : null}
 
-      {guest && !profile.isTest ? (
+      {guest ? (
         <div className="guest-access">
           <div className="fact-label">Connexion</div>
           <p className="small" style={{ margin: "4px 0" }}>Prénom <strong>{profile.name}</strong> · code {profile.guestCode ? <code className="secret-value">{profile.guestCode}</code> : <span className="muted">ancien code long (non affichable) : génère un code à 6 chiffres</span>}</p>
         </div>
       ) : null}
       <div className="profile-actions">
-        {profile.isTest ? <button type="button" className="btn" onClick={() => void act({ action: "invitation" }, (json) => onSecret({ title: `Lien d'invitation de ${profile.name}`, lines: [{ label: "Lien", value: String(json?.link ?? "") }], note: "À usage unique, valable 7 jours. Il ne sera plus affiché." }))}><Link2 size={14} /> Nouveau lien d&apos;invitation</button> : null}
-        {guest && !profile.isTest ? (
+        {guest ? (
           <button type="button" className="btn" onClick={() => { if (window.confirm(`Nouveau code pour ${profile.name} ? L'ancien ne marchera plus pour un nouvel appareil (ses appareils déjà connectés le restent).`)) void act({ action: "code" }); }}><KeyRound size={14} /> {profile.guestCode ? "Régénérer le code" : "Code à 6 chiffres"}</button>
         ) : !guest ? (
           <button type="button" className="btn btn-ghost" onClick={() => void act({ action: "code" }, (json) => onSecret({ title: `Ton code de connexion`, lines: [{ label: "Code", value: String(json?.code ?? "") }], note: "À taper avec ton prénom sur un nouvel appareil. Les appareils déjà connectés le restent. Il ne sera plus affiché." }))}><KeyRound size={14} /> Nouveau code</button>
