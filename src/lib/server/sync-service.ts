@@ -21,11 +21,12 @@ export function reloadEnv(): void {
 
 /**
  * Invités (gros volume possible) : 12 mois d'activités, 120 jours de bien-être, séries
- * détaillées des 12 dernières semaines ; les plus anciennes sont chargées à l'ouverture.
+ * détaillées des 16 dernières semaines ; les plus anciennes sont chargées à l'ouverture.
  */
 const GUEST_HISTORY_MONTHS = 12;
 const GUEST_WELLNESS_DAYS = 120;
-const GUEST_DETAIL_WEEKS = 12;
+/** 16 semaines : la carte forme aérobie compare deux périodes de 8 semaines (jusqu'à 111 jours en arrière). */
+const GUEST_DETAIL_WEEKS = 16;
 
 export function syncOptionsFor(member: Member, now = new Date(), detailBudget = 40): SyncOptions {
   if (member.role === "admin") return { detailBudget };

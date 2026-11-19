@@ -469,6 +469,7 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
     peut avoir lieu, ce qui écartait une qualité due. Décidée maintenant au plus tôt après la fenêtre et l'écart du
     rythme (`decideOn`). Avec une semaine type à 2 sorties : après une qualité, la sortie suivante est la longue si
     elle est due (sinon la longue ne venait jamais), puis la qualité. Bastien : suggestion et « ensuite » identiques.
+- Forme aérobie « pas assez de données » (invitée à 1 sortie par semaine) : la carte compare deux périodes de 8 semaines (3 sorties faciles avec séries par période) ; les séries des invités ne couvraient que 12 semaines, la période précédente n'avait donc que 2 sorties exploitables. Fenêtre de séries portée à 16 semaines (`GUEST_DETAIL_WEEKS`) : se complète à la prochaine synchro (Garmin, sans jeton). Si une période reste sous 3 sorties, la carte reste honnête.
 - Reste à vérifier : écart « à FC égale » en endurance face à des comparables à FC très dispersées (`comparable.ts`).
 
 ## État
