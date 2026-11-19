@@ -62,6 +62,8 @@ export type GoalGap = {
   /** Allure visée (s/km) et distance, pour situer la sortie longue. */
   goalPaceS: number;
   distanceKm: number;
+  /** Temps visé tel que saisi (l'allure arrondie ne le redonne pas exactement). */
+  targetTimeS: number;
 };
 
 function decimal(value: number): string {
@@ -137,7 +139,7 @@ export function goalGap(input: { target: RaceTarget; runs: GapRun[]; today: stri
   const summary = mainLever && action
     ? `Levier principal pour le ${bench.race} : ${mainLever.label.toLowerCase()} (${mainLever.current}, repère ${mainLever.needed}). ${action}${timing}`
     : `Pour le ${bench.race}, fréquence, volume, sortie longue et seuil sont au niveau des repères : garde la régularité.`;
-  return { race: bench.race, levers, main, action, summary, nextRunsPerWeek: nextRuns, goalPaceS, distanceKm: input.target.distanceKm };
+  return { race: bench.race, levers, main, action, summary, nextRunsPerWeek: nextRuns, goalPaceS, distanceKm: input.target.distanceKm, targetTimeS: input.target.targetTimeS };
 }
 
 /** Le levier demande-t-il de changer la semaine type (fréquence, volume, sortie longue) ? */

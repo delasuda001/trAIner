@@ -172,7 +172,7 @@ export function ProgressionCard({ dashboard }: { dashboard: Dashboard }) {
 
 const VERDICT_MARK: Record<Progression["state"], string> = { progressing: "↗", stable: "≈", regressing: "↘", insufficient: "?" };
 
-function VerdictMark({ state }: { state: Progression["state"] }) {
+export function VerdictMark({ state }: { state: Progression["state"] }) {
   return <span className={`verdict-mark ${state}`} aria-hidden>{VERDICT_MARK[state]}</span>;
 }
 

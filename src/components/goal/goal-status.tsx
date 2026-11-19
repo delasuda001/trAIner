@@ -32,7 +32,7 @@ export function GoalStatusList({ markers, gaps = [], goal, today, compact = fals
       })}
       {gapsOnly.map((gap) => (
         <div key={gap.race} className="goal-status-row">
-          <div className="goal-status-head"><Target size={13} /> <strong>{gap.race} en {formatClock(gap.goalPaceS * gap.distanceKm)}</strong></div>
+          <div className="goal-status-head"><Target size={13} /> <strong>{gap.race} en {formatClock(gap.targetTimeS)}</strong></div>
           {compact ? null : <div className="muted small"><Say tu="Allure du moment pas encore estimable : ta montre ne donne pas de seuil et tes séances récentes ne permettent pas d'en déduire un. Une séance au seuil en donnera une : répétitions de 6 min ou plus (15 min de travail au moins), FC en Z4, sur terrain plat. En attendant, les leviers ci-dessous ne dépendent que de ce que tu cours." /></div>}
           <GapView gap={gap} compact={compact} />
         </div>

@@ -17,6 +17,9 @@ import { reloadEnv } from "@/lib/server/sync-service";
 import { checkGarminKey } from "@/lib/source/garmin";
 import { Fact } from "@/components/ui/fact";
 import { ModelPicker } from "@/components/settings/model-picker";
+import { ViewPicker } from "@/components/settings/view-picker";
+import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
+import { resolveViewMode, VIEW_MODE_KEY, viewModeSchema } from "@/lib/view-mode";
 import { currentCoachModel } from "@/lib/coach";
 import { generatedAtLabel, modelLabel } from "@/lib/coach/model-label";
 import { summarizeUsage, totalTokens, type UsageTotals } from "@/lib/coach/usage-summary";
@@ -158,6 +161,11 @@ function renderGuest(member: Member) {
           <CoachGaugeLine />
         </section>
         <section className="card">
+          <h2 className="section-title">Tableau de bord</h2>
+          <p className="small" style={{ margin: "6px 0 10px" }}>Vue essentielle (jauges et calendrier) ou complète (toutes les cartes).</p>
+          <ViewPicker current={resolveViewMode(createAppStateRepository().get(VIEW_MODE_KEY, viewModeSchema), member.role)} />
+        </section>
+        <section className="card">
           <h2 className="section-title">Vos appareils connectés</h2>
           <MyDevices devices={devices} />
           <p className="muted small" style={{ marginTop: 10 }}>Un appareil perdu ? Déconnectez-le ici, ou prévenez Bastien. <Link href="/bienvenue">Revoir l&apos;accueil du test</Link></p>
@@ -200,6 +208,11 @@ async function renderAdmin(member: Member) {
       {admin}
 
       <div className="grid grid-main-side" style={{ alignItems: "start" }}>
+        <section className="card">
+          <h2 className="section-title">Tableau de bord</h2>
+          <p className="small" style={{ margin: "6px 0 10px" }}>Ta vue : essentielle (jauges et calendrier) ou complète. Celle des invités se règle de leur côté (essentielle par défaut).</p>
+          <ViewPicker current={resolveViewMode(createAppStateRepository().get(VIEW_MODE_KEY, viewModeSchema), member.role)} />
+        </section>
         <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-pink)" }}>
           <h2 className="section-title">Modèle du coach</h2>
           <p className="muted small" style={{ margin: "4px 0 12px" }}>Utilisé pour les analyses, le conseil du jour et « Demander au coach ». Actuellement : <strong>{modelLabel(model) === model ? model : modelLabel(model)}</strong>.</p>

@@ -481,6 +481,14 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
     zone dominante sinon. Un fractionné ne passe plus pour une endurance (échauffement et récupérations dominaient).
   - Retour « interface dense, peu ludique, je ne sais pas comment tout utiliser » : non traité dans le code, à arbitrer
     par Bastien (vue essentielle par profil, guide de démarrage).
+- Vue « essentiel » (décision du coordinateur, 19 nov.) : réglage par profil `dashboard_view` dans `app_state`
+  (`lib/view-mode.ts`, `PUT /api/view`, `ViewPicker` dans Paramètres pour chacun). Défaut : essentiel pour un invité,
+  complète pour Bastien ; `/?vue=complete` (« Voir le détail ») ouvre la vue complète sans changer le réglage.
+  Contenu (`components/dashboard/essential.tsx`) : carte jaune, jauge d'objectif (une barre par levier, remplie à
+  la part du repère, levier principal marqué, allure du moment si estimable), calendrier, forme aérobie en une
+  ligne. Ordre téléphone : séance, objectif, calendrier, forme. Mini-guide 3 étapes (`start-guide.tsx`) à la première
+  ouverture, « Passer », bouton « Guide » pour le rouvrir ; « déjà vu » en localStorage (commodité de l'appareil).
+  Vue complète inchangée. `GoalGap.targetTimeS` : temps visé exact (l'allure arrondie donnait 1:45:08).
 - Reste à vérifier : écart « à FC égale » en endurance face à des comparables à FC très dispersées (`comparable.ts`).
 
 ## État

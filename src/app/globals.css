@@ -569,6 +569,11 @@ a.welcome-stat:hover { transform: translate(-1px, -1px); }
   .home-hero .card-next { order: 1; }
   .home-hero .card-progress { order: 2; }
   .home-hero .cal-card { order: 3; }
+  /* Vue essentiel : prochaine séance, objectif, calendrier, forme aérobie. */
+  .home-hero.essential .essential-goal { order: 2; }
+  .home-hero.essential .cal-card { order: 3; }
+  .home-hero.essential .essential-aerobic { order: 4; }
+  .essential-goal-title { font-size: 22px; }
   .card-progress .big-number { font-size: 60px; }
   .card-progress .state-badge { font-size: 14px; }
 }
@@ -615,3 +620,37 @@ a.welcome-stat:hover { transform: translate(-1px, -1px); }
   .card-next .next-after .muted { flex-basis: 100%; white-space: normal; }
   .card-next .next-after > span:nth-child(2) { flex: 1 1 0; }
 }
+
+/* ---------- Vue « essentiel » ---------- */
+.essential-head-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.essential-goal-title { font-family: var(--font-display); font-weight: 800; font-size: 26px; letter-spacing: -0.02em; margin: 4px 0 6px; }
+.essential-pace { margin: 0 0 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-weight: 600; }
+.essential-chip { font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: var(--sl-radius-pill); border: var(--sl-stroke) solid var(--sl-ink); }
+.essential-chip.reachable { background: var(--sl-green); color: var(--sl-on-accent); }
+.essential-chip.stretch { background: var(--sl-yellow); color: var(--sl-on-accent); }
+.essential-chip.out_of_reach { background: var(--sl-surface); }
+.lever-bars { list-style: none; margin: 4px 0 12px; padding: 0; display: grid; gap: 10px; }
+.lever-label { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; margin-bottom: 4px; }
+.lever-bars li.main .lever-label > span:first-child { font-weight: 800; }
+.lever-bars li.main .lever-label > span:first-child::after { content: " · à travailler"; color: var(--sl-pink); font-weight: 700; font-size: 12px; }
+.lever-track { height: 14px; border: var(--sl-stroke) solid var(--sl-ink); border-radius: var(--sl-radius-pill); background: var(--sl-surface); overflow: hidden; }
+.lever-fill { display: block; height: 100%; border-right: var(--sl-stroke) solid var(--sl-ink); }
+.essential-action { margin: 0 0 10px; font-size: 14px; }
+.essential-action strong { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--sl-ink-muted); }
+.essential-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.essential-aerobic { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 20px; }
+.essential-aerobic-label { font-family: var(--font-display); font-weight: 800; font-size: 18px; }
+.essential-aerobic .state-badge { position: static; transform: rotate(-3deg); font-size: 14px; }
+.essential-aerobic-pace { margin-left: auto; font-family: var(--font-data); font-size: 15px; color: var(--sl-figure); font-weight: 700; }
+.essential-more { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 24px 0 8px; }
+.essential-more .btn { display: inline-flex; align-items: center; gap: 6px; }
+/* Mini-guide */
+.guide-open { display: inline-flex; align-items: center; gap: 6px; }
+.guide-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(21, 21, 30, 0.55); display: grid; place-items: center; padding: 16px; }
+.guide-card { position: relative; max-width: 420px; width: 100%; text-align: left; }
+.guide-close { position: absolute; top: 12px; right: 12px; background: none; border: 0; color: var(--sl-ink); cursor: pointer; padding: 6px; }
+.guide-icon { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; border: var(--sl-stroke) solid var(--sl-ink); color: var(--sl-on-accent); margin-bottom: 12px; }
+.guide-dots { display: flex; gap: 6px; margin: 12px 0; }
+.guide-dots span { width: 10px; height: 10px; border-radius: 50%; border: var(--sl-stroke) solid var(--sl-ink); }
+.guide-dots span.on { background: var(--sl-ink); }
+.guide-actions { display: flex; justify-content: space-between; gap: 10px; }

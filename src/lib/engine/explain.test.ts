@@ -50,7 +50,7 @@ describe("progressionVerdict", () => {
 });
 
 function gap(main: GoalGap["main"], race = "semi"): GoalGap {
-  return { race, levers: [], main, action: null, summary: "", nextRunsPerWeek: 3, goalPaceS: 247, distanceKm: 21.0975 };
+  return { race, levers: [], main, action: null, summary: "", nextRunsPerWeek: 3, goalPaceS: 247, distanceKm: 21.0975, targetTimeS: 5220 };
 }
 
 describe("progressionAction", () => {
