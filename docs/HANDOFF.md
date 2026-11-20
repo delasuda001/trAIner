@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 20 novembre 2026, soir (zones génériques recalées, allure facile réelle, contrôle de cohérence et relecture IA ; EN LIGNE depuis la branche `claude/project-thread-p09am7` (= s7rvwt + page Paramètres en catégories repliables, 20 nov. 16 h 30 Toronto), sauvegardes `data/backups/*-2026-11-20-avant-correctifs.db`).
+Dernière mise à jour : 20 novembre 2026, 18 h 40 Toronto (récupération et volume des fractionnés, continus longs, allure du moment ; avant : zones génériques recalées, allure facile réelle, contrôle de cohérence et relecture IA ; EN LIGNE depuis la branche `claude/project-thread-p09am7` (= s7rvwt + page Paramètres en catégories repliables, 20 nov. 16 h 30 Toronto), sauvegardes `data/backups/*-2026-11-20-avant-correctifs.db`).
 
 ## En deux phrases
 
@@ -546,6 +546,30 @@ concernés ne bougent pas.
   zones personnalisées, débutant ; toute la chaîne puis le contrôleur, sans erreur.
 - Audit sur copie après correctifs : restent le profil de test (analyses reprises de Bastien au « tu »)
   et les anciennes analyses de Charles (régénérées à la mise en ligne).
+
+## Récupération des fractionnés, continus longs, allure du moment (20 nov., 18 h 40, en ligne)
+
+Déclencheurs : Marie (« 3 × 1 km récupération 1:00 » alors qu'elle en prenait 1:30) et la question de Bastien sur
+les seuils 4:01 / 4:02 et « l'allure du moment ». Règles générales, vérifiées par photographie avant/après
+(`scripts/profile-snapshot.ts`) sur Bastien, Marie, Charles, Benoît : aucun verdict ni suggestion du jour changés.
+
+- Seuil nécessaire par objectif : COHÉRENT, rien changé. 5 km en 19:00 et semi en 1:27:00 sont des niveaux
+  équivalents (Riegel : 19:00 → 1:27:25 ; Daniels VDOT ≈ 52,5), donc le même seuil (4:02 et 4:01). Testé.
+- `prescription.ts` (fractionné, prochaine fois) : la récupération n'est jamais plus courte que celle prise si elle
+  dépasse le format (gardée jusqu'au format + 60 s, « comme cette fois ») ; une seule variable à la fois.
+- Travail total plafonné (`WORK_CAP`, entrée `weeklyRunMinutes` = temps de course moyen des 4 semaines avant) :
+  seuil max(25 min, 25 %), tempo max(30, 30 %), VO2max max(20, 15 %). Au plafond : même format, récupération
+  −15 s jusqu'au format. Bastien 13/11 : « 3 × 2 km, récupération 1:45 » au lieu de « 4 × 2 km » (33 min).
+- Continu seuil / tempo : « prolongé à N min » seulement jusqu'à 60 / 80 min au total, sinon « sans l'allonger ».
+- `classifyKind` (`METRICS_VERSION` 14) : un continu ≥ 90 min est une sortie longue pour TOUS (avant : seulement
+  zones recalées). Marie : 1:43 et 2:21 n'étaient plus « Continu au seuil, prolongé à 145 min ». Sortie longue
+  ≥ 60 min à FC moyenne ≥ Z4 OU ≥ 40 % du temps en Z4–Z5 : effort voulu, pas de reproche, récupération.
+- Allure du moment (`goal-gap.ts`, `paceCaveat`) : semi/marathon avec plus longue sortie < 80 % du repère → phrase
+  « ce repère suppose l'endurance de la distance… compte plus lent sur la fin ». Vue essentielle : une ligne
+  « Ce que tu courrais aujourd'hui sur le … (base : …) ». Bastien : 5 km 3:56 (~19:40), semi 4:16 (~1:30:01).
+- Reste : seuil sans FC seuil montre = toute la Z4 (Marie 163–178) ; resserrer touchait Charles, laissé.
+  Marie : plusieurs continus de 60–75 min « au seuil » à FC moyenne en Z3 (temps en zones Garmin ≠ ses zones),
+  classement à revoir. Sauvegardes `data/backups/*-2026-11-20-avant-recup-seuil.db`.
 
 ## État
 
