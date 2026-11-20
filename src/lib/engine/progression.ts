@@ -2,6 +2,7 @@ import { addDays, daysBetween } from "@/lib/dates";
 import type { HeartRateZones } from "@/lib/source/types";
 import type { ActivityMetrics } from "./activity-metrics";
 import { median, present, round, standardDeviation } from "./stats";
+import { EASY_ABOVE_Z2_MARGIN_BPM, MIN_EASY_RUNS_FOR_RECALIBRATION } from "./zones";
 
 /**
  * Indicateur de progression, 100 % déterministe.
@@ -179,8 +180,7 @@ const MIN_EASY_RUNS_FOR_REFERENCE = 3;
  * + 5 bpm, sur 5 sorties au moins). Mesurer l'allure à une FC qu'il n'atteint jamais en footing la ferait
  * paraître lente. Mesuré : Bastien 135 bpm pour une Z2 jusqu'à 148, Marie 150 pour 149 : non déclenché.
  */
-export const EASY_ABOVE_Z2_MARGIN_BPM = 5;
-const MIN_EASY_RUNS_FOR_RECALIBRATION = 5;
+export { EASY_ABOVE_Z2_MARGIN_BPM };
 
 /**
  * FC de référence de l'indicateur, propre à chaque profil :

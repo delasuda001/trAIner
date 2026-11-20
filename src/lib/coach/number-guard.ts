@@ -130,3 +130,15 @@ export function findUnsupportedCauses(text: string, payload: unknown): string[] 
   const issues = [...text.matchAll(CAUSE_PATTERN)].map((match) => match[1]).filter((phrase) => !source.includes(phrase.toLowerCase()));
   return [...new Set(issues)].map((phrase) => `« ${phrase} » (aucune cause fournie)`);
 }
+
+/**
+ * Jugement d'état global de la personne (ADR-004 : pas d'interprétation de fatigue ou de forme) :
+ * « vous étiez frais », « tu es fatigué », « en pleine forme »… Les constats chiffrés (VFC, sommeil)
+ * restent permis ; c'est la conclusion sur la personne qui est refusée.
+ */
+const STATE_PATTERN = /\b(?:(?:vous|tu)\s+(?:étiez|êtes|étais|es|semblez|sembles|paraissez|parais)\s+(?:bien\s+|plutôt\s+|très\s+|encore\s+)?(frais|fraîche|fatigué(?:e|s)?|reposé(?:e|s)?|épuisé(?:e|s)?|en forme|cuit(?:e)?|émoussé(?:e)?)|(en pleine forme|en surentraînement|surentraîné(?:e)?))/gi;
+
+export function findStateJudgements(text: string): string[] {
+  const issues = [...text.matchAll(STATE_PATTERN)].map((match) => match[0]);
+  return [...new Set(issues)].map((phrase) => `« ${phrase} » (jugement d'état de la personne, interdit)`);
+}

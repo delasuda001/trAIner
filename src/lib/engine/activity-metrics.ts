@@ -131,6 +131,8 @@ export type AerobicSample = {
 export type ActivityMetrics = {
   version: number;
   restingHeartRateUsed: number;
+  /** Planchers des zones utilisées, seulement quand la Z2 a été recalée sur ses footings (sert au cache). */
+  zoneFloorsUsed?: number[];
   kind: SessionKind;
   family: SessionFamily;
   structure: "continuous" | "intervals";
@@ -170,6 +172,8 @@ export type MetricsInput = {
   streams: ActivityStreams | null;
   laps: Lap[];
   zones: HeartRateZones;
+  /** Z2 recalée sur ses footings : la FC doit confirmer l'étiquette de la montre. */
+  zonesRecalibrated?: boolean;
   restingHeartRateBpm: number;
   movingTimeS: number | null;
   distanceM: number | null;
@@ -435,6 +439,13 @@ function computeZoneShares(input: MetricsInput): ActivityMetrics["zoneShares"] {
   return counts.map((value) => round(value / total, 3)) as [number, number, number, number, number];
 }
 
+/** Au-delà, une course continue est une sortie longue, quelle que soit son étiquette. */
+const LONG_RUN_S = 90 * 60;
+/** Étiquette « seuil / VO2max » de la montre retenue seulement avec au moins cette part du temps en Z4–Z5. */
+const LABEL_CONFIRM_HIGH_SHARE = 0.25;
+/** Étiquette « tempo » retenue seulement si la séance n'est pas à ce point en Z1–Z2. */
+const LABEL_TEMPO_MAX_EASY_SHARE = 0.6;
+
 /** Répétitions longues : format de seuil sauf FC moyenne nettement au-dessus de la FC seuil. */
 const LONG_REP_S = 360;
 const LONG_REP_M = 1600;
@@ -447,7 +458,7 @@ const LONG_REP_VO2_MARGIN_BPM = 8;
  */
 const GENERIC_ZONES_TEMPO_MARGIN_BPM = 5;
 
-export function classifyKind(input: { work: WorkBlock | null; zoneShares: ActivityMetrics["zoneShares"]; movingTimeS: number | null; distanceM: number | null; zones: HeartRateZones; trainingEffectLabel?: string | null }): SessionKind {
+export function classifyKind(input: { work: WorkBlock | null; zoneShares: ActivityMetrics["zoneShares"]; movingTimeS: number | null; distanceM: number | null; zones: HeartRateZones; trainingEffectLabel?: string | null; zonesRecalibrated?: boolean }): SessionKind {
   const { work, zoneShares, zones } = input;
   const tempoBelow = zones.floors[3] - (zones.lactateThresholdHeartRateBpm == null ? GENERIC_ZONES_TEMPO_MARGIN_BPM : 0);
   if (work) {
@@ -470,11 +481,23 @@ export function classifyKind(input: { work: WorkBlock | null; zoneShares: Activi
   const distance = input.distanceM ?? 0;
   const high = zoneShares ? zoneShares[3] + zoneShares[4] : 0;
   const moderate = zoneShares ? zoneShares[2] : 0;
+  const easyShare = zoneShares ? zoneShares[0] + zoneShares[1] : null;
   const label = input.trainingEffectLabel ?? null;
   const watchSaysEasy = label === "AEROBIC_BASE" || label === "RECOVERY";
+  const watchSaysHard = label === "LACTATE_THRESHOLD" || label === "VO2MAX" || label === "ANAEROBIC_CAPACITY";
+  // Zones recalées sur ses footings (zones génériques trop basses pour lui) : l'étiquette de la montre,
+  // calculée avec ces mêmes zones génériques, ne suffit plus seule.
+  // - La durée d'abord : 90 min et plus, c'est une sortie longue (une course longue menée fort reste une
+  //   sortie longue ; la consigne tient compte de l'intensité).
+  // - « Seuil » demande un peu de temps en Z4 ou plus ; « tempo », que la séance ne soit pas surtout en Z1–Z2.
+  // Zones mesurées (FC seuil) ou cohérentes avec ses footings : comportement inchangé.
+  const strict = input.zonesRecalibrated === true;
+  if (strict && duration >= LONG_RUN_S) return "long";
+  const hardConfirmed = !strict || !zoneShares || high >= LABEL_CONFIRM_HIGH_SHARE;
+  const tempoConfirmed = !strict || easyShare == null || easyShare < LABEL_TEMPO_MAX_EASY_SHARE;
   if (!watchSaysEasy) {
-    if (high >= 0.5 || label === "LACTATE_THRESHOLD" || label === "VO2MAX" || label === "ANAEROBIC_CAPACITY") return "threshold";
-    if ((high + moderate >= 0.5 || label === "TEMPO") && duration < 75 * 60) return "tempo";
+    if (high >= 0.5 || (watchSaysHard && hardConfirmed)) return "threshold";
+    if ((high + moderate >= 0.5 || ((label === "TEMPO" || watchSaysHard) && tempoConfirmed)) && duration < 75 * 60) return "tempo";
   } else if (high >= 0.6) {
     return "threshold";
   }
@@ -488,7 +511,7 @@ export function computeActivityMetrics(input: MetricsInput): ActivityMetrics {
   const windows = input.streams ? buildWindows(input.streams) : [];
   const work = detectWorkBlock(input.laps);
   const zoneShares = computeZoneShares(input);
-  const kind = classifyKind({ work, zoneShares, movingTimeS: input.movingTimeS, distanceM: input.distanceM, zones: input.zones, trainingEffectLabel: input.trainingEffectLabel });
+  const kind = classifyKind({ work, zoneShares, movingTimeS: input.movingTimeS, distanceM: input.distanceM, zones: input.zones, trainingEffectLabel: input.trainingEffectLabel, zonesRecalibrated: input.zonesRecalibrated });
   const end = input.streams?.timeS.at(-1) ?? 0;
   const main = input.streams && end > WARMUP_SKIP_S + 120 ? segmentAverage(input.streams, WARMUP_SKIP_S, end) : null;
   return {

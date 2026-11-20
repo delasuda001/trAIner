@@ -22,7 +22,7 @@ import { suggestNextSession, type Suggestion, type WeekPlan } from "@/lib/engine
 import { estimateThreshold, type ThresholdEstimate } from "@/lib/engine/threshold";
 import { goalGap, longRunBenchmarkKm, nextLongRunKm, primaryGap, structuralLever, type GoalGap } from "@/lib/engine/goal-gap";
 import { classifyVerdict, type SessionVerdict } from "@/lib/engine/verdict";
-import { fallbackZones, zonesFromHistory, type ZonesSource } from "@/lib/engine/zones";
+import { fallbackZones, recalibrateEasyZones, zonesFromHistory, type EasyZonesRecalibration, type ZonesSource } from "@/lib/engine/zones";
 import { activeMember } from "@/lib/profiles/context";
 import { registerForRole, voiceDeep, type Register } from "@/lib/register";
 import type { ActivityStreams, HeartRateZones, Lap, WellnessDay } from "@/lib/source/types";
@@ -30,7 +30,18 @@ import { EMPTY_GOAL, GOAL_KEY, goalSchema, targetPaceMps, withInferredTarget, ty
 import { athleteProfileSchema, PROFILE_KEY, SYNC_STATE_KEY, syncStateSchema, type SyncState } from "@/lib/sync/sync";
 
 /** `lactateThresholdSpeedMps` : seuil retenu (observé en séance s'il est nettement plus rapide que la montre, sinon montre) ; détail dans `threshold`. */
-export type Profile = { zones: HeartRateZones; zonesFromWatch: boolean; zonesSource: ZonesSource; lactateThresholdSpeedMps: number | null; restingHeartRateBpm: number; threshold?: ThresholdEstimate };
+export type Profile = {
+  zones: HeartRateZones;
+  zonesFromWatch: boolean;
+  zonesSource: ZonesSource;
+  lactateThresholdSpeedMps: number | null;
+  restingHeartRateBpm: number;
+  threshold?: ThresholdEstimate;
+  /** Zones de la montre telles quelles, quand `zones` a été recalé sur ses footings. */
+  watchZones?: HeartRateZones;
+  /** Recalage de la Z2 sur ses footings (zones sans FC seuil, footings nettement au-dessus de la Z2). */
+  easyZones?: EasyZonesRecalibration;
+};
 
 function toWellnessDay(row: WellnessRow): WellnessDay {
   return { date: row.date, hrvLastNightMs: row.hrvLastNightMs, hrvWeeklyAvgMs: row.hrvWeeklyAvgMs, hrvBaselineLowMs: row.hrvBaselineLowMs, hrvBaselineHighMs: row.hrvBaselineHighMs, hrvStatus: row.hrvStatus, sleepDurationS: row.sleepDurationS, sleepScore: row.sleepScore, restingHeartRateBpm: row.restingHeartRateBpm, vo2max: row.vo2max };
@@ -48,13 +59,29 @@ export function loadProfile(wellness: WellnessDay[], runs: ActivityRow[]): Profi
   const zonesSource: ZonesSource = stored?.heartRateZones ? "watch" : fromHistory ? "history" : "default";
   // FC de repos stable (médiane sur l'historique de bien-être) : elle sert de constante aux calculs d'efficacité.
   const resting = present(wellness.map((day) => day.restingHeartRateBpm));
-  return {
+  const profile: Profile = {
     zones,
     zonesFromWatch: stored?.heartRateZones != null,
     zonesSource,
     lactateThresholdSpeedMps: stored?.lactateThresholdSpeedMps ?? null,
     restingHeartRateBpm: resting.length >= 7 ? Math.round(median(resting) as number) : 50,
   };
+  const recalibrated = recalibrateEasyZones(zones, easyRunSummaryHeartRates(runs, localDate()));
+  return recalibrated ? { ...profile, zones: recalibrated.zones, watchZones: zones, easyZones: recalibrated.recalibration } : profile;
+}
+
+const EASY_WINDOW_DAYS = 112;
+const EASY_MIN_MOVING_S = 20 * 60;
+
+/**
+ * FC moyenne de ses footings des 16 dernières semaines, lue sur le résumé de la montre
+ * (sortie sur route, étiquetée « base aérobie » ou « récupération », 20 min au moins).
+ * Le résumé suffit et ne dépend pas des zones : pas de calcul circulaire avec le recalage.
+ */
+function easyRunSummaryHeartRates(runs: ActivityRow[], today: string): number[] {
+  return present(runs
+    .filter((run) => run.sport === "running" && (run.trainingEffectLabel === "AEROBIC_BASE" || run.trainingEffectLabel === "RECOVERY") && (run.movingTimeS ?? 0) >= EASY_MIN_MOVING_S && run.localDate <= today && daysBetween(run.localDate, today) < EASY_WINDOW_DAYS)
+    .map((run) => run.averageHeartRateBpm));
 }
 
 export function readGoal(): Goal | null {
@@ -71,7 +98,9 @@ export function readSyncState(): SyncState | null {
 function metricsFor(row: ActivityRow, profile: Profile, repo: ReturnType<typeof createActivityRepository>): ActivityMetrics | null {
   if (row.metricsJson && row.metricsVersion === METRICS_VERSION) {
     const cached = JSON.parse(row.metricsJson) as ActivityMetrics;
-    if (cached.restingHeartRateUsed === profile.restingHeartRateBpm) return cached;
+    // Zones recalées : les métriques en cache doivent avoir été calculées avec elles (et inversement).
+    const sameZones = profile.easyZones ? JSON.stringify(cached.zoneFloorsUsed ?? null) === JSON.stringify(profile.zones.floors) : cached.zoneFloorsUsed == null;
+    if (cached.restingHeartRateUsed === profile.restingHeartRateBpm && sameZones) return cached;
   }
   // Séries pas encore chargées (invités : au-delà de 12 semaines, chargées à l'ouverture) : métriques du résumé seul,
   // comme une séance sans détail. Sinon ces courses manquaient à tous les cumuls (km, sorties, rythme). Le passage
@@ -81,6 +110,7 @@ function metricsFor(row: ActivityRow, profile: Profile, repo: ReturnType<typeof 
     streams: detail?.streams ?? null,
     laps: detail?.laps ?? [],
     zones: profile.zones,
+    zonesRecalibrated: profile.easyZones != null,
     restingHeartRateBpm: profile.restingHeartRateBpm,
     movingTimeS: row.movingTimeS,
     distanceM: row.distanceM,
@@ -91,8 +121,9 @@ function metricsFor(row: ActivityRow, profile: Profile, repo: ReturnType<typeof 
     hrTimeInZonesS: parseZones(row),
     trainingEffectLabel: row.trainingEffectLabel,
   });
-  repo.saveMetrics(row.id, JSON.stringify(metrics), METRICS_VERSION);
-  return metrics;
+  const stored = profile.easyZones ? { ...metrics, zoneFloorsUsed: [...profile.zones.floors] } : metrics;
+  repo.saveMetrics(row.id, JSON.stringify(stored), METRICS_VERSION);
+  return stored;
 }
 
 export type AnalyzedRun = RunForComparison & { row: ActivityRow };
@@ -384,7 +415,8 @@ function computeOutlook(context: Context): Outlook {
   const computed = computeProgression({
     runs: progressionRuns,
     today,
-    reference: personalReferenceHeartRate({ zones: profile.zones, zonesFromWatch: profile.zonesFromWatch, easyRunHeartRates: easyRunHeartRates(progressionRuns, today) }),
+    // Zones de la montre : la FC de référence garde sa propre règle de recalage (même seuil de déclenchement).
+    reference: personalReferenceHeartRate({ zones: profile.watchZones ?? profile.zones, zonesFromWatch: profile.zonesFromWatch, easyRunHeartRates: easyRunHeartRates(progressionRuns, today) }),
     vo2maxSeries: present(wellness.map((day) => (day.vo2max != null ? { date: day.date, value: day.vo2max } : null))),
   });
   // Tendance impossible (trop peu de sorties faciles récentes) : estimation tirée de l'historique, rien sinon.

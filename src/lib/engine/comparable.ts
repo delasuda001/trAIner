@@ -1,5 +1,5 @@
 import type { ActivityMetrics, DynamicsValues, SessionFamily } from "./activity-metrics";
-import { mean, median, present, round } from "./stats";
+import { mean, median, present, round, standardDeviation } from "./stats";
 
 /**
  * Sélection des séances comparables et calcul des écarts. Avec ~1,5 course
@@ -141,6 +141,11 @@ export type ComparisonDeltas = {
   paceAtEqualHrGainSPerKm: number | null;
   /** > 0 : FC plus haute qu'attendu à allure égale (bpm). */
   hrAtEqualPaceDeltaBpm: number | null;
+  /**
+   * Bruit de la comparaison (séances continues) : dispersion des comparables entre eux à la FC de la séance
+   * (écart-type, s/km, 3 comparables au moins) et écart de dénivelé à leur médiane (m de D+ par km, > 0 : plus vallonnée).
+   */
+  noise?: { spreadSPerKm: number | null; climbGapMPerKm: number | null };
   /** Dérive cardiaque (découplage allure/FC, %) : courant et moyenne comparables. */
   drift: { current: number | null; reference: number | null };
   /** Ralentissement 2e moitié vs 1re (%) : courant et moyenne comparables. */
@@ -223,8 +228,18 @@ export function computeDeltas(current: RunForComparison, comparables: Array<RunF
     : null;
 
   const roundOrNull = (value: number | null, digits: number) => (value == null ? null : round(value, digits));
+  const ratios = present(comparables.map((run) => {
+    const sample = pick(run);
+    return sample ? speedPerBeat(sample.speed, sample.hr, rest) : null;
+  }));
+  const spread = current.metrics.structure === "continuous" && basisHr && basisHr - rest > 10 && ratios.length >= 3
+    ? standardDeviation(ratios.map((ratio) => secondsPerKm(ratio * (basisHr - rest))))
+    : null;
+  const climbs = present(comparables.map((run) => run.metrics.elevationGainPerKm));
+  const climbGap = current.metrics.structure === "continuous" && current.metrics.elevationGainPerKm != null && climbs.length ? current.metrics.elevationGainPerKm - (median(climbs) as number) : null;
   return {
     count: comparables.length,
+    noise: { spreadSPerKm: roundOrNull(spread, 0), climbGapMPerKm: roundOrNull(climbGap, 0) },
     current: { speedMps: currentSpeed, heartRateBpm: currentHr },
     reference: { speedMps: roundOrNull(refSpeed, 3), heartRateBpm: roundOrNull(refHr, 1) },
     paceAtEqualHrGainSPerKm: comparables.length ? paceGain : null,

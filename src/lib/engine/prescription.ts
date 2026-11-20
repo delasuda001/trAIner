@@ -494,6 +494,9 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
   return { status: "ok", target, goal: plan.goal, shouldHave, keep, next: { format: nextFormat, target: nextTarget, recoveryS: plan.recoveryS, cue } };
 }
 
+/** Sortie longue en Z4 ou plus pendant au moins ce temps : effort long volontaire (course), pas une endurance ratée. */
+const HARD_LONG_MIN_S = 60 * 60;
+
 export function prescribe(input: PrescriptionInput): Prescription {
   const { metrics } = input;
   if (metrics.family === "intervals") return intervalPrescription(input);
@@ -506,6 +509,16 @@ export function prescribe(input: PrescriptionInput): Prescription {
   const halves = metrics.halves;
   const hasPace = target.paceFastS != null && target.paceSlowS != null;
   const minutes = input.movingTimeS ? Math.max(5, roundTo(input.movingTimeS / 60, 5)) : null;
+
+  // Sortie longue menée en Z4 ou plus (course, effort long volontaire) : ce n'était pas de l'endurance ratée.
+  // Pas de reproche d'intensité, pas de « même effort plus long » : récupérer avant la prochaine qualité.
+  if (metrics.family === "long" && mainHr != null && mainHr >= input.zones.floors[3] && (input.movingTimeS ?? 0) >= HARD_LONG_MIN_S) {
+    const [easyLow, easyHigh] = hr(2, input.zones);
+    const steady = halves == null || halves.fadeSPerKm <= FADE_LIMIT_S;
+    const keep = steady && mainS != null ? `Effort long soutenu : ${minutes} min à ${pace(mainS)} pour ${mainHr} bpm, sans perte en 2e moitié.` : null;
+    const cue = `Après un effort de cette durée, 2 à 3 jours de footing facile entre ${easyLow} et ${easyHigh} bpm avant la prochaine séance de qualité.`;
+    return { status: "ok", target, goal: null, shouldHave: [], keep, next: { format: "footing facile", target, recoveryS: null, cue } };
+  }
 
   if (metrics.family === "easy" || metrics.family === "long") {
     const execution: string[] = [];

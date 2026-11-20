@@ -41,3 +41,13 @@ describe("garde-fou des multiples", () => {
     expect(findUnsupportedMultiples("Charge à 1,2 fois la moyenne.", payload)).toEqual(["1,2 fois (ratio non fourni)"]);
   });
 });
+
+describe("findStateJudgements", () => {
+  it("refuse un jugement d'état de la personne, garde les constats chiffrés", async () => {
+    const { findStateJudgements } = await import("./number-guard");
+    expect(findStateJudgements("Charge de 124, soit 0,4 fois votre moyenne : pas de hausse de charge, vous étiez frais.")).toHaveLength(1);
+    expect(findStateJudgements("Tu es fatigué après cette semaine.")).toHaveLength(1);
+    expect(findStateJudgements("VFC de 65 ms dans votre plage habituelle ; sommeil de 7 h 13.")).toEqual([]);
+    expect(findStateJudgements("Un départ frais et facile, la fin aussi facile que le début.")).toEqual([]);
+  });
+});

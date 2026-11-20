@@ -31,7 +31,34 @@ const MAX_SESSIONS = 3;
 /** Écart minimal (s/km) pour préférer le seuil observé à celui de la montre. */
 export const OBSERVED_MIN_GAIN_S = 8;
 
-export type ThresholdRun = { localDate: string; metrics: ActivityMetrics };
+export type ThresholdRun = { localDate: string; metrics: ActivityMetrics; movingTimeS?: number | null; distanceM?: number | null };
+
+/** Continu retenu comme preuve de seuil (seulement sans autre source) : durée hors échauffement et terrain. */
+const CONTINUOUS_MIN_S = 20 * 60;
+const CONTINUOUS_WARMUP_S = 5 * 60;
+const CONTINUOUS_MAX_ELEVATION_PER_KM = 12;
+
+/**
+ * Sans seuil de la montre ni répétitions probantes : un effort continu d'au moins 20 min (hors
+ * 5 premières minutes), FC moyenne dans la moitié haute de la bande du seuil, sur terrain roulant. Indicatif.
+ */
+export function continuousThresholdEvidence(runs: ThresholdRun[], today: string, band: ThresholdBand): ThresholdEvidence[] {
+  const from = addDays(today, -OBSERVED_WINDOW_DAYS);
+  return runs
+    .filter((run) => run.localDate > from && run.localDate <= today && run.metrics.structure === "continuous")
+    .flatMap((run): ThresholdEvidence[] => {
+      const hr = run.metrics.mainHeartRateBpm;
+      const speed = run.metrics.mainSpeedMps;
+      const durationS = (run.movingTimeS ?? 0) - CONTINUOUS_WARMUP_S;
+      if (hr == null || speed == null || durationS < CONTINUOUS_MIN_S) return [];
+      if ((run.metrics.elevationGainPerKm ?? 0) > CONTINUOUS_MAX_ELEVATION_PER_KM) return [];
+      // Moitié haute de la bande : un continu en bas de Z4 est un tempo long, pas le seuil.
+      if (hr < (band.low + band.high) / 2 || hr > band.high) return [];
+      return [{ localDate: run.localDate, reps: 1, repDistanceM: speed * durationS, repDurationS: durationS, speedMps: speed, heartRateBpm: Math.round(hr) }];
+    })
+    .sort((a, b) => b.localDate.localeCompare(a.localDate))
+    .slice(0, MAX_SESSIONS);
+}
 
 export type ThresholdEvidence = { localDate: string; reps: number; repDistanceM: number | null; repDurationS: number; speedMps: number; heartRateBpm: number };
 
@@ -51,6 +78,7 @@ function pace(speedMps: number): string {
 }
 
 function repLabel(evidence: ThresholdEvidence): string {
+  if (evidence.reps === 1) return `continu de ${Math.round(evidence.repDurationS / 60)} min`;
   const distance = evidence.repDistanceM && evidence.repDistanceM >= 950 ? `${String(Math.round(evidence.repDistanceM / 100) / 10).replace(".", ",")} km` : `${Math.round(evidence.repDurationS / 60)} min`;
   return `${evidence.reps} × ${distance}`;
 }
@@ -85,7 +113,10 @@ export function thresholdEvidence(runs: ThresholdRun[], today: string, threshold
 }
 
 export function estimateThreshold(input: { runs: ThresholdRun[]; today: string; watchSpeedMps: number | null; thresholdHeartRateBpm: number | null; zoneFloors?: number[] | null }): ThresholdEstimate {
-  const evidence = thresholdEvidence(input.runs, input.today, input.thresholdHeartRateBpm, input.zoneFloors);
+  const reps = thresholdEvidence(input.runs, input.today, input.thresholdHeartRateBpm, input.zoneFloors);
+  const band = thresholdBand(input.thresholdHeartRateBpm, input.zoneFloors);
+  // Seuil inconnu autrement (ni montre, ni répétitions) : un continu au seuil fait foi, à titre indicatif.
+  const evidence = reps.length || input.watchSpeedMps != null || band == null ? reps : continuousThresholdEvidence(input.runs, input.today, band);
   const indicative = input.thresholdHeartRateBpm == null;
   const watch = input.watchSpeedMps;
   // Moyenne des allures (s/km), pas des vitesses : c'est ce que lit un coureur.
@@ -99,7 +130,7 @@ export function estimateThreshold(input: { runs: ThresholdRun[]; today: string; 
       watchSpeedMps: watch,
       observedSpeedMps: observed,
       evidence,
-      basis: `seuil observé ${pace(observed)} (${proof})${watch != null ? `, la montre l'estime à ${pace(watch)}` : ""}${indicative ? " ; indicatif : la montre ne donne pas de FC seuil, répétitions retenues en Z4" : ""}`,
+      basis: `seuil observé ${pace(observed)} (${proof})${watch != null ? `, la montre l'estime à ${pace(watch)}` : ""}${indicative ? ` ; indicatif : la montre ne donne pas de FC seuil, ${evidence.every((entry) => entry.reps === 1) ? "effort continu retenu en Z4" : "répétitions retenues en Z4"}` : ""}`,
     };
   }
   if (watch != null) {

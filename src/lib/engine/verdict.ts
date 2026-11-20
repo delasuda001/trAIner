@@ -40,6 +40,10 @@ export const VERDICT_LABELS: Record<VerdictLevel, string> = {
 /** Seuils (s/km à FC égale) : au-delà, l'écart dépasse le bruit d'une séance à l'autre (jusqu'à 5 s/km : bruit). */
 const INTERVAL_GAIN_THRESHOLD_S = 6;
 const CONTINUOUS_GAIN_THRESHOLD_S = 6;
+/** Part de la dispersion des comparables (écart-type) en deçà de laquelle un écart reste du bruit. */
+const NOISE_SHARE = 0.5;
+/** Écart de dénivelé (m de D+ par km) au-delà duquel l'allure à FC égale n'est plus comparable. */
+const CLIMB_GAP_LIMIT_M_PER_KM = 10;
 
 function comparablesText(count: number): string {
   return count === 1 ? "ta seule séance comparable" : `tes ${count} séances comparables`;
@@ -50,13 +54,20 @@ export function buildSignals(metrics: ActivityMetrics, deltas: ComparisonDeltas)
 
   if (metrics.structure === "continuous" && deltas.paceAtEqualHrGainSPerKm != null && deltas.count > 0) {
     const gain = deltas.paceAtEqualHrGainSPerKm;
-    const tone: SignalTone = gain >= CONTINUOUS_GAIN_THRESHOLD_S ? "good" : gain <= -CONTINUOUS_GAIN_THRESHOLD_S ? "watch" : "neutral";
+    // Le seuil suit le bruit propre aux comparables : s'ils diffèrent déjà beaucoup entre eux, un petit écart ne dit rien.
+    const spread = deltas.noise?.spreadSPerKm ?? null;
+    const threshold = Math.max(CONTINUOUS_GAIN_THRESHOLD_S, spread != null ? Math.round(spread * NOISE_SHARE) : 0);
+    // Nettement plus (ou moins) vallonnée que les comparables : l'allure ne se compare pas.
+    const climbGap = deltas.noise?.climbGapMPerKm ?? null;
+    const terrainBias = climbGap != null && Math.abs(climbGap) > CLIMB_GAP_LIMIT_M_PER_KM && Math.abs(gain) >= threshold;
+    const tone: SignalTone = terrainBias ? "neutral" : gain >= threshold ? "good" : gain <= -threshold ? "watch" : "neutral";
+    const base = Math.abs(gain) < 2 ? `À FC égale, même allure que ${comparablesText(deltas.count)}` : `À FC égale, ${formatNumber(Math.abs(gain))} s/km plus ${gain > 0 ? "rapide" : "lent"} que ${comparablesText(deltas.count)}`;
     signals.push({
       key: "efficiency",
       tone,
       weight: 3,
       primary: true,
-      label: Math.abs(gain) < 2 ? `À FC égale, même allure que ${comparablesText(deltas.count)}.` : `À FC égale, ${formatNumber(Math.abs(gain))} s/km plus ${gain > 0 ? "rapide" : "lent"} que ${comparablesText(deltas.count)}.`,
+      label: terrainBias ? `${base}, mais avec ${formatNumber(Math.abs(climbGap as number))} m de D+ par km de ${(climbGap as number) > 0 ? "plus" : "moins"} : écart non concluant.` : `${base}.`,
     });
   }
 

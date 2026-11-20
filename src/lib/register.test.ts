@@ -15,13 +15,18 @@ describe("vouvoyer", () => {
     expect(vouvoyer("Si les signaux restent dégradés le jour J (VFC sous ta plage habituelle), remplace par ce footing facile.")).toBe("Si les signaux restent dégradés le jour J (VFC sous votre plage habituelle), remplacez par ce footing facile.");
   });
 
+  it("garde l'accord du verbe quand « Tu » ouvre la phrase", () => {
+    expect(vouvoyer("Tu cours toute l'année avec des séances structurées.")).toBe("Vous courez toute l'année avec des séances structurées.");
+    expect(vouvoyer("Tu dois partir plus lentement ; tu peux accélérer ensuite.")).toBe("Vous devez partir plus lentement ; vous pouvez accélérer ensuite.");
+  });
+
   it("laisse intacts les verbes à la 3e personne et les mots qui contiennent les pronoms", () => {
     const text = "La suivante reste facile pour que le travail paie ; on garde le rythme. Tableau, tempo, total, tonus, Toronto.";
     expect(vouvoyer(text)).toBe(text);
   });
 
   it("ne laisse aucun tutoiement dans les phrases du moteur", () => {
-    const files = ["explain", "suggestion", "verdict", "prescription", "dynamics-reading", "load", "progression", "recovery"];
+    const files = ["explain", "suggestion", "verdict", "prescription", "dynamics-reading", "load", "progression", "recovery", "athlete-level", "goal-pages", "threshold"];
     const leftovers: string[] = [];
     for (const file of files) {
       const source = readFileSync(join(__dirname, "engine", `${file}.ts`), "utf8");
@@ -29,7 +34,9 @@ describe("vouvoyer", () => {
       for (const literal of literals) {
         // Morceaux de texte d'un gabarit (hors expressions ${…}).
         for (const chunk of literal.split(/\$\{[^}]*\}/)) {
-          if (hasTutoiement(vouvoyer(chunk))) leftovers.push(`${file}: ${chunk}`);
+          const converted = vouvoyer(chunk);
+          // Tutoiement restant, ou « vous » suivi d'un verbe resté au « tu » (« Vous cours »).
+          if (hasTutoiement(converted) || /\b[Vv]ous (cours|courais|dois|peux|fais|as|es|tiens|vas|sais|veux)\b/.test(converted)) leftovers.push(`${file}: ${chunk}`);
         }
       }
     }

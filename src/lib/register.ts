@@ -78,7 +78,8 @@ const IMPERATIVE_PATTERN = new RegExp(`(^\\s*|[:;.!?]\\s+|,\\s+|\\(\\s*)(${Objec
 /** Convertit une phrase du moteur (au « tu ») au vouvoiement. */
 export function vouvoyer(text: string): string {
   let result = text;
-  for (const [pattern, replacement] of PHRASES) result = result.replace(pattern, replacement);
+  // Insensible à la casse, majuscule conservée : « Tu cours » en tête de phrase → « Vous courez ».
+  for (const [pattern, replacement] of PHRASES) result = result.replace(new RegExp(pattern.source, "gi"), (match: string) => matchCase(match, replacement));
   result = result.replace(IMPERATIVE_PATTERN, (_match, before: string, verb: string) => `${before}${matchCase(verb, IMPERATIVES[verb.toLowerCase()])}`);
   result = result.replace(/-toi\b/g, "-vous");
   result = result.replace(WORD_PATTERN, (word: string) => matchCase(word, WORDS[word.toLowerCase()]));

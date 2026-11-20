@@ -18,7 +18,15 @@ export type MetricVsBaseline = {
 };
 
 export type RecoverySignals = {
-  hrv: MetricVsBaseline & { baselineLow: number | null; baselineHigh: number | null; status: string | null };
+  hrv: MetricVsBaseline & {
+    baselineLow: number | null;
+    baselineHigh: number | null;
+    status: string | null;
+    /** Moyenne 7 jours de la montre (c'est elle qui fixe le statut Garmin). */
+    weeklyAvg?: number | null;
+    /** Ce qui déclenche « VFC basse » : la nuit sous la plage, ou seulement le statut 7 jours de la montre. */
+    lowBasis?: "night" | "week" | null;
+  };
   sleep: MetricVsBaseline & { score: number | null; baselineScore: number | null };
   restingHr: MetricVsBaseline;
   flags: Array<"hrv_low" | "resting_hr_high" | "sleep_short">;
@@ -61,7 +69,7 @@ export function assessRecovery(days: WellnessDay[], today: string): RecoverySign
   const rhrBaseline = rhrDay ? baselineOf(days, rhrPick, rhrDay.date, median) : null;
 
   const hrvLatest = hrvDay?.hrvLastNightMs ?? null;
-  const hrv = {
+  const hrv: RecoverySignals["hrv"] = {
     latest: hrvLatest,
     latestDate: hrvDay?.date ?? null,
     baseline: hrvBaseline == null ? null : round(hrvBaseline, 0),
@@ -92,7 +100,11 @@ export function assessRecovery(days: WellnessDay[], today: string): RecoverySign
 
   const flags: RecoverySignals["flags"] = [];
   const hrvBelowRange = hrvLatest != null && hrv.baselineLow != null && hrvLatest < hrv.baselineLow;
-  if (hrvBelowRange || hrv.status === "LOW" || hrv.status === "POOR") flags.push("hrv_low");
+  const hrvLowStatus = hrv.status === "LOW" || hrv.status === "POOR";
+  if (hrvBelowRange || hrvLowStatus) flags.push("hrv_low");
+  // La nuit peut être dans la plage alors que le statut (moyenne 7 jours) est bas : dire lequel des deux.
+  hrv.weeklyAvg = hrvDay?.hrvWeeklyAvgMs ?? null;
+  hrv.lowBasis = hrvBelowRange ? "night" : hrvLowStatus ? "week" : null;
   if (restingHr.delta != null && restingHr.delta >= 5) flags.push("resting_hr_high");
   if ((sleepLatest != null && sleepLatest < 6 * 3600) || (sleep.delta != null && sleep.delta <= -75 * 60)) flags.push("sleep_short");
 

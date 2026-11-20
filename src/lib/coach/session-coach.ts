@@ -99,7 +99,7 @@ export type SessionContextInput = {
   /** Écart habituel minimal entre deux séances de qualité (jours) ; 3 par défaut. */
   rhythm?: { qualitySpacingDays: number };
   recovery: {
-    hrv: { latest: number | null; baselineLow: number | null; baselineHigh: number | null };
+    hrv: SessionHrv;
     restingHr: { latest: number | null; delta: number | null };
     sleep: { latest: number | null; delta: number | null };
     flags: string[];
@@ -153,13 +153,28 @@ function ageText(days: number): string {
 
 const FLAG_TEXT: Record<string, string> = { hrv_low: "VFC sous la plage habituelle", resting_hr_high: "FC de repos au-dessus de la base", sleep_short: "nuit courte" };
 
+/** « VFC basse » déclenchée par le seul statut 7 jours : la nuit est dans la plage, le texte doit le dire. */
+type SessionHrv = { latest: number | null; baselineLow: number | null; baselineHigh: number | null; weeklyAvg?: number | null; lowBasis?: "night" | "week" | null };
+
+function flagText(flag: string, recovery: { hrv: SessionHrv }): string {
+  if (flag === "hrv_low" && recovery.hrv.lowBasis === "week") return "VFC moyenne sur 7 jours sous la plage habituelle (la nuit elle-même est dans la plage)";
+  return FLAG_TEXT[flag] ?? flag;
+}
+
+function hrvLine(hrv: SessionHrv): string {
+  if (hrv.latest == null) return "—";
+  const range = `plage habituelle ${hrv.baselineLow ?? "—"}–${hrv.baselineHigh ?? "—"} ms`;
+  if (hrv.lowBasis === "week" && hrv.weeklyAvg != null) return `${Math.round(hrv.latest)} ms cette nuit, dans la ${range} ; moyenne 7 jours ${Math.round(hrv.weeklyAvg)} ms, sous la plage`;
+  return `${Math.round(hrv.latest)} ms (${range})`;
+}
+
 /** Causes que le moteur autorise : facteurs du contexte qui peuvent expliquer un écart (sinon, aucune). */
 export function possibleCauses(context: SessionContextInput | null, feeling: { perceivedEffort: number | null; note: string } | null | undefined): string[] {
   const causes: string[] = [];
   if (context?.loadAlertBefore?.actionable) causes.push(`hausse de charge corroborée (${context.loadAlertBefore.reasons.join(", ")})`);
   const spacing = context?.rhythm?.qualitySpacingDays ?? 3;
   for (const entry of context?.qualityBefore14d ?? []) if (entry.daysBefore < spacing) causes.push(`${entry.title}, ${entry.daysBefore} jour${entry.daysBefore > 1 ? "s" : ""} avant`);
-  for (const flag of context?.recovery.flags ?? []) causes.push(FLAG_TEXT[flag] ?? flag);
+  for (const flag of context?.recovery.flags ?? []) causes.push(context ? flagText(flag, context.recovery) : (FLAG_TEXT[flag] ?? flag));
   if (feeling?.perceivedEffort != null && feeling.perceivedEffort >= 8) causes.push(`effort perçu ${feeling.perceivedEffort}/10`);
   if (feeling?.note) causes.push("ressenti noté par l'athlète");
   return causes;
@@ -279,10 +294,10 @@ export function buildSessionPayload(input: {
           jours_depuis_course_precedente: context.daysSincePreviousRun == null ? "—" : String(context.daysSincePreviousRun),
           seances_de_qualite_14_jours_avant: context.qualityBefore14d.length ? context.qualityBefore14d.map((entry) => `${entry.title}, ${entry.daysBefore} jours avant`) : "aucune",
           recuperation_du_jour: {
-            vfc: context.recovery.hrv.latest != null ? `${Math.round(context.recovery.hrv.latest)} ms (plage habituelle ${context.recovery.hrv.baselineLow ?? "—"}–${context.recovery.hrv.baselineHigh ?? "—"} ms)` : "—",
+            vfc: hrvLine(context.recovery.hrv),
             fc_repos: context.recovery.restingHr.latest != null ? `${Math.round(context.recovery.restingHr.latest)} bpm au repos (${context.recovery.restingHr.delta == null ? "base inconnue" : `${context.recovery.restingHr.delta >= 0 ? "+" : "−"}${Math.abs(context.recovery.restingHr.delta)} vs base`})` : "—",
             sommeil: context.recovery.sleep.latest != null ? formatDuration(context.recovery.sleep.latest) : "—",
-            signaux_degrades: context.recovery.flags.length ? context.recovery.flags.map((flag) => FLAG_TEXT[flag] ?? flag) : "aucun",
+            signaux_degrades: context.recovery.flags.length ? context.recovery.flags.map((flag) => flagText(flag, context.recovery)) : "aucun",
           },
         }
       : null,
