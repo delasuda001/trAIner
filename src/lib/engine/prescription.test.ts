@@ -101,11 +101,30 @@ describe("prescribe, fractionné", () => {
 
   it("écart marginal à la cible et rien de dégradé : « aurait dû » vide, une répétition de plus", () => {
     const metrics = withWork({ averageSpeedMps: 1000 / 244, fadeSPerKm: 1, averageRecoveryS: 180, repsDetail: [rep(244, 180), rep(244, 180), rep(245, 180)] });
-    const result = prescribe(input(metrics, { context: null }));
+    const result = prescribe(input(metrics, { context: null, weeklyRunMinutes: 240 }));
     if (result.status !== "ok") throw new Error("attendu ok");
     expect(result.shouldHave).toEqual([]);
     expect(result.keep).toContain("à reproduire");
     expect(result.next.format).toBe("4 × 2 km");
+  });
+
+  it("travail total plafonné par le volume de la semaine : pas de répétition de plus, la récupération raccourcit de 15 s", () => {
+    const metrics = withWork({ averageSpeedMps: 1000 / 244, fadeSPerKm: 1, averageRecoveryS: 240, repsDetail: [rep(244, 240), rep(244, 240), rep(245, 240)] });
+    // 65 min de course par semaine : plafond VO2max = 20 min ; 4 × 8:21 en ferait 33.
+    const result = prescribe(input(metrics, { context: null, weeklyRunMinutes: 65 }));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.next.format).toBe("3 × 2 km");
+    expect(result.next.cue).toContain("récupération 3:45 (15 s de moins que cette fois)");
+    expect(result.next.cue).toContain("dépasserait 20 min de travail");
+  });
+
+  it("récupération prise plus longue que le format : gardée telle quelle avec la répétition de plus (une variable à la fois)", () => {
+    const threshold = withWork({ averageDurationS: 313, averageDistanceM: 1000, averageSpeedMps: 1000 / 313, averageHeartRateBpm: 165, fadeSPerKm: 1, paceSpreadSPerKm: 4, averageRecoveryS: 91, repsDetail: [rep(311, 91), rep(315, 91), rep(312, 91)] });
+    const result = prescribe(input({ ...threshold, kind: "intervals_threshold" }, { context: null, lactateThresholdSpeedMps: null, raceTargets: [], reference: null, weeklyRunMinutes: 55, zones: { floors: [123, 136, 150, 163, 179], maxHeartRateBpm: 192, lactateThresholdHeartRateBpm: null, method: "HR_MAX" } }));
+    if (result.status !== "ok") throw new Error("attendu ok");
+    expect(result.next.cue).toContain("4 × 1 km");
+    expect(result.next.cue).toContain("récupération 1:30, comme cette fois");
+    expect(result.next.recoveryS).toBe(90);
   });
 
   it("format court en secondes : 8 × 70 s", () => {
@@ -243,7 +262,7 @@ describe("prescribe, fractionné sans allure cible (ni seuil ni objectif chiffr�
     expect(result.target).toMatchObject({ paceFastS: null, label: "allure semi du moment", heartRateLow: 154, heartRateHigh: 164 });
     expect(result.shouldHave).toEqual([]);
     expect(result.keep).toBe("Répétitions à 5:17/km et 158 bpm, dans la cible 154–164 bpm, 6 s/km entre la plus rapide et la plus lente : à reproduire.");
-    expect(result.next.cue).toBe("Une répétition de plus : 4 × 1 km à 154–164 bpm (repère d'allure : 5:17/km, celle de cette séance), récupération 1:00.");
+    expect(result.next.cue).toBe("Une répétition de plus : 4 × 1 km à 154–164 bpm (repère d'allure : 5:17/km, celle de cette séance), récupération 1:30, comme cette fois.");
     expect(result.next.cue).not.toMatch(/1re répétition à \d+ bpm/);
   });
 
@@ -262,7 +281,7 @@ describe("prescribe, fractionné sans allure cible (ni seuil ni objectif chiffr�
   it("FC hors cible : même format, sans consigne de départ exprimée en bpm", () => {
     const result = prescribe(pacelessInput({ ...tempo, work: { ...(tempo.work as Work), averageHeartRateBpm: 140 } }));
     if (result.status !== "ok") throw new Error("attendu ok");
-    expect(result.next.cue).toBe("Même format 3 × 1 km à 154–164 bpm, récupération 1:00.");
+    expect(result.next.cue).toBe("Même format 3 × 1 km à 154–164 bpm, récupération 1:30, comme cette fois.");
   });
 });
 

@@ -26,6 +26,7 @@ export function GoalStatusList({ markers, gaps = [], goal, today, compact = fals
             <div className="goal-status-head"><Target size={13} /> <strong>{status.race} en {status.goal}</strong></div>
             <div><strong><Say tu={status.verdict} /></strong> Repère actuel : {status.current}.</div>
             {compact ? null : <div className="muted small"><Say tu={status.timing} /></div>}
+            {(() => { const caveat = gaps.find((entry) => entry.race === marker.race)?.paceCaveat; return caveat ? <div className="muted small"><Say tu={caveat} /></div> : null; })()}
             <GapView gap={gaps.find((entry) => entry.race === marker.race) ?? null} compact={compact} />
           </div>
         );

@@ -16,6 +16,23 @@ function weeks(perWeek: number, km: number, longest = km): GapRun[] {
 }
 
 describe("écart à l'objectif", () => {
+  it("allure du moment sur semi : limite dite quand la plus longue sortie est sous 80 % du repère, pas sur 5 km", () => {
+    const runs = weeks(2, 7, 11);
+    const halfGap = goalGap({ target: half, runs, today, thresholdSpeedMps: 1000 / 250 });
+    const fiveGap = goalGap({ target: fiveK, runs, today, thresholdSpeedMps: 1000 / 250 });
+    expect(halfGap?.paceCaveat).toContain("avec 11 km de plus longue sortie (repère 18 km)");
+    expect(fiveGap?.paceCaveat).toBeNull();
+    expect(goalGap({ target: half, runs: weeks(2, 7, 16), today, thresholdSpeedMps: 1000 / 250 })?.paceCaveat).toBeNull();
+  });
+
+  it("seuil nécessaire : 5 km en 19:00 et semi en 1:27:00 sont des niveaux équivalents, même seuil à ±1 s", () => {
+    const runs = weeks(3, 10, 18);
+    const fromHalf = goalGap({ target: half, runs, today, thresholdSpeedMps: 1000 / 250 })?.levers.find((lever) => lever.key === "threshold");
+    const fromFive = goalGap({ target: fiveK, runs, today, thresholdSpeedMps: 1000 / 250 })?.levers.find((lever) => lever.key === "threshold");
+    expect(fromHalf?.needed).toBe("4:01/km");
+    expect(fromFive?.needed).toBe("4:02/km");
+  });
+
   it("coureur à ~1,5 sortie par semaine : le levier principal est la fréquence, formulé en action chiffrée", () => {
     const runs = weeks(1, 9, 11).concat(weeks(1, 9).filter((_, index) => index % 2 === 0).map((run) => ({ ...run, localDate: addDays(run.localDate, -3) })));
     const gap = goalGap({ target: half, runs, today, thresholdSpeedMps: 1000 / 250 });

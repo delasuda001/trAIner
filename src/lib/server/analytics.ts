@@ -296,6 +296,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     recentSpeedPerBeat: perBeat.length ? median(perBeat) : null,
     easySamples: easySamplesBefore(history, current.localDate),
     movingTimeS: current.movingTimeS,
+    weeklyRunMinutes: history.filter((run) => run.localDate >= addDays(current.localDate, -28)).reduce((sum, run) => sum + (run.movingTimeS ?? 0), 0) / 60 / 4,
     raceTargets: context.goal?.raceTargets ?? [],
     efforts: recentEfforts(history, current.localDate),
     reference: deltas.count ? { repSpeedMps: deltas.work?.reference?.speedMps ?? null, repHeartRateBpm: deltas.work?.reference?.heartRateBpm ?? null, repSpreadSPerKm: deltas.work?.reference?.paceSpreadSPerKm ?? null, halvesFadeSPerKm: deltas.fadeSPerKm.reference, repFadePct: deltas.work?.reference?.fadePct ?? null } : null,

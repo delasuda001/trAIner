@@ -9,7 +9,7 @@ import { zoneOf, type ZoneIndex } from "./zones";
  * découlent : le LLM ne calcule rien.
  */
 
-export const METRICS_VERSION = 13;
+export const METRICS_VERSION = 14;
 
 export type SessionKind =
   | "recovery"
@@ -492,7 +492,9 @@ export function classifyKind(input: { work: WorkBlock | null; zoneShares: Activi
   // - « Seuil » demande un peu de temps en Z4 ou plus ; « tempo », que la séance ne soit pas surtout en Z1–Z2.
   // Zones mesurées (FC seuil) ou cohérentes avec ses footings : comportement inchangé.
   const strict = input.zonesRecalibrated === true;
-  if (strict && duration >= LONG_RUN_S) return "long";
+  // Pour tous : un effort continu de 90 min et plus n'est ni un seuil ni un tempo (le seuil se tient environ
+  // une heure) ; c'est une sortie longue, éventuellement menée fort (la consigne tient compte de l'intensité).
+  if (duration >= LONG_RUN_S) return "long";
   const hardConfirmed = !strict || !zoneShares || high >= LABEL_CONFIRM_HIGH_SHARE;
   const tempoConfirmed = !strict || easyShare == null || easyShare < LABEL_TEMPO_MAX_EASY_SHARE;
   // Zones recalées : « seuil » exige aussi une FC moyenne en Z4 (sinon c'est un tempo, souvent progressif).

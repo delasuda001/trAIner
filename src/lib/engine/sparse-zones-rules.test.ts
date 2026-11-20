@@ -42,8 +42,9 @@ describe("classifyKind avec zones recalées", () => {
   const base = { work: null, distanceM: 10_000, zones: genericZones };
   it("90 min et plus : sortie longue, même étiquetée VO2max et menée en Z4", () => {
     expect(classifyKind({ ...base, zoneShares: [0.01, 0.02, 0.02, 0.51, 0.44], movingTimeS: 121 * 60, distanceM: 26_900, trainingEffectLabel: "VO2MAX", zonesRecalibrated: true })).toBe("long");
-    // Sans recalage : comportement historique inchangé.
-    expect(classifyKind({ ...base, zoneShares: [0.01, 0.02, 0.02, 0.51, 0.44], movingTimeS: 121 * 60, distanceM: 26_900, trainingEffectLabel: "VO2MAX" })).toBe("threshold");
+    // Sans recalage aussi : un continu de 90 min et plus n'est jamais un seuil (le seuil se tient environ une heure).
+    expect(classifyKind({ ...base, zoneShares: [0.01, 0.02, 0.02, 0.51, 0.44], movingTimeS: 121 * 60, distanceM: 26_900, trainingEffectLabel: "VO2MAX" })).toBe("long");
+    expect(classifyKind({ ...base, zoneShares: [0.01, 0.02, 0.02, 0.51, 0.44], movingTimeS: 80 * 60, distanceM: 18_000, trainingEffectLabel: "VO2MAX" })).toBe("threshold");
   });
 
   it("étiquette TEMPO sur une séance surtout en Z1–Z2 : endurance", () => {
@@ -77,9 +78,16 @@ describe("prescription d'une sortie longue menée en Z4", () => {
   });
 
   it("sortie longue en Z2 : consigne d'endurance habituelle", () => {
-    const result = prescribe({ metrics: longMetrics(140, 2), zones: recalibrated, lactateThresholdSpeedMps: null, thresholdLabel: "seuil observé", restingHeartRateBpm: 42, recentSpeedPerBeat: 0.03, movingTimeS: 100 * 60, raceTargets: [], efforts: [], reference: null, context: null });
+    const result = prescribe({ metrics: { ...longMetrics(140, 2), zoneShares: [0.05, 0.75, 0.15, 0.05, 0] }, zones: recalibrated, lactateThresholdSpeedMps: null, thresholdLabel: "seuil observé", restingHeartRateBpm: 42, recentSpeedPerBeat: 0.03, movingTimeS: 100 * 60, raceTargets: [], efforts: [], reference: null, context: null });
     if (result.status !== "ok") throw new Error("consigne attendue");
     expect(result.next.cue).toContain("Sortie longue");
+  });
+
+  it("sortie longue passée à 40 % ou plus en Z4–Z5, FC moyenne en Z3 (course, sortie soutenue) : effort voulu, pas de reproche", () => {
+    const result = prescribe({ metrics: { ...longMetrics(152, 2), zoneShares: [0, 0.05, 0.25, 0.6, 0.1] }, zones: recalibrated, lactateThresholdSpeedMps: null, thresholdLabel: "seuil observé", restingHeartRateBpm: 42, recentSpeedPerBeat: 0.03, movingTimeS: 140 * 60, raceTargets: [], efforts: [], reference: null, context: null });
+    if (result.status !== "ok") throw new Error("consigne attendue");
+    expect(result.shouldHave).toEqual([]);
+    expect(result.next.cue).toContain("Après un effort de cette durée");
   });
 });
 

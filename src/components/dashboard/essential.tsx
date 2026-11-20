@@ -45,7 +45,10 @@ function ChronoSlide({ page, level }: { page: ChronoPage; level: AthleteLevel })
       <div className="card-eyebrow"><Target size={13} /> Objectif chrono</div>
       <h2 className="essential-goal-title">{page.title} <span className="muted small">({formatPace(1000 / gap.goalPaceS)})</span></h2>
       {marker && level !== "beginner" ? (
-        <p className="essential-pace"><Say tu={`Allure du moment : ${formatPace(1000 / marker.estimate.centerS)}`} /> <span className={`essential-chip ${marker.status}`}>{marker.status === "reachable" ? "à portée" : marker.status === "stretch" ? "ambitieux" : `${marker.gapS} s/km à gagner`}</span></p>
+        <>
+          <p className="essential-pace"><Say tu={`Allure du moment : ${formatPace(1000 / marker.estimate.centerS)}`} /> <span className={`essential-chip ${marker.status}`}>{marker.status === "reachable" ? "à portée" : marker.status === "stretch" ? "ambitieux" : `${marker.gapS} s/km à gagner`}</span></p>
+          <p className="essential-note small"><Say tu={`Ce que tu courrais aujourd'hui sur le ${marker.race} (base : ${marker.estimate.basis}).${gap.paceCaveat ? ` ${gap.paceCaveat}` : ""}`} /></p>
+        </>
       ) : null}
       <ul className="lever-bars">
         {levers.map((lever) => (

@@ -62,6 +62,28 @@ export const SHORT_REP_S = 60;
 const SHORT_FADE_LIMIT_S = 10;
 /** …et seulement si elle dépasse celle des comparables de 2 points de pourcentage. */
 const FADE_PCT_ABOVE_REFERENCE = 2;
+/**
+ * Récupération de la prochaine séance : jamais plus courte que celle prise cette fois (on ne change qu'une
+ * variable à la fois : une répétition de plus OU une récupération plus courte), dans la limite du format + 60 s.
+ */
+const RECOVERY_KEEP_MAX_EXTRA_S = 60;
+/** Pas de raccourcissement de la récupération quand le volume de travail est au plafond. */
+const RECOVERY_STEP_S = 15;
+/**
+ * Continu : durée totale de la sortie (min, échauffement compris) au-delà de laquelle on ne propose plus de prolonger
+ * l'effort : ~40 min au seuil, ~60 min au tempo, plus 20 min d'échauffement et de retour au calme.
+ */
+const CONTINUOUS_MAX_MIN: Partial<Record<SessionKind, number>> = { threshold: 60, tempo: 80 };
+/**
+ * Travail total proposé (répétitions) : au plus la plus grande de deux valeurs, un plancher qui fait une séance
+ * utile pour tout coureur régulier, et une part du temps de course hebdomadaire (repères d'entraîneur usuels :
+ * seuil ≈ 10 % du volume pour un gros volume, bien plus pour un petit volume, d'où le plancher).
+ */
+const WORK_CAP: Partial<Record<SessionKind, { floorMin: number; weeklyShare: number }>> = {
+  intervals_threshold: { floorMin: 25, weeklyShare: 0.25 },
+  intervals_tempo: { floorMin: 30, weeklyShare: 0.3 },
+  intervals_vo2: { floorMin: 20, weeklyShare: 0.15 },
+};
 const MISMATCH_REASON = "allure trop éloignée de la cible du format reconnu, séance probablement d'un autre type";
 
 export type PrescriptionTarget = {
@@ -130,6 +152,8 @@ export type PrescriptionInput = {
   /** Footings des 12 semaines précédentes (allure, FC) : bornent l'allure facile à ce qui a été couru (voir easy-pace.ts). */
   easySamples?: EasySample[];
   movingTimeS: number | null;
+  /** Temps de course hebdomadaire moyen (min) des 4 semaines avant la séance : plafonne le volume de qualité proposé. */
+  weeklyRunMinutes?: number | null;
   raceTargets: RaceTarget[];
   /** Répétitions longues des 12 semaines précédant la séance. */
   efforts: RecentEffort[];
@@ -476,7 +500,14 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
     : !fadeDegraded && spread != null ? `Régularité : ${spread} s/km entre la répétition la plus rapide et la plus lente${referenceSpread != null ? `, ${spread < referenceSpread - 2 ? "mieux que" : "comme"} tes comparables (${referenceSpread} s/km)` : ""}.` : null;
 
   const format = `${work.reps} × ${repFormat(work.averageDistanceM, work.averageDurationS)}`;
-  const recoveryText = formatClock(plan.recoveryS ?? recovery);
+  // Jamais plus court que la récupération prise cette fois (une variable à la fois), au plus le format + 60 s.
+  const kept = plan.recoveryS != null && recovery != null && recovery > plan.recoveryS + 7 ? Math.min(roundTo(recovery, 15), plan.recoveryS + RECOVERY_KEEP_MAX_EXTRA_S) : null;
+  const nextRecoveryS = kept ?? plan.recoveryS ?? recovery;
+  const recoveryText = kept != null ? `${formatClock(kept)}, comme cette fois` : formatClock(nextRecoveryS);
+  // Une répétition de plus seulement si le travail total reste dans ce que la semaine du coureur supporte.
+  const cap = WORK_CAP[metrics.kind];
+  const capMin = cap ? Math.max(cap.floorMin, (input.weeklyRunMinutes ?? 0) * cap.weeklyShare) : null;
+  const roomForRep = capMin == null || ((work.reps + 1) * work.averageDurationS) / 60 <= capMin;
   let nextFormat = format;
   let nextTarget = target;
   let cue: string;
@@ -492,16 +523,25 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
   } else if (plan.goal && plan.goal.status !== "out_of_reach" && fast > plan.goal.goalPaceS) {
     nextTarget = { ...target, paceFastS: fast - 3, paceSlowS: slow - 3 };
     cue = `Même format ${format}, 3 s/km plus vite : ${band(nextTarget)}, récupération ${recoveryText}.`;
-  } else if (work.reps < plan.maxReps) {
+  } else if (work.reps < plan.maxReps && roomForRep) {
     nextFormat = format.replace(/^\d+/, String(work.reps + 1));
     cue = `Une répétition de plus : ${nextFormat} à ${band(target)}${paceHint}, récupération ${recoveryText}.`;
+  } else if (kept != null && plan.recoveryS != null) {
+    // Volume de travail au plafond : la progression passe par la récupération, 15 s de moins à la fois, jusqu'au format.
+    const shorter = Math.max(plan.recoveryS, kept - RECOVERY_STEP_S);
+    cue = `Même format ${format} à ${band(target)}${paceHint}, récupération ${formatClock(shorter)} (${RECOVERY_STEP_S} s de moins que cette fois)${work.reps < plan.maxReps ? ` : une répétition de plus dépasserait ${Math.round(capMin as number)} min de travail, le plafond utile pour ton volume de la semaine` : ""}.`;
+    return { status: "ok", target, goal: plan.goal, shouldHave, keep, next: { format: nextFormat, target: nextTarget, recoveryS: shorter, cue } };
   } else {
-    cue = `Même format ${format} à ${band(target)}${paceHint} : le volume est au maximum utile, garde la qualité.`;
+    cue = work.reps < plan.maxReps
+      ? `Même format ${format} à ${band(target)}${paceHint}, récupération ${recoveryText} : une répétition de plus dépasserait ${Math.round(capMin as number)} min de travail, le plafond utile pour ton volume de la semaine ; garde la qualité.`
+      : `Même format ${format} à ${band(target)}${paceHint} : le volume est au maximum utile, garde la qualité.`;
   }
-  return { status: "ok", target, goal: plan.goal, shouldHave, keep, next: { format: nextFormat, target: nextTarget, recoveryS: plan.recoveryS, cue } };
+  return { status: "ok", target, goal: plan.goal, shouldHave, keep, next: { format: nextFormat, target: nextTarget, recoveryS: nextRecoveryS, cue } };
 }
 
 /** Sortie longue en Z4 ou plus pendant au moins ce temps : effort long volontaire (course), pas une endurance ratée. */
+/** Part du temps en Z4–Z5 qui fait d'une sortie longue un effort voulu. */
+const HARD_LONG_HIGH_SHARE = 0.4;
 const HARD_LONG_MIN_S = 60 * 60;
 
 export function prescribe(input: PrescriptionInput): Prescription {
@@ -519,7 +559,11 @@ export function prescribe(input: PrescriptionInput): Prescription {
 
   // Sortie longue menée en Z4 ou plus (course, effort long volontaire) : ce n'était pas de l'endurance ratée.
   // Pas de reproche d'intensité, pas de « même effort plus long » : récupérer avant la prochaine qualité.
-  if (metrics.family === "long" && mainHr != null && mainHr >= input.zones.floors[3] && (input.movingTimeS ?? 0) >= HARD_LONG_MIN_S) {
+  // Aussi une sortie longue passée au moins à 40 % en Z4–Z5 : effort
+  // voulu (course, sortie longue soutenue), pas une endurance mal dosée.
+  const shares = metrics.zoneShares;
+  const mostlyHard = shares != null && shares[3] + shares[4] >= HARD_LONG_HIGH_SHARE;
+  if (metrics.family === "long" && mainHr != null && (mainHr >= input.zones.floors[3] || mostlyHard) && (input.movingTimeS ?? 0) >= HARD_LONG_MIN_S) {
     const [easyLow, easyHigh] = hr(2, input.zones);
     const steady = halves == null || halves.fadeSPerKm <= FADE_LIMIT_S;
     const keep = steady && mainS != null ? `Effort long soutenu : ${minutes} min à ${pace(mainS)} pour ${mainHr} bpm, sans perte en 2e moitié.` : null;
@@ -566,8 +610,11 @@ export function prescribe(input: PrescriptionInput): Prescription {
   const steadyOk = !fadeDegraded && (mainHr == null || mainHr <= target.heartRateHigh);
   const keep = steadyOk && mainS != null ? `Allure tenue à ${pace(mainS)} sans perte entre les moitiés : à reproduire.` : null;
   const format = minutes ? `${minutes} min` : "même durée";
+  // Un effort continu au seuil ou au tempo ne se prolonge que jusqu'à une durée utile (au-delà, ce n'est plus ce format).
+  const longest = CONTINUOUS_MAX_MIN[metrics.kind] ?? null;
+  const longer = minutes != null && (longest == null || minutes + 5 <= longest) ? minutes + 5 : null;
   const cue = steadyOk
-    ? `Même effort à ${band(target)}${minutes ? `, prolongé à ${minutes + 5} min` : ""} ou fractionné en 2 blocs avec 2:00 de trot.`
+    ? `Même effort à ${band(target)}${longer ? `, prolongé à ${longer} min` : minutes ? `, sans l'allonger (${minutes} min, c'est déjà le haut de ce format)` : ""} ou fractionné en 2 blocs avec 2:00 de trot.`
     : `${format} à ${band(target)}, en 2 blocs avec 2:00 de trot.`;
   return { status: "ok", target, goal: plan.goal, shouldHave, keep, next: { format, target, recoveryS: null, cue } };
 }

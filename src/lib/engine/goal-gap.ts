@@ -73,7 +73,15 @@ export type GoalGap = {
    * une phrase qui dit comment on compense, et que l'objectif peut se revoir. Null sinon.
    */
   availabilityNote: string | null;
+  /**
+   * Limite de l'allure du moment (semi, marathon) : elle vient du seuil et suppose l'endurance de la distance.
+   * Dite quand la plus longue sortie est sous 80 % du repère. Null sinon.
+   */
+  paceCaveat: string | null;
 };
+
+/** En deçà de cette part du repère de sortie longue, l'allure tirée du seuil est optimiste sur semi et marathon. */
+const ENDURANCE_CAVEAT_SHARE = 0.8;
 
 function decimal(value: number): string {
   return String(Math.round(value * 10) / 10).replace(".", ",");
@@ -166,7 +174,10 @@ export function goalGap(input: { target: RaceTarget; runs: GapRun[]; today: stri
   const availabilityNote = capped && !frequency.met
     ? `Le repère courant pour le ${bench.race} est de ${bench.runsPerWeek} sorties par semaine, pour ${available} possible${(available as number) > 1 ? "s" : ""} dans ton agenda : le plan n'en ajoute pas et compense par la sortie longue et la qualité. Si l'écart reste grand, une ${bench.runsPerWeek}e sortie (même 30 min) ou un temps visé revu sont les deux options.`
     : null;
-  return { race: bench.race, levers, main, action, summary: availabilityNote ? `${summary} ${availabilityNote}` : summary, nextRunsPerWeek: nextRuns, goalPaceS, distanceKm: input.target.distanceKm, targetTimeS: input.target.targetTimeS, availabilityNote };
+  const paceCaveat = input.target.distanceKm > 10.5 && longRun.share < ENDURANCE_CAVEAT_SHARE
+    ? `Ce repère suppose l'endurance de la distance : avec ${longRun.current} de plus longue sortie (repère ${longRun.needed}), compte plus lent sur la fin tant que la sortie longue n'est pas construite.`
+    : null;
+  return { race: bench.race, levers, main, action, summary: availabilityNote ? `${summary} ${availabilityNote}` : summary, nextRunsPerWeek: nextRuns, goalPaceS, distanceKm: input.target.distanceKm, targetTimeS: input.target.targetTimeS, availabilityNote, paceCaveat };
 }
 
 /** Le levier demande-t-il de changer la semaine type (fréquence, volume, sortie longue) ? */
