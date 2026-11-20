@@ -733,3 +733,14 @@ mark.key-reco { background: var(--sl-yellow); color: var(--fixed-ink); font-weig
 .celebration.reduced .celebration-banner { animation: banner-fade 3.4s linear forwards; transform: translateX(-50%) rotate(-3deg); }
 @keyframes banner-fade { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .celebration-hearts { display: none; } }
+
+/* Sorties déclarées sans montre */
+.cal-day.declared { background: var(--sl-surface); border: 2px dashed var(--sl-ink-muted); }
+.cal-swatch-declared { display: inline-block; width: 10px; height: 10px; border-radius: 3px; border: 1.5px dashed var(--sl-ink-muted); margin-right: 5px; vertical-align: -1px; }
+.declare-open { display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; }
+.declare-run { margin-top: 12px; padding-top: 10px; border-top: 1.5px solid var(--sl-grid); display: grid; gap: 8px; }
+.declare-fields { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.declare-fields .field { margin: 0; }
+.declare-fields input { width: 150px; }
+.declare-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--sl-ink-muted); }
+.declare-list li { display: inline-flex; align-items: center; gap: 2px; }

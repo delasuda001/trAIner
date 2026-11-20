@@ -136,6 +136,8 @@ export function ProgressionCard({ dashboard }: { dashboard: Dashboard }) {
   const { progression } = dashboard;
   const verdict = progressionVerdict(progression);
   const hr = progression.referenceHeartRateBpm;
+  // Pas de tendance calculable : une estimation tirée de l'historique plutôt qu'un vide (jamais un 0).
+  const estimate = progression.state === "insufficient" ? progression.estimate ?? null : null;
   const toPace = (speed: number | null) => (speed ? 1000 / speed : null);
   return (
     <section className="card card-hero card-progress card-collapsible" aria-labelledby="progress-title">
@@ -144,10 +146,14 @@ export function ProgressionCard({ dashboard }: { dashboard: Dashboard }) {
       <div className="aerobic-head">
         {progression.state !== "insufficient" ? (
           <div className="big-number">{formatPace(progression.recent.speedAtReferenceHr).replace("/km", "")}<span className="unit">/km</span></div>
+        ) : estimate ? (
+          <div className="big-number">{formatPace(estimate.speedAtReferenceHr).replace("/km", "")}<span className="unit">/km</span></div>
         ) : null}
-        <span className={`state-badge ${progression.state}`}><VerdictMark state={progression.state} />{verdict.headline}</span>
+        <span className={`state-badge ${progression.state}`}><VerdictMark state={progression.state} />{estimate ? "Estimation" : verdict.headline}</span>
       </div>
       {progression.state !== "insufficient" ? <div className="aerobic-label"><Say tu={`ton allure quand tu cours à ${hr} bpm`} /></div> : null}
+      {estimate ? <div className="aerobic-label"><Say tu={`ton allure estimée à ${hr} bpm · ${estimate.historyRuns} sorties sur 12 mois, ${estimate.recentRuns} récente${estimate.recentRuns > 1 ? "s" : ""} · confiance ${CONFIDENCE_WORDS[estimate.confidence]}`} /></div> : null}
+      {estimate && progression.vo2max.latest != null ? <div className="aerobic-label">VO2max (montre) : {formatNumber(progression.vo2max.latest, 1)}</div> : null}
       <p className="verdict-reason"><CoachText text={progressionAction(progression, dashboard.goalGaps)} voice /></p>
       <div className="card-more">
         {/* Le graphique des sorties faciles est l'explication du chiffre : replié avec elle. */}
@@ -177,6 +183,8 @@ export function ProgressionCard({ dashboard }: { dashboard: Dashboard }) {
     </section>
   );
 }
+
+const CONFIDENCE_WORDS = { low: "faible", moderate: "moyenne", high: "bonne" } as const;
 
 const VERDICT_MARK: Record<Progression["state"], string> = { progressing: "↗", stable: "≈", regressing: "↘", insufficient: "?" };
 

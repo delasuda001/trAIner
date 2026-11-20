@@ -102,6 +102,7 @@ const REFERENCE_SOURCES: Record<ReferenceHrSource, string> = {
   threshold: "environ 80 % de ta FC seuil",
   easy_runs: "ta FC habituelle en footing",
   zones_z2: "le milieu de ta zone 2",
+  easy_above_z2: "la FC habituelle de tes footings, nettement au-dessus de ta zone 2 : c'est là que tu cours en facile",
 };
 
 /** Explication dépliable : d'où vient la FC de référence, comment on compare, et l'écart mesuré. */
@@ -109,7 +110,11 @@ export function progressionExplanation(progression: Progression): string {
   const { referenceHeartRateBpm: hr, windowWeeks } = progression;
   const verdict = progressionVerdict(progression);
   const how = `Sur tes sorties faciles, on mesure l'allure que tu tiens par battement de cœur, ramenée à ${hr} bpm (${REFERENCE_SOURCES[progression.referenceSource]}), puis on compare tes ${windowWeeks} dernières semaines aux ${windowWeeks} précédentes.`;
-  return [how, verdict.reason, verdict.caution].filter(Boolean).join(" ");
+  const estimate = progression.state === "insufficient" ? progression.estimate ?? null : null;
+  const estimated = estimate
+    ? `En attendant, l'estimation part de ta référence des 12 derniers mois (tes 25 % meilleures sorties faciles : ${formatPace(estimate.referenceSpeed)}) et chaque sortie récente la rapproche de ce que tu cours aujourd'hui.`
+    : null;
+  return [how, verdict.reason, estimated, verdict.caution].filter(Boolean).join(" ");
 }
 
 export function progressionSentence(progression: Progression): string {

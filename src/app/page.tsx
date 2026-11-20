@@ -64,7 +64,7 @@ function renderHome(member: Member, query: string | null) {
     <div className={`grid grid-2 home-hero${plain ? " plain" : ""}`}>
       <div className="stack">
         <SuggestionCard dashboard={dashboard} coach={outlook} plain={plain} />
-        <SessionCalendar calendar={dashboard.calendar} zonesNote={zonesNote} plain={plain} />
+        <SessionCalendar calendar={dashboard.calendar} zonesNote={zonesNote} plain={plain} declared={dashboard.declaredRuns} today={dashboard.today} />
       </div>
       <div className="stack">
         {plain ? null : <ProgressionCard dashboard={dashboard} />}

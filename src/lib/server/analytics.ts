@@ -12,7 +12,8 @@ import { isRun, loadAlert, loadFigure, summarizeLoad, type LoadAlert, type LoadF
 import { calendarZone, trainingCalendar, type TrainingCalendar } from "@/lib/engine/calendar";
 import { detectLevel, type LevelAssessment } from "@/lib/engine/athlete-level";
 import { goalPages, type GoalPage } from "@/lib/engine/goal-pages";
-import { computeProgression, easyRunHeartRates, personalReferenceHeartRate, type Progression } from "@/lib/engine/progression";
+import { DECLARED_RUNS_KEY, declaredRunsSchema, type DeclaredRun } from "@/lib/declared-runs";
+import { computeProgression, easyRunHeartRates, historicalEstimate, historyEntries, personalReferenceHeartRate, type Progression } from "@/lib/engine/progression";
 import { assessRecovery, type RecoverySignals } from "@/lib/engine/recovery";
 import { runningRhythm, type Rhythm } from "@/lib/engine/rhythm";
 import { median, present } from "@/lib/engine/stats";
@@ -351,6 +352,8 @@ export type Dashboard = {
   level: LevelAssessment;
   /** Pages de la carte objectif (chrono, distance, régularité), dans l'ordre du niveau. */
   goalPages: GoalPage[];
+  /** Sorties déclarées sans montre (8 dernières semaines) : régularité et calendrier seulement. */
+  declaredRuns: DeclaredRun[];
 };
 
 const CALENDAR_WEEKS = 8;
@@ -378,12 +381,16 @@ function computeOutlook(context: Context): Outlook {
   const rhythm = runningRhythm(runs.map((run) => ({ localDate: run.localDate, family: run.metrics.family })), today);
   const alert = loadAlert(load, { recoveryFlags: recovery.flags, perceivedEffort: lastFeeling?.perceivedEffort ?? null }, rhythm.highLoadRatio);
   const progressionRuns = runs.map((run) => ({ id: run.id, localDate: run.localDate, distanceM: run.distanceM, metrics: run.metrics, sport: run.sport }));
-  const progression = computeProgression({
+  const computed = computeProgression({
     runs: progressionRuns,
     today,
     reference: personalReferenceHeartRate({ zones: profile.zones, zonesFromWatch: profile.zonesFromWatch, easyRunHeartRates: easyRunHeartRates(progressionRuns, today) }),
     vo2maxSeries: present(wellness.map((day) => (day.vo2max != null ? { date: day.date, value: day.vo2max } : null))),
   });
+  // Tendance impossible (trop peu de sorties faciles récentes) : estimation tirée de l'historique, rien sinon.
+  const progression = computed.state === "insufficient"
+    ? { ...computed, estimate: historicalEstimate(historyEntries(runs.map((run) => ({ id: run.id, localDate: run.localDate, distanceM: run.distanceM, metrics: run.metrics, sport: run.sport, movingTimeS: run.movingTimeS, averageSpeedMps: run.row.averageSpeedMps, averageHeartRateBpm: run.row.averageHeartRateBpm })), { today, referenceHr: computed.referenceHeartRateBpm, zones: profile.zones, restingHeartRateBpm: profile.restingHeartRateBpm }), today, computed.windowWeeks) }
+    : computed;
 
   const recentRuns = runs.filter((run) => run.localDate >= addDays(today, -42));
   // Efficacité de ses sorties faciles récentes : sert à traduire la FC cible en allure réaliste.
@@ -438,12 +445,15 @@ export function getDashboard(): Dashboard {
   const sameRun = [...runs].reverse().find((run) => sameKinds.includes(run.metrics.kind) && run.localDate >= addDays(today, -60));
   const sameAnalysis = sameRun ? analyzeSession(sameRun.id, context) : null;
   const runById = new Map(runs.map((run) => [run.id, run]));
+  const declared = createAppStateRepository().get(DECLARED_RUNS_KEY, declaredRunsSchema) ?? [];
+  const calendarStart = addDays(startOfIsoWeek(today), -7 * (CALENDAR_WEEKS - 1));
   const level = voiceDeep(detectLevel(runs.map((run) => ({ localDate: run.localDate, distanceM: run.distanceM, family: run.metrics.family })), today), currentRegister());
   const goalGaps = voiceDeep(goalGapsFor(goal, runs, today, profile.lactateThresholdSpeedMps), currentRegister());
   const goalMarkers = (goal?.raceTargets ?? []).map((target) => goalMarker(goal?.raceTargets ?? [], target.distanceKm, { lactateThresholdSpeedMps: profile.lactateThresholdSpeedMps, thresholdLabel: thresholdLabel(profile), efforts: recentEfforts(runs, addDays(today, 1)) })).filter((marker): marker is GoalMarker => marker != null);
   return {
     level,
-    goalPages: voiceDeep(goalPages({ level: level.level, gaps: goalGaps, markers: goalMarkers, runs: runs.map((run) => ({ localDate: run.localDate, distanceM: run.distanceM })), today, goal: goal ? { distanceKm: goal.distanceKm, targetTimeS: goal.targetTimeS, runsPerWeek: goal.runsPerWeek } : null, habitualRunsPerWeek: rhythm.runsPerWeek12w }), currentRegister()),
+    goalPages: voiceDeep(goalPages({ level: level.level, gaps: goalGaps, markers: goalMarkers, runs: [...runs.map((run) => ({ localDate: run.localDate, distanceM: run.distanceM })), ...declared.map((run) => ({ localDate: run.date, distanceM: null }))].sort((a, b) => a.localDate.localeCompare(b.localDate)), today, goal: goal ? { distanceKm: goal.distanceKm, targetTimeS: goal.targetTimeS, runsPerWeek: goal.runsPerWeek } : null, habitualRunsPerWeek: rhythm.runsPerWeek12w }), currentRegister()),
+    declaredRuns: declared.filter((run) => run.date >= calendarStart),
     rhythm,
     today,
     profile,
@@ -467,7 +477,7 @@ export function getDashboard(): Dashboard {
       activities: rows.filter((row) => row.localDate >= addDays(startOfIsoWeek(today), -7 * (CALENDAR_WEEKS - 1))).map((row) => {
         const run = runById.get(row.id);
         return { id: row.id, date: row.localDate, run: isRun(row.sport), zone: calendarZone(run?.metrics.kind ?? null, run?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null)), family: run?.metrics.family ?? "other", title: run ? sessionTitle(run.metrics) : row.name, distanceM: row.distanceM };
-      }),
+      }).concat(declared.filter((run) => run.date >= calendarStart).map((run) => ({ id: `declaree-${run.id}`, date: run.date, run: true, zone: null, family: "declared", title: `Sortie sans montre (${run.durationMin} min)`, distanceM: null, declared: true }))),
       planned: [
         ...suggestion.when.dates.map((date, index) => ({ date, type: suggestion.primary.type, alternative: index > 0 })),
         ...(suggestion.then ? [{ date: suggestion.then.when.date, type: suggestion.then.type, alternative: false }] : []),

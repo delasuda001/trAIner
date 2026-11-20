@@ -4,6 +4,8 @@ import { SUGGESTION_ZONE, ZONE_NAMES, zoneColor, type Zone } from "@/components/
 import { Say } from "@/components/ui/register";
 import type { CalendarDay, CalendarWeek, TrainingCalendar } from "@/lib/engine/calendar";
 import type { SuggestionType } from "@/lib/engine/suggestion";
+import type { DeclaredRun } from "@/lib/declared-runs";
+import { DeclareRun } from "./declare-run";
 import { formatDate, formatNumber } from "@/lib/formatters";
 
 const DAY_LETTERS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -14,7 +16,7 @@ const DAY_LETTERS = ["L", "M", "M", "J", "V", "S", "D"];
  * la semaine face à la cible : des pastilles pleines pour ce qui est fait, jamais de rouge.
  */
 /** `plain` : légende en trois mots (facile, soutenu, intense) et sans la phrase sur les zones (vue débutant). */
-export function SessionCalendar({ calendar, zonesNote, plain = false }: { calendar: TrainingCalendar; zonesNote: string; plain?: boolean }) {
+export function SessionCalendar({ calendar, zonesNote, plain = false, declared = [], today }: { calendar: TrainingCalendar; zonesNote: string; plain?: boolean; declared?: DeclaredRun[]; today?: string }) {
   const { target } = calendar;
   return (
     <section className="card cal-card" aria-labelledby="cal-title">
@@ -39,7 +41,9 @@ export function SessionCalendar({ calendar, zonesNote, plain = false }: { calend
           : ([1, 2, 3, 4, 5] as Zone[]).map((zone) => <span key={zone}><span className="legend-swatch" style={{ background: zoneColor(zone) }} />{ZONE_NAMES[zone].split(" ").slice(1).join(" ")}</span>)}
         <span><span className="cal-swatch-other" />autre sport</span>
         <span><span className="cal-swatch-planned" />proposée</span>
+        {declared.length ? <span><span className="cal-swatch-declared" />sans montre</span> : null}
       </div>
+      {today ? <DeclareRun declared={declared} today={today} /> : null}
       {plain ? null : <p className="cal-zones"><Say tu={`Couleur = intensité : zone du travail pour un fractionné ou un tempo, zone dominante sinon. ${zonesNote}`} /></p>}
     </section>
   );
@@ -65,7 +69,7 @@ function WeekRow({ week, target }: { week: CalendarWeek; target: number | null }
           <span className="cal-pips" aria-hidden>
             {Array.from({ length: pips }, (_, index) => <span key={index} className={`cal-pip${index < week.runs ? " on" : ""}${index >= target ? " extra" : ""}`} />)}
           </span>
-        ) : <span aria-hidden>{week.runs}</span>}
+        ) : <span aria-hidden>{week.runs || ""}</span>}
         <span className="cal-km" aria-hidden>{week.runKm ? `${formatNumber(week.runKm, 0)} km` : ""}</span>
       </span>
     </div>
@@ -86,6 +90,9 @@ function DayCell({ day }: { day: CalendarDay }) {
       {others.length && main ? <span className="cal-other-dot" /> : null}
     </>
   );
+  if (main?.declared) {
+    return <span role="cell" className={`${classes} declared`} title={label} aria-label={label}>{content}</span>;
+  }
   if (main) {
     return <Link role="cell" href={`/activities/${main.id}`} className={classes} style={style} title={label} aria-label={label}>{content}</Link>;
   }

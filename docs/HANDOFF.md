@@ -552,3 +552,10 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
   le code départage deux prénoms identiques). Sans prénom, seul un code long passe (anciens codes). Freinage inchangé. Anciens
   liens d'invitation encore valides ; lien déjà servi → /connexion « plus nécessaire ». Paramètres : code affiché sur la carte de
   l'invité (« Régénérer le code ») ; côté invité, « Ouvrir Sillage sur un autre appareil » (adresse, prénom, code).
+- (20 nov., branche `claude/proposition-donnees-rares`) Données rares, règles générales déclenchées par les données :
+  FC de référence recalée (`easy_above_z2`) si la médiane des FC de footing ≥ haut de Z2 + 5 bpm sur ≥ 5 sorties (Bastien
+  135/148, Marie 150/149 : non) ; si la tendance est impossible, `progression.estimate` (`historicalEstimate` : 25 %
+  meilleures sorties faciles sur 12 mois, séries ou résumé, poids 2 face à chaque sortie récente, confiance selon leur
+  nombre) affiché « Estimation » avec la VO2max montre ; régularité sans 0 (« N sem. sur 8 à la cible ») ; sorties déclarées
+  sans montre (`declared_runs` dans app_state, API `/api/declared-runs`) : régularité et calendrier seulement. Diff du
+  tableau de bord à zéro pour Bastien, Marie et Léa ; photographie du moteur de Bastien identique.

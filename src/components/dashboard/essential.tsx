@@ -90,14 +90,17 @@ function RegularitySlide({ page, noGoal }: { page: RegularityPage; noGoal: boole
   return (
     <div className="essential-goal">
       <div className="card-eyebrow"><Repeat size={13} /> Régularité · {page.target} sorties / sem.</div>
+      {/* Jamais de 0 en gros : sans série en cours, on montre ce qui a été tenu sur 8 semaines. */}
       <div className="goal-figure">
-        <span className="big-number">{page.streakWeeks}<span className="unit">{unit} d&apos;affilée</span></span>
-        <span className={`state-badge streak-badge${page.streakWeeks >= 2 ? " on" : ""}`}>{page.streakWeeks >= 2 ? "Série en cours" : page.streakWeeks === 1 ? "C'est parti" : "À lancer"}</span>
+        {page.streakWeeks > 0 ? <span className="big-number">{page.streakWeeks}<span className="unit">{unit} d&apos;affilée</span></span>
+          : page.weeksAtTarget > 0 ? <span className="big-number">{page.weeksAtTarget}<span className="unit">sem. sur 8 à la cible</span></span>
+          : null}
+        <span className={`state-badge streak-badge${page.streakWeeks >= 2 ? " on" : ""}`}>{page.streakWeeks >= 2 ? "Série en cours" : page.streakWeeks === 1 ? "C'est parti" : page.weeksAtTarget > 0 ? "À relancer" : "À lancer"}</span>
       </div>
       <div className="streak-row" aria-label={`Cette semaine : ${page.thisWeekRuns} sur ${page.target}`}>
         <span className="muted small">Cette semaine</span>
         <span className="streak-pips" aria-hidden>{Array.from({ length: Math.max(page.target, page.thisWeekRuns) }, (_, index) => <span key={index} className={index < page.thisWeekRuns ? "on" : ""} />)}</span>
-        <span className="muted small num">{page.weeksAtTarget}/8 sem. à la cible</span>
+        {page.streakWeeks > 0 ? <span className="muted small num">{page.weeksAtTarget}/8 sem. à la cible</span> : null}
       </div>
       <NextStep text={page.next} reached={false} />
       {noGoal ? <Link className="essential-link" href="/objectif"><Say tu="Ajouter un objectif (distance, chrono)" /> <ArrowRight size={14} /></Link> : null}

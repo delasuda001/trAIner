@@ -89,3 +89,30 @@ describe("personalReferenceHeartRate", () => {
     expect(easyRunHeartRates(runs, today)).toEqual([132]);
   });
 });
+
+describe("données rares : règles générales", () => {
+  const zones = { floors: [96, 115, 134, 154, 173] as [number, number, number, number, number], maxHeartRateBpm: 192, lactateThresholdHeartRateBpm: null, method: "HR_MAX" };
+  it("FC de référence recalée seulement si les footings sont ≥ 5 bpm au-dessus de la Z2 (5 sorties au moins)", async () => {
+    const { personalReferenceHeartRate: reference } = await import("./progression");
+    expect(reference({ zones, zonesFromWatch: true, easyRunHeartRates: [125, 135, 140, 141, 148, 139, 118] })).toEqual({ bpm: 139, source: "easy_above_z2" });
+    // Juste au-dessus de la Z2 (+1 bpm) : inchangé.
+    expect(reference({ zones, zonesFromWatch: true, easyRunHeartRates: [134, 134, 135, 133, 134] })).toEqual({ bpm: 124, source: "watch_z2" });
+    // Trop peu de sorties : inchangé.
+    expect(reference({ zones, zonesFromWatch: true, easyRunHeartRates: [145, 146, 147, 148] })).toEqual({ bpm: 124, source: "watch_z2" });
+    // Jamais au-delà du haut de la Z3.
+    expect(reference({ zones, zonesFromWatch: true, easyRunHeartRates: [160, 162, 165, 161, 163] }).bpm).toBe(153);
+  });
+
+  it("estimation historique : 25 % meilleures sorties sur 12 mois, tirée par chaque sortie récente, confiance selon leur nombre", async () => {
+    const { historicalEstimate } = await import("./progression");
+    const today = "2026-11-19";
+    const old = [2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0, 3.1].map((value, index) => ({ date: `2026-0${(index % 8) + 1}-10`, value, source: "summary" as const }));
+    const none = historicalEstimate(old, today, 8);
+    expect(none).toMatchObject({ referenceSpeed: 3.0, speedAtReferenceHr: 3.0, recentRuns: 0, confidence: "low" });
+    const withRecent = historicalEstimate([...old, { date: "2026-11-10", value: 2.7, source: "streams" }], today, 8);
+    // La sortie récente entre aussi dans les 12 mois : référence = 2,9 (25 % meilleures sur 9).
+    expect(withRecent?.speedAtReferenceHr).toBeCloseTo((2 * 2.9 + 2.7) / 3, 4);
+    expect(withRecent?.confidence).toBe("moderate");
+    expect(historicalEstimate(old.slice(0, 4), today, 8)).toBeNull();
+  });
+});
