@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldCheck, X } from "lucide-react";
+import { ScanEye, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -24,14 +24,14 @@ const SEVERITY_LABELS: Record<QualityFindingView["severity"], string> = { error:
  * Constats du contrôle de cohérence (règles en code après chaque analyse) et de la relecture IA
  * par lots. Vue de Bastien seulement : jamais montrée à un invité.
  */
-export function QualityPanel({ findings }: { findings: QualityFindingView[] }) {
+export function QualityPanel({ findings, reviewRunning }: { findings: QualityFindingView[]; reviewRunning: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   async function post(body: unknown) {
     const response = await fetch("/api/quality", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    return (await response.json().catch(() => ({}))) as { profiles?: number; subjects?: number; findings?: number; error?: string };
+    return (await response.json().catch(() => ({}))) as { profiles?: number; subjects?: number; findings?: number; started?: boolean; error?: string };
   }
 
   async function run() {
@@ -40,6 +40,13 @@ export function QualityPanel({ findings }: { findings: QualityFindingView[] }) {
     setBusy(false);
     setMessage(result.error ?? `${result.subjects ?? 0} analyses relues sur ${result.profiles ?? 0} profils : ${result.findings ?? 0} constat(s).`);
     router.refresh();
+  }
+
+  async function review() {
+    setBusy(true);
+    const result = await post({ action: "review" });
+    setBusy(false);
+    setMessage(result.error ?? (result.started ? "Relecture lancée en arrière-plan (Haiku, plafonds du banc) : recharge la page dans quelques minutes." : "Une relecture tourne déjà."));
   }
 
   async function dismiss(id: string) {
@@ -56,6 +63,9 @@ export function QualityPanel({ findings }: { findings: QualityFindingView[] }) {
       <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
         <button type="button" className="btn" disabled={busy} onClick={() => void run()}>
           <ShieldCheck size={14} /> {busy ? "Contrôle en cours…" : "Tout revérifier (sans appel au coach)"}
+        </button>
+        <button type="button" className="btn" disabled={busy || reviewRunning} onClick={() => void review()} title="Un appel par profil, au plus 6 analyses récentes non relues ; comptée dans les plafonds du banc">
+          <ScanEye size={14} /> {reviewRunning ? "Relecture en cours…" : "Relecture IA (Haiku)"}
         </button>
         {message ? <span className="muted small">{message}</span> : null}
       </div>

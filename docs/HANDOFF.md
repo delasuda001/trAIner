@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 18 novembre 2026 (soir, revue des premières analyses d'une invitée, lien d'invitation confirmé).
+Dernière mise à jour : 20 novembre 2026 (zones génériques recalées, contrôle de cohérence et relecture IA des analyses ; branche `claude/project-thread-s7rvwt`, pas encore en ligne).
 
 ## En deux phrases
 
@@ -490,6 +490,47 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
   ouverture, « Passer », bouton « Guide » pour le rouvrir ; « déjà vu » en localStorage (commodité de l'appareil).
   Vue complète inchangée. `GoalGap.targetTimeS` : temps visé exact (l'allure arrondie donnait 1:45:08).
 - Reste à vérifier : écart « à FC égale » en endurance face à des comparables à FC très dispersées (`comparable.ts`).
+
+## Zones génériques et contrôle qualité des analyses (20 nov., branche `claude/project-thread-s7rvwt`)
+
+Déclencheur : revue du profil de Charles (coureur entraîné, zones montre en % de FC max, footings à
+139–148 bpm pour une Z2 qui finissait à 133). Toutes les règles sont générales et déclenchées par les
+données ; `scripts/profile-snapshot.ts` a servi à vérifier, analyse par analyse, que les profils non
+concernés ne bougent pas.
+
+- **Z2 recalée** (`engine/zones.ts`, `recalibrateEasyZones`) : zones SANS FC seuil, ≥ 5 footings des
+  16 semaines (résumé montre : route, étiquette base aérobie/récupération, ≥ 20 min) dont la FC moyenne
+  médiane ≥ haut de Z2 + 5 → haut de Z2 = 9e décile + 3 bpm (≤ Z4 − 5), bas de Z2 décalé d'autant ; Z4–Z5
+  inchangées. Fait dans `loadProfile` ; `profile.zones` est recalé (cibles, classement, temps en zones,
+  consignes), `profile.watchZones` garde l'original (FC de référence de la progression). Métriques en
+  cache marquées `zoneFloorsUsed`. Note des zones à l'accueil. Charles : 115–133 → 130–148.
+- **Classement** (`classifyKind`, seulement si zones recalées) : ≥ 90 min → sortie longue ; étiquette
+  seuil/VO2max confirmée par ≥ 25 % en Z4–Z5, tempo refusé si ≥ 60 % en Z1–Z2.
+- **Sortie longue en Z4** ≥ 60 min (`prescribe`) : pas de reproche d'intensité, consigne de récupération.
+- **Verdict** (`verdict.ts`, `comparable.ts` → `deltas.noise`) : seuil = max(6, ½ écart-type des
+  comparables) ; D+/km à > 10 m des comparables → « écart non concluant ». Change le verdict calculé de
+  46 vieilles séances de Bastien et 5 de Marie (aucune analyse stockée touchée).
+- **VFC** : statut 7 jours bas mais nuit dans la plage → le dire (`recovery.lowBasis`, payload).
+- **Seuil observé sur un continu** (`threshold.ts`) : seulement sans seuil montre ni répétitions ;
+  ≥ 20 min hors échauffement, FC dans la moitié haute de la bande Z4, ≤ 12 m D+/km. Indicatif.
+- **Registre** : règles tu → vous insensibles à la casse (« Tu cours » → « Vous courez ») ; test
+  étendu à athlete-level, goal-pages, threshold.
+- **Garde-fou** : `findStateJudgements` refuse « vous étiez frais », « tu es fatigué »…
+- **Contrôle de cohérence** (`lib/quality/coherence.ts`, pur) : allure facile prescrite > footings +
+  45 s/km, Z2 sous les footings, type vs durée/FC, « plus long » après un effort exceptionnel, verdict
+  dans le bruit, comparaison à une plage fausse, registre, élision, gabarit. Lancé après chaque analyse
+  produite (`quality-service.ts`, branché dans `coach-service`), et en audit complet sans appel
+  (`npm run quality -- --print`, bouton dans Paramètres). Constats : table `quality_findings` du
+  registre, vue « Contrôle des analyses » (admin seulement), écartables.
+- **Relecture IA** (`coach/quality-review.ts`, `server/quality-review-service.ts`) : Haiku, prompt de
+  second avis indépendant, un appel par profil (≤ 6 analyses récentes non relues + conseil du jour),
+  plafonds du banc (usage kind `review`, compté avec bench/weekly). Bouton dans Paramètres ou
+  `npm run quality -- --review [--scheduled]` (21 h – 5 h). Rien d'automatique installé.
+- **Profils types** (`lib/quality/archetypes.test.ts`) : entraîné à zones génériques, zones mesurées,
+  zones personnalisées, débutant ; toute la chaîne puis le contrôleur, sans erreur.
+- Constats du premier audit (copie des bases) : Marie, consignes faciles 55–93 s/km plus lentes que
+  ses footings (traduction FC → allure à revoir, non corrigé : à arbitrer) ; profil de test : analyses
+  reprises de Bastien au « tu » ; Charles : anciennes analyses (« 64 ms sous la plage », « de effort »).
 
 ## État
 

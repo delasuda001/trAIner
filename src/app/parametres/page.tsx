@@ -30,13 +30,14 @@ import { budgetFromEnv, budgetTokens } from "@/lib/bench/budget";
 import { benchIsRunning, pendingTasks } from "@/lib/bench/runner";
 import { BenchButton } from "@/components/settings/bench-button";
 import { QualityPanel } from "@/components/settings/quality-panel";
+import { reviewIsRunning } from "@/lib/server/quality-review-service";
 import { readReportIndex, readReportMarkdown } from "@/lib/bench/store";
 
 export const dynamic = "force-dynamic";
 
-const KIND_LABELS: Record<string, string> = { session: "Analyse de séance", outlook: "Conseil du jour", chat: "Question au coach", weekly: "Bilan hebdomadaire", bench: "Banc de tests", feedback: "Synthèse des retours", prepare: "Préparation d'un invité" };
+const KIND_LABELS: Record<string, string> = { session: "Analyse de séance", outlook: "Conseil du jour", chat: "Question au coach", weekly: "Bilan hebdomadaire", bench: "Banc de tests", feedback: "Synthèse des retours", prepare: "Préparation d'un invité", review: "Relecture des analyses" };
 /** Travail automatique (bilan, banc), compté à part de l'usage de Bastien. */
-const AUTOMATIC_KINDS = new Set(["weekly", "bench"]);
+const AUTOMATIC_KINDS = new Set(["weekly", "bench", "review"]);
 const OUTCOME_LABELS: Record<string, string> = { ok: "ok", rejected: "refusée", error: "échec" };
 const WINDOW_LABELS: Record<string, string> = { five_hour: "fenêtre de 5 h", seven_day: "semaine", seven_day_opus: "semaine (Opus)", seven_day_sonnet: "semaine (Sonnet)" };
 
@@ -116,7 +117,7 @@ async function adminSections() {
           <h2 className="section-title">Contrôle des analyses</h2>
           <span className="section-note">règles vérifiées en code après chaque analyse, et relecture IA par lots ; jamais visible des invités</span>
         </div>
-        <div className="card"><QualityPanel findings={findings} /></div>
+        <div className="card"><QualityPanel findings={findings} reviewRunning={reviewIsRunning()} /></div>
       </section>
       <section className="section">
         <div className="section-head">

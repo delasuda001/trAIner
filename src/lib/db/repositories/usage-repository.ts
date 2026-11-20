@@ -6,7 +6,8 @@ import { coachUsage } from "../schema";
 
 /** `weekly` et `bench` : bilan hebdomadaire et banc de tests, séparés de l'usage de Bastien. */
 /** « prepare » : analyses pré-générées par Bastien avant la première ouverture d'un invité. */
-export type UsageKind = "session" | "outlook" | "chat" | "weekly" | "bench" | "feedback" | "prepare";
+/** « review » : relecture indépendante des analyses par lots (contrôle qualité), comptée avec le banc. */
+export type UsageKind = "session" | "outlook" | "chat" | "weekly" | "bench" | "feedback" | "prepare" | "review";
 export type UsageOutcome = "ok" | "rejected" | "error";
 export type UsageRow = typeof coachUsage.$inferSelect;
 

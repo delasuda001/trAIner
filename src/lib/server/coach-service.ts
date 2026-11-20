@@ -125,7 +125,8 @@ async function generate<T>(job: Job<T>, options: { preparation?: boolean } = {})
   return task;
 }
 
-function sessionPayload(analysis: SessionAnalysis) {
+/** Charge utile d'une séance telle qu'envoyée au coach (sert aussi au relecteur indépendant). */
+export function sessionPayload(analysis: SessionAnalysis) {
   return buildSessionPayload({
     session: analysis.activity,
     metrics: analysis.metrics,
@@ -153,6 +154,10 @@ function goalFreeSessionPayload(activityId: string): unknown {
 function sessionJob(analysis: SessionAnalysis): Job<SessionCoachOutput> {
   const payload = sessionPayload(analysis);
   return { goalFreePayload: () => goalFreeSessionPayload(analysis.activity.id), normalize: normalizeSessionOutput, zoneOf: (hr: number) => zoneOf(hr, analysis.profile.zones), kind: "session", subject: analysis.activity.id, promptVersion: SESSION_PROMPT_VERSION, payload, system: systemPromptFor(SESSION_SYSTEM_PROMPT, { isAdmin: requireActiveMember().role === "admin", runsPerWeek12w: analysis.context.rhythm.runsPerWeek12w }), prompt: buildSessionPrompt(payload), schema: sessionCoachSchema, jsonSchema: sessionCoachJsonSchema as unknown as Record<string, unknown> };
+}
+
+export function outlookPayload(dashboard: Dashboard) {
+  return buildOutlookPayload({ suggestion: dashboard.suggestion, progression: dashboard.progression, recovery: dashboard.recovery, load: dashboard.load, goal: goalForCoach(dashboard.goal, dashboard.today), lastSameType: dashboard.lastSameType, goalGaps: dashboard.goalGaps.map((gap) => gap.summary) });
 }
 
 function outlookJob(dashboard: Dashboard): Job<OutlookCoachOutput> {

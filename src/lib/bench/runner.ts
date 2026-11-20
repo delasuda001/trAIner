@@ -162,7 +162,7 @@ export type RunSummary = { done: string[]; stoppedBecause: string | null; remain
 
 /** Tokens comptés dans les plafonds pour le travail automatique (banc + bilan) depuis `sinceIso`. */
 export function automaticTokensSince(sinceIso: string): number {
-  return createUsageRepository().since(sinceIso).filter((row) => row.kind === "bench" || row.kind === "weekly").reduce((sum, row) => sum + budgetTokens(row), 0);
+  return createUsageRepository().since(sinceIso).filter((row) => row.kind === "bench" || row.kind === "weekly" || row.kind === "review").reduce((sum, row) => sum + budgetTokens(row), 0);
 }
 
 let running = false;
