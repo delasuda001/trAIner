@@ -23,6 +23,22 @@ function weekAgo(now: Date): string {
   return new Date(now.getTime() - 7 * 86_400_000).toISOString();
 }
 
+export const quotaResetKey = (id: string) => `quota_reset_${id}`;
+
+/**
+ * Début de la fenêtre de 7 jours d'un profil : Bastien peut la remettre à zéro (Paramètres). La
+ * consommation passée reste enregistrée ; elle ne compte simplement plus dans les plafonds.
+ */
+function windowStart(id: string, now: Date): string {
+  const reset = getRegistry().getSetting(quotaResetKey(id), z.string());
+  const start = weekAgo(now);
+  return reset && reset > start ? reset : start;
+}
+
+export function resetWeeklyQuota(id: string, now = new Date()): void {
+  getRegistry().setSetting(quotaResetKey(id), now.toISOString());
+}
+
 /** Consommation d'un profil, lue dans SA base (vue administrateur et contrôle des plafonds). */
 export function usageOf(record: Pick<MemberRecord, "id" | "role">, sinceIso: string) {
   return createUsageRepository(getDbFor(record)).since(sinceIso);
@@ -34,7 +50,7 @@ export function checkQuota(estimate?: number, options: { preparation?: boolean }
   const registry = getRegistry();
   const record = registry.find(member.id);
   const now = new Date();
-  const since = weekAgo(now);
+  const since = windowStart(member.id, now);
   // Le profil de test de Bastien n'entame pas le plafond commun des vrais invités.
   const guests = registry.list().filter((entry) => entry.role === "guest" && entry.testOf == null);
   return decideQuota({
@@ -42,7 +58,7 @@ export function checkQuota(estimate?: number, options: { preparation?: boolean }
     dailyCap: record?.dailyTokenCap ?? null,
     weeklyCap: record?.weeklyTokenCap ?? null,
     own: createUsageRepository().since(since),
-    allGuests: member.role === "guest" ? guests.flatMap((guest) => usageOf(guest, since)) : [],
+    allGuests: member.role === "guest" ? guests.flatMap((guest) => usageOf(guest, windowStart(guest.id, now))) : [],
     guestsWeeklyCap: guestsWeeklyCap(),
     // Coach simulé du profil de test : aucun appel réel, l'abonnement n'est pas en jeu (plafonds personnels inchangés).
     windows: simulatedCoachForActive() ? [] : windows(),
@@ -70,11 +86,11 @@ export function coachGauge(now = new Date()): CoachGauge {
   const gauge = subscriptionGauge(windows(), now);
   if (member.role !== "guest") return { ...gauge, left: null, guest: false };
   const record = getRegistry().find(member.id);
-  const state = quotaState({ own: createUsageRepository().since(weekAgo(now)), dailyCap: record?.dailyTokenCap ?? null, weeklyCap: record?.weeklyTokenCap ?? null, now, startOfTodayIso: startOfToday(now) });
+  const state = quotaState({ own: createUsageRepository().since(windowStart(member.id, now)), dailyCap: record?.dailyTokenCap ?? null, weeklyCap: record?.weeklyTokenCap ?? null, now, startOfTodayIso: startOfToday(now) });
   return { ...gauge, left: analysesLeft(state), guest: true };
 }
 
 /** État du quota d'un profil (affichage Paramètres). */
 export function quotaStateOf(record: MemberRecord, now = new Date()): QuotaState {
-  return quotaState({ own: usageOf(record, weekAgo(now)), dailyCap: record.role === "admin" ? null : record.dailyTokenCap, weeklyCap: record.role === "admin" ? null : record.weeklyTokenCap, now, startOfTodayIso: startOfToday(now) });
+  return quotaState({ own: usageOf(record, windowStart(record.id, now)), dailyCap: record.role === "admin" ? null : record.dailyTokenCap, weeklyCap: record.role === "admin" ? null : record.weeklyTokenCap, now, startOfTodayIso: startOfToday(now) });
 }

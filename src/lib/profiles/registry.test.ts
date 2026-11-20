@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import { generateAccessCode, generateToken } from "./credentials";
 import { ADMIN_ID, createRegistry } from "./registry";
@@ -157,5 +158,20 @@ describe("connexion par prénom et code court", () => {
     value.setGuestCode("charles", "654321");
     value.setDisabled("charles", true);
     expect(value.findByNameAndCode("Charles", "654321")).toBeNull();
+  });
+});
+
+describe("réinitialiser l'accueil d'un invité", () => {
+  it("appareils déconnectés, bienvenue à revoir, guide à rouvrir ; refusé pour l'administrateur", () => {
+    const value = registry();
+    value.createGuest({ id: "charles", name: "Charles", code: generateAccessCode() });
+    value.markOnboarded("charles");
+    const token = generateToken();
+    value.createSession("charles", token, "iPhone, Safari");
+    value.resetOnboarding("charles");
+    expect(value.find("charles")?.onboardedAt).toBeNull();
+    expect(value.resolveSession(token)).toBeNull();
+    expect(value.getSetting("guide_reset_charles", z.string())).toBe(now.toISOString());
+    expect(() => value.resetOnboarding(ADMIN_ID)).toThrow();
   });
 });

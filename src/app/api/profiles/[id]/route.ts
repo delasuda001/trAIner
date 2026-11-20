@@ -8,6 +8,7 @@ import { capsSchema } from "@/lib/profiles/types";
 import { checkGarminKey } from "@/lib/source/garmin";
 import { newCode, newInvitation, publicUrl } from "@/lib/server/profiles-admin";
 import { reloadEnv } from "@/lib/server/sync-service";
+import { resetWeeklyQuota } from "@/lib/server/quota";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,8 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("revoke-all") }),
   z.object({ action: z.literal("check-garmin") }),
   z.object({ action: z.literal("prepare") }),
+  z.object({ action: z.literal("reset-onboarding") }),
+  z.object({ action: z.literal("reset-quota") }),
 ]);
 
 /** État de la préparation d'un invité (suivi dans Paramètres). */
@@ -61,6 +64,14 @@ export async function POST(request: Request, { params }: Params) {
       case "enable":
         if (id === ADMIN_ID) return NextResponse.json({ error: "Le profil administrateur ne se désactive pas." }, { status: 400 });
         registry.setDisabled(id, body.action === "disable");
+        return NextResponse.json({ ok: true });
+      case "reset-onboarding":
+        if (record.role !== "guest") return NextResponse.json({ error: "Seul un invité se réinitialise ainsi." }, { status: 400 });
+        registry.resetOnboarding(id);
+        return NextResponse.json({ ok: true });
+      case "reset-quota":
+        if (record.role !== "guest") return NextResponse.json({ error: "Pas de plafond pour l'administrateur." }, { status: 400 });
+        resetWeeklyQuota(id);
         return NextResponse.json({ ok: true });
       case "revoke-all":
         registry.revokeAllSessions(id);

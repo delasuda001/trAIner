@@ -559,3 +559,7 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
   nombre) affiché « Estimation » avec la VO2max montre ; régularité sans 0 (« N sem. sur 8 à la cible ») ; sorties déclarées
   sans montre (`declared_runs` dans app_state, API `/api/declared-runs`) : régularité et calendrier seulement. Diff du
   tableau de bord à zéro pour Bastien, Marie et Léa ; photographie du moteur de Bastien identique.
+- (20 nov., branche `claude/proposition-admin-reset`) Paramètres, par invité : « Réinitialiser l'accueil » (`resetOnboarding` :
+  appareils déconnectés, `onboarded_at` remis à zéro, `guide_reset_<id>` pour rouvrir le mini-guide ; données intactes) et
+  « Remettre le quota de la semaine à zéro » (`quota_reset_<id>` : début de la fenêtre de 7 jours, consommation gardée en
+  historique, aussi dans le plafond commun).

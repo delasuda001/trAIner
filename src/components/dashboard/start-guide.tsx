@@ -11,7 +11,8 @@ const STORAGE_KEY = "sillage_guide_seen";
  * ré-ouvrable par le bouton « Guide ». Le « déjà vu » est une commodité de l'appareil
  * (localStorage) : sans elle, le guide s'affiche simplement de nouveau.
  */
-export function StartGuide() {
+/** `resetAt` : Bastien a réinitialisé l'accueil de ce profil ; un « déjà vu » plus ancien ne compte plus. */
+export function StartGuide({ resetAt = null }: { resetAt?: string | null }) {
   const say = useSay();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -19,7 +20,9 @@ export function StartGuide() {
   useEffect(() => {
     let seen = true;
     try {
-      seen = window.localStorage.getItem(STORAGE_KEY) === "1";
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      // « 1 » : vu avant que la date soit gardée ; sinon la date à laquelle il a été vu.
+      seen = stored != null && (resetAt == null || (stored !== "1" && stored >= resetAt));
     } catch {
       seen = false;
     }
@@ -27,13 +30,13 @@ export function StartGuide() {
     // Ouverture après le premier rendu (le rendu serveur ne connaît pas l'appareil).
     const frame = window.requestAnimationFrame(() => setOpen(true));
     return () => window.cancelAnimationFrame(frame);
-  }, []);
+  }, [resetAt]);
 
   function close() {
     setOpen(false);
     setStep(0);
     try {
-      window.localStorage.setItem(STORAGE_KEY, "1");
+      window.localStorage.setItem(STORAGE_KEY, new Date().toISOString());
     } catch {
       // Stockage indisponible (navigation privée) : le guide reviendra, sans gêner.
     }

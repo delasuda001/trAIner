@@ -14,6 +14,8 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { GoalPages } from "@/components/dashboard/essential";
 import { StartGuide } from "@/components/dashboard/start-guide";
+import { getRegistry } from "@/lib/profiles/context";
+import { z } from "zod";
 import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
 import { resolveViewMode, VIEW_MODE_KEY, viewModeSchema } from "@/lib/view-mode";
 
@@ -43,6 +45,7 @@ function renderHome(member: Member, query: string | null) {
   const weekday = formatDate(dashboard.today, "long");
   const register = registerForRole(member.role);
   const view = resolveViewMode(createAppStateRepository().get(VIEW_MODE_KEY, viewModeSchema), member.role, query);
+  const guideResetAt = getRegistry().getSetting(`guide_reset_${member.id}`, z.string());
   const zonesNote = zonesSourceSentence(dashboard.profile.zones, dashboard.profile.zonesSource);
   // Tête et cartes du haut identiques dans les deux vues : passer de l'une à l'autre ne fait rien bouger.
   const head = (
@@ -52,7 +55,7 @@ function renderHome(member: Member, query: string | null) {
         <h1 className="page-title">{say(register, "Ta forme", "Votre forme")}, <mark>{say(register, "ta prochaine séance", "votre prochaine séance")}</mark></h1>
       </div>
       <div className="home-actions">
-        <StartGuide />
+        <StartGuide resetAt={guideResetAt} />
         {outlook.status !== "ready" ? <CoachRequest endpoint="/api/coach/outlook" label="Demander l'avis du coach" queueLabel="Conseil du jour du coach" initialError={outlook.status === "error" ? outlook.message : null} gaugePopover /> : null}
       </div>
     </div>

@@ -234,6 +234,18 @@ export function createRegistry(connection: Database.Database, clock: () => Date 
       return toRecord(getRow(input.id) as ProfileRow);
     },
 
+    /**
+     * Accueil du premier jour pour un invité : appareils déconnectés (il se reconnecte avec prénom et code),
+     * page de bienvenue et mini-guide de nouveau affichés. Ni ses données ni ses analyses ne bougent.
+     */
+    resetOnboarding(id: string): void {
+      const row = getRow(id);
+      if (!row || row.role !== "guest") throw new Error("Seul un invité se réinitialise ainsi");
+      connection.prepare("UPDATE profiles SET onboarded_at = NULL WHERE id = ?").run(id);
+      registry.revokeAllSessions(id);
+      registry.setSetting(`guide_reset_${id}`, nowIso());
+    },
+
     /** Profil de test remis comme neuf : jamais connecté, accueil à revoir, appareils et invitations révoqués. */
     resetFirstVisit(id: string): void {
       const row = getRow(id);
