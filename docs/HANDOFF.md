@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 20 novembre 2026, soir (zones génériques recalées, allure facile réelle, contrôle de cohérence et relecture IA ; EN LIGNE depuis la branche `claude/project-thread-s7rvwt`, sauvegardes `data/backups/*-2026-11-20-avant-correctifs.db`).
+Dernière mise à jour : 20 novembre 2026, soir (zones génériques recalées, allure facile réelle, contrôle de cohérence et relecture IA ; EN LIGNE depuis la branche `claude/project-thread-p09am7` (= s7rvwt + page Paramètres en catégories repliables, 20 nov. 16 h 30 Toronto), sauvegardes `data/backups/*-2026-11-20-avant-correctifs.db`).
 
 ## En deux phrases
 
@@ -619,3 +619,15 @@ concernés ne bougent pas.
   appareils déconnectés, `onboarded_at` remis à zéro, `guide_reset_<id>` pour rouvrir le mini-guide ; données intactes) et
   « Remettre le quota de la semaine à zéro » (`quota_reset_<id>` : début de la fenêtre de 7 jours, consommation gardée en
   historique, aussi dans le plafond commun).
+
+## Page Paramètres en catégories (fil du 20 nov., soir)
+
+- `components/settings/settings-group.tsx` (catégorie `<details>` avec pastille d'état), `group-memory.tsx`
+  (ouvert/replié retenu par appareil dans localStorage ; `closedOnPhone` replie les profils sur téléphone),
+  `device-list.tsx` (3 appareils visibles, le reste replié). Admin : Profils, Coach et affichage (ouverts),
+  Accès, Consommation, Contrôle des analyses, Bilan et banc (repliés). Invité : Ton espace, Tes appareils,
+  Confidentialité. Aucun changement de comportement.
+- Captures des pages connectées sur le serveur d'essai : le lien d'invitation passe désormais par une page
+  de confirmation (POST) ; obtenir le cookie avec `curl --form-string t=<jeton> …/api/session/invitation`
+  puis le poser dans Chrome (CDP `Network.setCookie`).
+- Attention : ne jamais `pkill -P 1` sur next-server, cela arrête aussi le serveur en ligne (port 3000).
