@@ -539,6 +539,9 @@ concernés ne bougent pas.
   sorties longues hors course (effet aérobie < 4,5), conseil du jour qui porte l'alternative quand la
   récupération est dégradée (`outlook-v6`, contrôle `alternative_missing`).
 - Analyses de Charles régénérées (« préparation », ≈ 65 k tokens au total).
+- **Tutoiement pour tout le monde** (choix de Bastien, 20 nov. au soir) : `registerForRole` renvoie toujours
+  « tu », consigne du coach des invités au tutoiement, textes invités repassés au « tu ». Analyses de
+  Charles régénérées au « tu » ; celles de Marie s'affichent « à mettre à jour » jusqu'à son prochain clic.
 - **Profils types** (`lib/quality/archetypes.test.ts`) : entraîné à zones génériques, zones mesurées,
   zones personnalisées, débutant ; toute la chaîne puis le contrôleur, sans erreur.
 - Audit sur copie après correctifs : restent le profil de test (analyses reprises de Bastien au « tu »)
