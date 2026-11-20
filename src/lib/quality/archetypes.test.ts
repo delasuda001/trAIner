@@ -72,7 +72,7 @@ function runArchetype(archetype: Archetype): { zones: HeartRateZones; findings: 
   const zones = recalibration?.zones ?? archetype.zones;
   const all = archetype.runs.map((spec) => ({ spec, metrics: metricsFor(spec, zones, archetype.rest, recalibration != null) }));
   const easyRuns = all.filter((entry) => entry.metrics.family === "easy");
-  const easy: EasyBaseline | null = easyRuns.length ? { medianPaceS: median(easyRuns.map((entry) => entry.spec.paceS)) as number, medianHeartRateBpm: median(easyRuns.map((entry) => entry.spec.hr)) as number, runs: easyRuns.length } : null;
+  const easy: EasyBaseline | null = easyRuns.length ? { medianPaceS: median(easyRuns.map((entry) => entry.spec.paceS)) as number, medianHeartRateBpm: median(easyRuns.map((entry) => entry.spec.hr)) as number, runs: easyRuns.length, samples: easyRuns.map((entry) => ({ paceS: entry.spec.paceS, heartRateBpm: entry.spec.hr })) } : null;
   const perBeat = median(easyRuns.map((entry) => (1000 / entry.spec.paceS) / (entry.spec.hr - archetype.rest)));
   const longest = Math.max(...archetype.runs.map((run) => run.minutes * 60));
   const findings = all.flatMap(({ spec, metrics }) => {
@@ -109,7 +109,7 @@ describe("profils types : chaîne complète du moteur, puis contrôleur de cohé
     const metrics = metricsFor(easyRuns[0], zones, archetype.rest, false);
     const perBeat = median(easyRuns.map((run) => (1000 / run.paceS) / (run.hr - archetype.rest)));
     const prescription = prescribe({ metrics, zones, lactateThresholdSpeedMps: null, restingHeartRateBpm: archetype.rest, recentSpeedPerBeat: perBeat, movingTimeS: 3000, raceTargets: [], efforts: [], reference: null, context: null });
-    const findings = checkSession({ register: "vous", zones, easy: { medianPaceS: median(easyRuns.map((run) => run.paceS)) as number, medianHeartRateBpm: median(easyRuns.map((run) => run.hr)) as number, runs: easyRuns.length }, session: { kind: metrics.kind, family: metrics.family, movingTimeS: 3000, mainHeartRateBpm: metrics.mainHeartRateBpm, longestBeforeS: null }, verdict: { level: "in_line", efficiencyTone: "neutral", efficiencyGainSPerKm: 0, spreadSPerKm: null }, prescription, texts: [] });
-    expect(findings.map((finding) => finding.code)).toEqual(expect.arrayContaining(["z2_below_easy_runs", "easy_pace_far_slower"]));
+    const findings = checkSession({ register: "vous", zones, easy: { medianPaceS: median(easyRuns.map((run) => run.paceS)) as number, medianHeartRateBpm: median(easyRuns.map((run) => run.hr)) as number, runs: easyRuns.length, samples: easyRuns.map((run) => ({ paceS: run.paceS, heartRateBpm: run.hr })) }, session: { kind: metrics.kind, family: metrics.family, movingTimeS: 3000, mainHeartRateBpm: metrics.mainHeartRateBpm, longestBeforeS: null }, verdict: { level: "in_line", efficiencyTone: "neutral", efficiencyGainSPerKm: 0, spreadSPerKm: null }, prescription, texts: [] });
+    expect(findings.map((finding) => finding.code)).toEqual(expect.arrayContaining(["z2_below_easy_runs"]));
   });
 });

@@ -42,6 +42,8 @@ const INTERVAL_GAIN_THRESHOLD_S = 6;
 const CONTINUOUS_GAIN_THRESHOLD_S = 6;
 /** Part de la dispersion des comparables (écart-type) en deçà de laquelle un écart reste du bruit. */
 const NOISE_SHARE = 0.5;
+/** Au-delà (s/km à FC égale), l'écart vient de la mesure, pas de la forme : non concluant. */
+const IMPLAUSIBLE_GAIN_S_PER_KM = 45;
 /** Écart de dénivelé (m de D+ par km) au-delà duquel l'allure à FC égale n'est plus comparable. */
 const CLIMB_GAP_LIMIT_M_PER_KM = 10;
 
@@ -60,14 +62,20 @@ export function buildSignals(metrics: ActivityMetrics, deltas: ComparisonDeltas)
     // Nettement plus (ou moins) vallonnée que les comparables : l'allure ne se compare pas.
     const climbGap = deltas.noise?.climbGapMPerKm ?? null;
     const terrainBias = climbGap != null && Math.abs(climbGap) > CLIMB_GAP_LIMIT_M_PER_KM && Math.abs(gain) >= threshold;
-    const tone: SignalTone = terrainBias ? "neutral" : gain >= threshold ? "good" : gain <= -threshold ? "watch" : "neutral";
+    // Un écart de cette taille d'une sortie à l'autre n'est pas physiologique : FC faussée (capteur) ou parcours très différent.
+    const implausible = !terrainBias && Math.abs(gain) > IMPLAUSIBLE_GAIN_S_PER_KM;
+    const tone: SignalTone = terrainBias || implausible ? "neutral" : gain >= threshold ? "good" : gain <= -threshold ? "watch" : "neutral";
     const base = Math.abs(gain) < 2 ? `À FC égale, même allure que ${comparablesText(deltas.count)}` : `À FC égale, ${formatNumber(Math.abs(gain))} s/km plus ${gain > 0 ? "rapide" : "lent"} que ${comparablesText(deltas.count)}`;
     signals.push({
       key: "efficiency",
       tone,
       weight: 3,
       primary: true,
-      label: terrainBias ? `${base}, mais avec ${formatNumber(Math.abs(climbGap as number))} m de D+ par km de ${(climbGap as number) > 0 ? "plus" : "moins"} : écart non concluant.` : `${base}.`,
+      label: terrainBias
+        ? `${base}, mais avec ${formatNumber(Math.abs(climbGap as number))} m de D+ par km de ${(climbGap as number) > 0 ? "plus" : "moins"} : écart non concluant.`
+        : implausible
+          ? `${base} : écart trop grand pour être réel (FC du capteur probablement faussée), non concluant.`
+          : `${base}.`,
     });
   }
 

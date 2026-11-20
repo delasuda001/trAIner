@@ -1,4 +1,5 @@
 import { formatClock, formatDate, formatPace } from "@/lib/formatters";
+import { easyPaceRange, type EasySample } from "./easy-pace";
 import type { HeartRateZones } from "@/lib/source/types";
 import type { ActivityMetrics, SessionKind } from "./activity-metrics";
 import { easyAboveZ2Share, paceSeconds } from "./activity-metrics";
@@ -126,6 +127,8 @@ export type PrescriptionInput = {
   restingHeartRateBpm: number;
   /** Vitesse par battement au-dessus du repos des sorties faciles récentes (traduit une FC cible en allure). */
   recentSpeedPerBeat: number | null;
+  /** Footings des 12 semaines précédentes (allure, FC) : bornent l'allure facile à ce qui a été couru (voir easy-pace.ts). */
+  easySamples?: EasySample[];
   movingTimeS: number | null;
   raceTargets: RaceTarget[];
   /** Répétitions longues des 12 semaines précédant la séance. */
@@ -361,7 +364,11 @@ function continuousPlan(kind: SessionKind, input: PrescriptionInput): Plan | nul
   const high = kind === "recovery" ? z2Low + 5 : z2High;
   const perBeat = input.recentSpeedPerBeat ?? input.metrics.aerobic?.speedPerBeat ?? null;
   const toPace = (heartRate: number) => (perBeat ? paceSeconds(perBeat * (heartRate - input.restingHeartRateBpm)) : null);
-  return { target: { label: kind === "recovery" ? "récupération" : "endurance Z2", paceFastS: toPace(high - 3), paceSlowS: toPace(Math.max(low, high - 9)), heartRateLow: low, heartRateHigh: high, zone: kind === "recovery" ? "Z1–Z2" : "Z2" }, goal: null, recoveryS: null, maxReps: 1 };
+  const fast = toPace(high - 3);
+  const slow = toPace(Math.max(low, high - 9));
+  // Récupération : volontairement plus lente que les footings, pas de borne.
+  const anchored = kind !== "recovery" ? easyPaceRange(fast != null && slow != null ? { fastS: fast, slowS: slow } : null, { heartRateLow: Math.max(low, high - 12), heartRateHigh: high }, input.easySamples) : null;
+  return { target: { label: kind === "recovery" ? "récupération" : "endurance Z2", paceFastS: anchored?.fastS ?? fast, paceSlowS: anchored?.slowS ?? slow, heartRateLow: low, heartRateHigh: high, zone: kind === "recovery" ? "Z1–Z2" : "Z2" }, goal: null, recoveryS: null, maxReps: 1 };
 }
 
 /** « 3 × 2 km », « 6 × 800 m », « 8 × 70 s ». */
@@ -525,9 +532,17 @@ export function prescribe(input: PrescriptionInput): Prescription {
     if (mainHr != null && mainHr > target.heartRateHigh) execution.push(`Intensité : reste sous ${target.heartRateHigh} bpm (haut de ${target.zone})${hasPace ? `, soit ${band(target)}` : ""} ; ${mainHr} bpm de moyenne, ce n'est plus de l'endurance.`);
     // FC moyenne en Z2 mais une part notable du temps au-dessus : ralentir pour y rester.
     const aboveZ2 = mainHr != null && mainHr <= target.heartRateHigh ? easyAboveZ2Share(metrics) : null;
-    if (aboveZ2 != null) execution.push(`Intensité : ${Math.round(aboveZ2 * 100)} % du temps au-dessus de ${target.heartRateHigh} bpm (haut de ${target.zone}) ; ralentis dès que tu le dépasses${hasPace ? `, quitte à courir à ${pace(target.paceSlowS as number)}` : ""}.`);
-    if (halves?.driftPct != null && halves.driftPct > 5) execution.push(`Départ : ${hasPace ? `pars à ${pace(target.paceSlowS as number)}` : "pars plus lentement"} sur les 15 premières minutes pour limiter la dérive cardiaque (${decimal(halves.driftPct)} %).`);
-    const keep = mainHr != null && mainHr <= target.heartRateHigh && aboveZ2 == null ? `FC moyenne à ${mainHr} bpm, dans la cible ${target.heartRateLow}–${target.heartRateHigh} bpm : à reproduire.` : null;
+    // Une allure n'est citée pour ralentir que si elle est plus lente que celle courue (sinon la consigne se contredit).
+    const slowerHint = hasPace && mainS != null && (target.paceSlowS as number) > mainS;
+    if (aboveZ2 != null) execution.push(`Intensité : ${Math.round(aboveZ2 * 100)} % du temps au-dessus de ${target.heartRateHigh} bpm (haut de ${target.zone}) ; ralentis dès que tu le dépasses${slowerHint ? `, quitte à courir à ${pace(target.paceSlowS as number)}` : ""}.`);
+    const firstHalfS = halves ? paceSeconds(halves.first.speedMps) : null;
+    if (halves?.driftPct != null && halves.driftPct > 5) execution.push(`Départ : ${hasPace && firstHalfS != null && (target.paceSlowS as number) > firstHalfS ? `pars à ${pace(target.paceSlowS as number)}` : "pars plus lentement"} sur les 15 premières minutes pour limiter la dérive cardiaque (${decimal(halves.driftPct)} %).`);
+    const inTarget = mainHr != null && mainHr >= target.heartRateLow && mainHr <= target.heartRateHigh;
+    const keep = aboveZ2 != null || mainHr == null || mainHr > target.heartRateHigh
+      ? null
+      : inTarget
+        ? `FC moyenne à ${mainHr} bpm, dans la cible ${target.heartRateLow}–${target.heartRateHigh} bpm : à reproduire.`
+        : `FC moyenne à ${mainHr} bpm, sous la cible ${target.heartRateLow}–${target.heartRateHigh} bpm : sortie très facile, rien à corriger.`;
     const nextMinutes = metrics.family === "long" && minutes ? Math.min(120, roundTo(minutes * 1.1, 5)) : minutes;
     const format = nextMinutes ? `${nextMinutes} min` : "même durée";
     const cue = `${metrics.family === "long" ? "Sortie longue" : "Endurance"} de ${format} entre ${target.heartRateLow} et ${target.heartRateHigh} bpm${hasPace ? `, soit environ ${band(target)}` : ""} ; la fin aussi facile que le début.`;

@@ -24,6 +24,7 @@ export function easyBaselineAt(context: Pick<Context, "runs">, date: string): Ea
     medianPaceS: median(runs.map((run) => paceSeconds(run.metrics.mainSpeedMps as number))) as number,
     medianHeartRateBpm: median(runs.map((run) => run.metrics.mainHeartRateBpm as number)) as number,
     runs: runs.length,
+    samples: runs.map((run) => ({ paceS: paceSeconds(run.metrics.mainSpeedMps as number), heartRateBpm: run.metrics.mainHeartRateBpm as number })),
   };
 }
 
@@ -56,7 +57,7 @@ export function checkOutlook(dashboard: Dashboard, context: Pick<Context, "runs"
   const easy = easyBaselineAt(context, addDays(dashboard.today, 1));
   const findings: Finding[] = [];
   if (primary.target && ["endurance", "long", "recovery_run"].includes(primary.type) && primary.target.paceSlowMps) {
-    findings.push(...checkEasyTargets({ zones: dashboard.profile.zones, easy, easyTarget: { paceSlowS: paceSeconds(primary.target.paceSlowMps) } }, "séance proposée"));
+    findings.push(...checkEasyTargets({ zones: dashboard.profile.zones, easy, easyTarget: { paceSlowS: paceSeconds(primary.target.paceSlowMps), heartRateLow: primary.target.heartRateLow, heartRateHigh: primary.target.heartRateHigh } }, "séance proposée"));
   }
   const texts = [...stringsOf(dashboard.suggestion).map((text) => ({ where: "séance proposée", text })), ...stringsOf(coachOutput).map((text) => ({ where: "conseil du jour (Claude)", text }))];
   findings.push(...texts.flatMap((entry) => checkText(entry.text, entry.where, register)));

@@ -526,11 +526,18 @@ concernés ne bougent pas.
   second avis indépendant, un appel par profil (≤ 6 analyses récentes non relues + conseil du jour),
   plafonds du banc (usage kind `review`, compté avec bench/weekly). Bouton dans Paramètres ou
   `npm run quality -- --review [--scheduled]` (21 h – 5 h). Rien d'automatique installé.
+- **Allure facile réelle** (`engine/easy-pace.ts`, prescriptions et séance proposée, hors récupération) : ≥ 3
+  footings sur route courus aux FC du haut de la zone visée (6 semaines, sinon 12) → fourchette autour de
+  leur médiane (⅓ plus vite, ⅔ plus lent, 20–30 s/km) ; sinon modèle FC → allure borné à médiane des
+  footings + 30 s/km. Corrige Marie (consignes 50–60 s/km trop lentes).
+- « Ralentis, quitte à courir à X » / « pars à X » seulement si X est plus lent que l'allure courue ;
+  « FC sous la cible » dit comme tel (plus « dans la cible »).
+- Écart à FC égale > 45 s/km → non concluant (FC du capteur faussée) ; zones recalées : « seuil » exige
+  une FC moyenne en Z4, sinon tempo.
 - **Profils types** (`lib/quality/archetypes.test.ts`) : entraîné à zones génériques, zones mesurées,
   zones personnalisées, débutant ; toute la chaîne puis le contrôleur, sans erreur.
-- Constats du premier audit (copie des bases) : Marie, consignes faciles 55–93 s/km plus lentes que
-  ses footings (traduction FC → allure à revoir, non corrigé : à arbitrer) ; profil de test : analyses
-  reprises de Bastien au « tu » ; Charles : anciennes analyses (« 64 ms sous la plage », « de effort »).
+- Audit sur copie après correctifs : restent le profil de test (analyses reprises de Bastien au « tu »)
+  et les anciennes analyses de Charles (régénérées à la mise en ligne).
 
 ## État
 

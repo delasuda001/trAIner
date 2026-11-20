@@ -458,7 +458,7 @@ const LONG_REP_VO2_MARGIN_BPM = 8;
  */
 const GENERIC_ZONES_TEMPO_MARGIN_BPM = 5;
 
-export function classifyKind(input: { work: WorkBlock | null; zoneShares: ActivityMetrics["zoneShares"]; movingTimeS: number | null; distanceM: number | null; zones: HeartRateZones; trainingEffectLabel?: string | null; zonesRecalibrated?: boolean }): SessionKind {
+export function classifyKind(input: { work: WorkBlock | null; zoneShares: ActivityMetrics["zoneShares"]; movingTimeS: number | null; distanceM: number | null; zones: HeartRateZones; trainingEffectLabel?: string | null; zonesRecalibrated?: boolean; averageHeartRateBpm?: number | null }): SessionKind {
   const { work, zoneShares, zones } = input;
   const tempoBelow = zones.floors[3] - (zones.lactateThresholdHeartRateBpm == null ? GENERIC_ZONES_TEMPO_MARGIN_BPM : 0);
   if (work) {
@@ -495,8 +495,11 @@ export function classifyKind(input: { work: WorkBlock | null; zoneShares: Activi
   if (strict && duration >= LONG_RUN_S) return "long";
   const hardConfirmed = !strict || !zoneShares || high >= LABEL_CONFIRM_HIGH_SHARE;
   const tempoConfirmed = !strict || easyShare == null || easyShare < LABEL_TEMPO_MAX_EASY_SHARE;
+  // Zones recalées : « seuil » exige aussi une FC moyenne en Z4 (sinon c'est un tempo, souvent progressif).
+  const averageHr = input.averageHeartRateBpm ?? null;
+  const thresholdHrConfirmed = !strict || averageHr == null || averageHr >= input.zones.floors[3];
   if (!watchSaysEasy) {
-    if (high >= 0.5 || (watchSaysHard && hardConfirmed)) return "threshold";
+    if ((high >= 0.5 || (watchSaysHard && hardConfirmed)) && thresholdHrConfirmed) return "threshold";
     if ((high + moderate >= 0.5 || ((label === "TEMPO" || watchSaysHard) && tempoConfirmed)) && duration < 75 * 60) return "tempo";
   } else if (high >= 0.6) {
     return "threshold";
@@ -511,7 +514,7 @@ export function computeActivityMetrics(input: MetricsInput): ActivityMetrics {
   const windows = input.streams ? buildWindows(input.streams) : [];
   const work = detectWorkBlock(input.laps);
   const zoneShares = computeZoneShares(input);
-  const kind = classifyKind({ work, zoneShares, movingTimeS: input.movingTimeS, distanceM: input.distanceM, zones: input.zones, trainingEffectLabel: input.trainingEffectLabel, zonesRecalibrated: input.zonesRecalibrated });
+  const kind = classifyKind({ work, zoneShares, movingTimeS: input.movingTimeS, distanceM: input.distanceM, zones: input.zones, trainingEffectLabel: input.trainingEffectLabel, zonesRecalibrated: input.zonesRecalibrated, averageHeartRateBpm: input.averageHeartRateBpm });
   const end = input.streams?.timeS.at(-1) ?? 0;
   const main = input.streams && end > WARMUP_SKIP_S + 120 ? segmentAverage(input.streams, WARMUP_SKIP_S, end) : null;
   return {

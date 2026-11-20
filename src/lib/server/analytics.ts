@@ -20,6 +20,7 @@ import { median, present } from "@/lib/engine/stats";
 import { goalMarker, prescribe, type GoalMarker, type Prescription, type RecentEffort } from "@/lib/engine/prescription";
 import { suggestNextSession, type Suggestion, type WeekPlan } from "@/lib/engine/suggestion";
 import { estimateThreshold, type ThresholdEstimate } from "@/lib/engine/threshold";
+import type { EasySample } from "@/lib/engine/easy-pace";
 import { goalGap, longRunBenchmarkKm, nextLongRunKm, primaryGap, structuralLever, type GoalGap } from "@/lib/engine/goal-gap";
 import { classifyVerdict, type SessionVerdict } from "@/lib/engine/verdict";
 import { fallbackZones, recalibrateEasyZones, zonesFromHistory, type EasyZonesRecalibration, type ZonesSource } from "@/lib/engine/zones";
@@ -225,6 +226,13 @@ function sessionContext(current: AnalyzedRun, context: Context): SessionContext 
   };
 }
 
+/** Footings continus sur route des 12 semaines précédant `date` (allure et FC hors échauffement). */
+function easySamplesBefore(runs: AnalyzedRun[], date: string): EasySample[] {
+  return runs
+    .filter((run) => run.localDate < date && run.localDate >= addDays(date, -84) && run.sport === "running" && run.metrics.family === "easy" && run.metrics.structure === "continuous" && run.metrics.mainSpeedMps && run.metrics.mainHeartRateBpm)
+    .map((run) => ({ paceS: Math.round(1000 / (run.metrics.mainSpeedMps as number)), heartRateBpm: run.metrics.mainHeartRateBpm as number, localDate: run.localDate }));
+}
+
 /** Répétitions longues (VO2max) des 12 semaines précédant `date` : base de l'allure 5 km du moment. */
 function recentEfforts(runs: AnalyzedRun[], date: string): RecentEffort[] {
   return runs
@@ -286,6 +294,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     thresholdLabel: thresholdLabel(context.profile),
     restingHeartRateBpm: context.profile.restingHeartRateBpm,
     recentSpeedPerBeat: perBeat.length ? median(perBeat) : null,
+    easySamples: easySamplesBefore(history, current.localDate),
     movingTimeS: current.movingTimeS,
     raceTargets: context.goal?.raceTargets ?? [],
     efforts: recentEfforts(history, current.localDate),
@@ -436,6 +445,7 @@ function computeOutlook(context: Context): Outlook {
     zones: profile.zones,
     restingHeartRateBpm: profile.restingHeartRateBpm,
     recentSpeedPerBeat: recentPerBeat.length ? median(recentPerBeat) : null,
+    easySamples: easySamplesBefore(runs, addDays(today, 1)),
     lactateThresholdSpeedMps: profile.lactateThresholdSpeedMps,
     easyHeartRateBpm: progression.referenceHeartRateBpm,
     load,

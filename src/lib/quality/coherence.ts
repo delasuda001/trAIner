@@ -30,6 +30,8 @@ export type EasyBaseline = {
   /** FC médiane de ces mêmes sorties, bpm. */
   medianHeartRateBpm: number;
   runs: number;
+  /** Chaque sortie facile (allure s/km, FC bpm) : la consigne se compare à celles courues à la même FC. */
+  samples?: Array<{ paceS: number; heartRateBpm: number }>;
 };
 
 export type SessionCheckInput = {
@@ -68,22 +70,40 @@ function pace(seconds: number): string {
 /* ---------- Consignes et zones face à ce que la personne court ---------- */
 
 /** Cible facile d'une consigne (endurance, récupération, sortie longue en Z2), s'il y en a une. */
-export function easyTargetOf(prescription: Prescription | null): { paceSlowS: number | null } | null {
-  return prescription?.status === "ok" && /endurance|récupération/.test(prescription.target.label) ? { paceSlowS: prescription.target.paceSlowS } : null;
+export type EasyTarget = { paceSlowS: number | null; heartRateLow: number; heartRateHigh: number };
+
+export function easyTargetOf(prescription: Prescription | null): EasyTarget | null {
+  return prescription?.status === "ok" && /endurance|récupération/.test(prescription.target.label) ? { paceSlowS: prescription.target.paceSlowS, heartRateLow: prescription.target.heartRateLow, heartRateHigh: prescription.target.heartRateHigh } : null;
 }
 
-export function checkEasyTargets(input: Pick<SessionCheckInput, "zones" | "easy"> & { easyTarget: { paceSlowS: number | null } | null }, where = "consigne"): Finding[] {
+/** Marge de FC autour de la cible pour retenir les footings « courus à la même FC ». */
+const SAME_HR_MARGIN_BPM = 3;
+const MIN_SAME_HR_RUNS = 3;
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+export function checkEasyTargets(input: Pick<SessionCheckInput, "zones" | "easy"> & { easyTarget: EasyTarget | null }, where = "consigne"): Finding[] {
   const findings: Finding[] = [];
   const { easy, zones } = input;
   if (!easy || easy.runs < MIN_EASY_RUNS) return findings;
   if (easy.medianHeartRateBpm >= z2High(zones) + EASY_HR_ABOVE_Z2_BPM) {
     findings.push({ code: "z2_below_easy_runs", severity: "warning", where: "zones", message: `Ses footings tournent à ${Math.round(easy.medianHeartRateBpm)} bpm (médiane de ${easy.runs} sorties) pour une Z2 qui s'arrête à ${z2High(zones)} bpm : chaque footing sera jugé « trop intense ».` });
   }
-  const slow = input.easyTarget?.paceSlowS ?? null;
-  if (slow != null) {
-    const gap = slow - easy.medianPaceS;
-    if (gap > EASY_PACE_GAP_LIMIT_S) {
-      findings.push({ code: "easy_pace_far_slower", severity: "error", where, message: `Allure facile prescrite jusqu'à ${pace(slow)}, soit ${Math.round(gap)} s/km plus lent que ses footings (${pace(easy.medianPaceS)} en médiane sur ${easy.runs} sorties).` });
+  const target = input.easyTarget;
+  const slow = target?.paceSlowS ?? null;
+  if (target && slow != null) {
+    // Comparée à ce qu'il court à la MÊME FC (une sortie à FC basse est logiquement plus lente, et inversement).
+    const sameHr = (easy.samples ?? []).filter((sample) => sample.heartRateBpm >= target.heartRateLow - SAME_HR_MARGIN_BPM && sample.heartRateBpm <= target.heartRateHigh + SAME_HR_MARGIN_BPM);
+    if (sameHr.length >= MIN_SAME_HR_RUNS) {
+      const reference = median(sameHr.map((sample) => sample.paceS));
+      const gap = slow - reference;
+      if (gap > EASY_PACE_GAP_LIMIT_S) {
+        findings.push({ code: "easy_pace_far_slower", severity: "error", where, message: `Allure facile prescrite jusqu'à ${pace(slow)} pour ${target.heartRateLow}–${target.heartRateHigh} bpm, soit ${Math.round(gap)} s/km plus lent que ses footings courus à cette FC (${pace(reference)} en médiane sur ${sameHr.length} sorties).` });
+      }
     }
   }
   return findings;

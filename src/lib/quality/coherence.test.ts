@@ -4,7 +4,7 @@ import type { Prescription } from "@/lib/engine/prescription";
 import { checkClassification, checkEasyTargets, checkProgressionCue, checkRangeClaims, checkSession, checkText, checkVerdict, easyTargetOf } from "./coherence";
 
 const generic: HeartRateZones = { floors: [96, 115, 134, 154, 173], maxHeartRateBpm: 192, lactateThresholdHeartRateBpm: null, method: "HR_MAX" };
-const easy = { medianPaceS: 310, medianHeartRateBpm: 142, runs: 11 };
+const easy = { medianPaceS: 310, medianHeartRateBpm: 142, runs: 11, samples: [139, 142, 144, 144, 141, 145, 139, 148, 132, 119, 118].map((heartRateBpm, index) => ({ heartRateBpm, paceS: [330, 320, 305, 300, 332, 315, 342, 325, 345, 388, 371][index] })) };
 
 function easyPrescription(paceSlowS: number): Prescription {
   const target = { label: "endurance Z2", paceFastS: paceSlowS - 27, paceSlowS, heartRateLow: 115, heartRateHigh: 133, zone: "Z2" };
@@ -12,10 +12,19 @@ function easyPrescription(paceSlowS: number): Prescription {
 }
 
 describe("consignes faciles face aux footings de la personne", () => {
-  it("cas d'origine : Z2 générique sous ses footings et allure facile une minute plus lente", () => {
+  it("cas d'origine : Z2 générique sous ses footings", () => {
     const findings = checkEasyTargets({ zones: generic, easy, easyTarget: easyTargetOf(easyPrescription(405)) });
-    expect(findings.map((finding) => finding.code)).toEqual(["z2_below_easy_runs", "easy_pace_far_slower"]);
-    expect(findings[1].message).toContain("95 s/km plus lent");
+    expect(findings.map((finding) => finding.code)).toEqual(["z2_below_easy_runs"]);
+  });
+
+  it("allure prescrite comparée aux footings courus à la même FC", () => {
+    const recalibrated: HeartRateZones = { ...generic, floors: [96, 130, 149, 154, 173] };
+    const slowTarget = { paceSlowS: 405, heartRateLow: 130, heartRateHigh: 148 };
+    const findings = checkEasyTargets({ zones: recalibrated, easy, easyTarget: slowTarget });
+    expect(findings.map((finding) => finding.code)).toEqual(["easy_pace_far_slower"]);
+    expect(findings[0].message).toContain("à cette FC");
+    // Sans footing couru dans cette plage de FC : pas de jugement.
+    expect(checkEasyTargets({ zones: recalibrated, easy, easyTarget: { ...slowTarget, heartRateLow: 100, heartRateHigh: 110 } })).toEqual([]);
   });
 
   it("zones recalées et allure cohérente : rien", () => {

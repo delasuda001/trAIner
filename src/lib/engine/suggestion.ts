@@ -1,4 +1,5 @@
 import { addDays, daysBetween } from "@/lib/dates";
+import { easyPaceRange, type EasySample } from "./easy-pace";
 import { formatDate, formatNumber } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 import type { SessionFamily, SessionKind } from "./activity-metrics";
@@ -105,6 +106,8 @@ export type SuggestionInput = {
   restingHeartRateBpm: number;
   /** Efficacité aérobie récente (m/s par bpm au-dessus du repos), pour traduire une FC cible en allure. */
   recentSpeedPerBeat: number | null;
+  /** Footings des 12 dernières semaines (allure, FC) : bornent l'allure facile proposée (voir easy-pace.ts). */
+  easySamples?: EasySample[];
   /** FC habituelle de ses sorties faciles (centre de la cible en endurance). */
   easyHeartRateBpm: number | null;
   lactateThresholdSpeedMps: number | null;
@@ -159,7 +162,12 @@ function easyTarget(input: SuggestionInput, zone: 1 | 2 = 2): SessionTarget {
   const center = zone === 1 ? zoneLow : Math.min(zoneHigh - 3, Math.max(zoneLow + 3, input.easyHeartRateBpm ?? Math.round((zoneLow + zoneHigh) / 2)));
   const low = Math.max(zone === 1 ? input.zones.floors[0] : zoneLow, center - 5);
   const high = Math.min(zoneHigh, center + 5);
-  const pace = input.recentSpeedPerBeat ? paceAround(input.recentSpeedPerBeat * (center - input.restingHeartRateBpm), EASY_PACE_HALF_RANGE_S) : { paceFastMps: null, paceSlowMps: null };
+  const modelled = input.recentSpeedPerBeat ? paceAround(input.recentSpeedPerBeat * (center - input.restingHeartRateBpm), EASY_PACE_HALF_RANGE_S) : null;
+  // Récupération (zone 1) : volontairement plus lente que les footings, modèle seul.
+  const range = zone === 1 ? null : easyPaceRange(modelled ? { fastS: 1000 / modelled.paceFastMps, slowS: 1000 / modelled.paceSlowMps } : null, { heartRateLow: low, heartRateHigh: high }, input.easySamples);
+  const pace = range && (!modelled || Math.round(range.slowS) !== Math.round(1000 / modelled.paceSlowMps) || Math.round(range.fastS) !== Math.round(1000 / modelled.paceFastMps))
+    ? { paceFastMps: round(1000 / range.fastS, 3), paceSlowMps: round(1000 / range.slowS, 3) }
+    : (modelled ?? { paceFastMps: null, paceSlowMps: null });
   return { zone: zone === 1 ? "Z1–Z2" : "Z2", heartRateLow: low, heartRateHigh: high, ...pace };
 }
 
