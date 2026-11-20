@@ -32,6 +32,9 @@ import { BenchButton } from "@/components/settings/bench-button";
 import { QualityPanel } from "@/components/settings/quality-panel";
 import { reviewIsRunning } from "@/lib/server/quality-review-service";
 import { readReportIndex, readReportMarkdown } from "@/lib/bench/store";
+import { SettingsGroup } from "@/components/settings/settings-group";
+import { GroupMemory } from "@/components/settings/group-memory";
+import { BarChart3, FlaskConical, Globe, Lock, ShieldCheck, SlidersHorizontal, Smartphone, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -110,26 +113,19 @@ async function adminSections() {
   const url = publicUrl("");
   const logins = registry.listLogins(40);
   const findings = registry.listQualityFindings({ limit: 200 }).map((finding) => ({ id: finding.id, profileName: names.get(finding.profileId) ?? finding.profileId, subjectKind: finding.subjectKind, subjectId: finding.subjectId, source: finding.source, code: finding.code, severity: finding.severity, where: finding.where, message: finding.message, createdAt: finding.createdAt }));
-  return (
-    <>
-      <section className="section">
-        <div className="section-head">
-          <h2 className="section-title">Contrôle des analyses</h2>
-          <span className="section-note">règles vérifiées en code après chaque analyse, et relecture IA par lots ; jamais visible des invités</span>
-        </div>
-        <div className="card"><QualityPanel findings={findings} reviewRunning={reviewIsRunning()} /></div>
-      </section>
-      <section className="section">
-        <div className="section-head">
-          <h2 className="section-title">Profils du test</h2>
-          <span className="section-note">chacun a sa base, sa clé Garmin et son coach ; tu ne vois que leur consommation</span>
-        </div>
-        <ProfilesAdmin profiles={profiles} publicUrlConfigured={url.configured} prepareEstimate={PREPARATION_ESTIMATE} testCoachSimulated={testCoachSimulated()} />
-      </section>
-      <section className="section grid grid-main-side" style={{ alignItems: "start" }}>
+  const guests = records.filter((record) => record.role === "guest" && record.testOf == null).length;
+  const suspended = guestsSuspended();
+  return {
+    profilesBadge: `${guests} invité${guests > 1 ? "s" : ""}`,
+    accessBadge: suspended ? "invités coupés" : url.configured ? "ouvert" : "local seulement",
+    qualityBadge: findings.length ? `${findings.length >= 200 ? "200+" : findings.length} constat${findings.length > 1 ? "s" : ""}` : "aucun constat",
+    quality: <div className="card"><QualityPanel findings={findings} reviewRunning={reviewIsRunning()} /></div>,
+    profiles: <ProfilesAdmin profiles={profiles} publicUrlConfigured={url.configured} prepareEstimate={PREPARATION_ESTIMATE} testCoachSimulated={testCoachSimulated()} />,
+    access: (
+      <div className="grid grid-main-side">
         <div className="card">
           <h2 className="section-title">Accès depuis l&apos;extérieur</h2>
-          <AccessPanel suspended={guestsSuspended()} publicUrl={url.configured ? url.url : null} guestsWeeklyCap={guestsWeeklyCap()} guestsWeekUsed={guestsWeekUsed} trainingOptOut={trainingOptOut()} />
+          <AccessPanel suspended={suspended} publicUrl={url.configured ? url.url : null} guestsWeeklyCap={guestsWeeklyCap()} guestsWeekUsed={guestsWeekUsed} trainingOptOut={trainingOptOut()} />
         </div>
         <div className="card">
           <h2 className="section-title">Journal des connexions</h2>
@@ -146,9 +142,9 @@ async function adminSections() {
             </div>
           ) : <p className="muted small">Aucune connexion pour l&apos;instant.</p>}
         </div>
-      </section>
-    </>
-  );
+      </div>
+    ),
+  };
 }
 
 /** Vue d'un invité : sa consommation et ses appareils, rien sur les autres profils. */
@@ -167,28 +163,37 @@ function renderGuest(member: Member) {
         </div>
       </div>
       <AccountRow name={member.name} />
-      <div className="grid grid-2" style={{ alignItems: "start" }}>
-        <section className="card">
-          <h2 className="section-title">Le coach</h2>
-          <p className="small" style={{ marginTop: 6 }}>Chaque commentaire du coach (analyse de séance, conseil, réponse) passe par l&apos;abonnement Claude de Bastien. Une analyse déjà faite se relit à volonté.</p>
-          <CoachGaugeLine />
-        </section>
-        <section className="card">
-          <h2 className="section-title">Tableau de bord</h2>
-          <p className="small" style={{ margin: "6px 0 10px" }}>Vue essentielle (jauges et calendrier) ou complète (toutes les cartes).</p>
-          <ViewPicker current={resolveViewMode(createAppStateRepository().get(VIEW_MODE_KEY, viewModeSchema), member.role)} />
-        </section>
-        <section className="card">
-          <h2 className="section-title">Tes appareils connectés</h2>
-          <MyDevices devices={devices} />
-          <div className="other-device">
-            <div className="fact-label">Ouvrir Sillage sur un autre appareil</div>
-            <p className="small" style={{ margin: "4px 0 0" }}>Va sur {address ? <strong className="mono">{address.replace(/^https?:\/\//, "")}</strong> : "la même adresse"}, puis entre ton prénom <strong>{member.name}</strong> et ton code {record?.guestCode ? <strong className="mono">{record.guestCode}</strong> : "(demande-le à Bastien)"}. Une seule fois par appareil.</p>
+      <GroupMemory scope="invite" />
+      <div className="settings-groups">
+        <SettingsGroup id="espace" title="Ton espace" note="le coach et l'affichage du tableau de bord" icon={SlidersHorizontal} accent="pink" open>
+          <div className="grid grid-2">
+            <section className="card">
+              <h2 className="section-title">Le coach</h2>
+              <p className="small" style={{ marginTop: 6 }}>Chaque commentaire du coach (analyse de séance, conseil, réponse) passe par l&apos;abonnement Claude de Bastien. Une analyse déjà faite se relit à volonté.</p>
+              <CoachGaugeLine />
+            </section>
+            <section className="card">
+              <h2 className="section-title">Tableau de bord</h2>
+              <p className="small" style={{ margin: "6px 0 10px" }}>Vue essentielle (jauges et calendrier) ou complète (toutes les cartes).</p>
+              <ViewPicker current={resolveViewMode(createAppStateRepository().get(VIEW_MODE_KEY, viewModeSchema), member.role)} />
+            </section>
           </div>
-          <p className="muted small" style={{ marginTop: 10 }}>Un appareil perdu ? Déconnecte-le ici, ou préviens Bastien. <Link href="/bienvenue">Revoir l&apos;accueil du test</Link></p>
-        </section>
+        </SettingsGroup>
+        <SettingsGroup id="appareils" title="Tes appareils" note="où tu es connecté, et comment ouvrir Sillage ailleurs" badge={`${devices.length} appareil${devices.length > 1 ? "s" : ""}`} icon={Smartphone} accent="blue" open>
+          <section className="card">
+            <h2 className="section-title">Tes appareils connectés</h2>
+            <MyDevices devices={devices} />
+            <div className="other-device">
+              <div className="fact-label">Ouvrir Sillage sur un autre appareil</div>
+              <p className="small" style={{ margin: "4px 0 0" }}>Va sur {address ? <strong className="mono">{address.replace(/^https?:\/\//, "")}</strong> : "la même adresse"}, puis entre ton prénom <strong>{member.name}</strong> et ton code {record?.guestCode ? <strong className="mono">{record.guestCode}</strong> : "(demande-le à Bastien)"}. Une seule fois par appareil.</p>
+            </div>
+            <p className="muted small" style={{ marginTop: 10 }}>Un appareil perdu ? Déconnecte-le ici, ou préviens Bastien. <Link href="/bienvenue">Revoir l&apos;accueil du test</Link></p>
+          </section>
+        </SettingsGroup>
+        <SettingsGroup id="donnees" title="Confidentialité" note="où sont gardées tes données et ce que voit Bastien" icon={Lock} accent="green">
+          <PrivacyNotice trainingOptOut={trainingOptOut()} />
+        </SettingsGroup>
       </div>
-      <section className="section"><PrivacyNotice trainingOptOut={trainingOptOut()} /></section>
     </>
   );
 }
@@ -222,139 +227,142 @@ async function renderAdmin(member: Member) {
         </div>
       </div>
       <AccountRow name={member.name} />
-      {admin}
-
-      <div className="grid grid-main-side" style={{ alignItems: "start" }}>
-        <section className="card">
-          <h2 className="section-title">Tableau de bord</h2>
-          <p className="small" style={{ margin: "6px 0 10px" }}>Ta vue : essentielle (jauges et calendrier) ou complète. Celle des invités se règle de leur côté (essentielle par défaut).</p>
-          <ViewPicker current={resolveViewMode(createAppStateRepository().get(VIEW_MODE_KEY, viewModeSchema), member.role)} />
-        </section>
-        <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-pink)" }}>
-          <h2 className="section-title">Modèle du coach</h2>
-          <p className="muted small" style={{ margin: "4px 0 12px" }}>Utilisé pour les analyses, le conseil du jour et « Demander au coach ». Actuellement : <strong>{modelLabel(model) === model ? model : modelLabel(model)}</strong>.</p>
-          <ModelPicker current={model} />
-        </section>
-        <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-orange)" }}>
-          <h2 className="section-title">Quota de l&apos;abonnement</h2>
-          {rateLimit ? (
-            <div className="facts" style={{ marginTop: 10 }}>
-              <Fact label="État" value={rateLimit.status === "allowed" ? "OK" : rateLimit.status === "allowed_warning" ? "Proche de la limite" : "Limite atteinte"} />
-              {rateLimit.utilization != null ? <Fact label={`Utilisé (${WINDOW_LABELS[rateLimit.window ?? ""] ?? rateLimit.window ?? "fenêtre"})`} value={`${Math.round(rateLimit.utilization * (rateLimit.utilization <= 1 ? 100 : 1))} %`} /> : null}
-              {rateLimit.resetsAt ? <Fact label="Se réinitialise" value={generatedAtLabel(rateLimit.resetsAt)} /> : null}
-            </div>
-          ) : (
-            <p className="small" style={{ marginTop: 8 }}>Claude n&apos;a pas encore communiqué d&apos;état de quota à l&apos;application. Le suivi complet de ton abonnement (toutes utilisations confondues) est dans Claude : <span className="mono">Paramètres → Utilisation</span> sur claude.ai ou dans l&apos;application, ou la commande <span className="mono">/usage</span> dans Claude Code.</p>
-          )}
-          {rateLimit ? <p className="muted small" style={{ marginTop: 8 }}>Relevé le {generatedAtLabel(rateLimit.seenAt)}. Le quota est partagé avec ton usage de Claude ailleurs ; le détail complet est dans Claude : Paramètres → Utilisation, ou <span className="mono">/usage</span> dans Claude Code.</p> : null}
-        </section>
-      </div>
-
-      <section className="section">
-        <div className="section-head">
-          <h2 className="section-title">Ta consommation (analyses, conseils, questions)</h2>
-          <span className="section-note">{first ? `suivi depuis le ${formatDate(first.createdAt, "long")}` : "suivi démarré : aucun appel enregistré pour l'instant"}</span>
-        </div>
-        <div className="grid grid-3">
-          <TotalsCard title="Aujourd'hui" totals={summary.today} />
-          <TotalsCard title="7 derniers jours" totals={summary.last7Days} />
-          <TotalsCard title="30 derniers jours" totals={summary.last30Days} />
-        </div>
-      </section>
-
-      <section className="section">
-        <div className="section-head">
-          <h2 className="section-title">Bilan et banc de tests</h2>
-          <span className="section-note">compté à part de ton usage · plafonds : {tokens(budget.nightTokens)} par lancement, {tokens(budget.weekTokens)} sur 7 jours</span>
-        </div>
-        <div className="grid grid-3">
-          <TotalsCard title="7 derniers jours" totals={automaticSummary.last7Days} />
-          <TotalsCard title="30 derniers jours" totals={automaticSummary.last30Days} />
-          <div className="card" style={{ ["--shadow-color" as string]: "var(--sl-orange)" }}>
-            <div className="card-eyebrow">Plafond de la semaine</div>
-            <div className="kpi-value">{Math.round((weekBudgetUsed / budget.weekTokens) * 100)}<span className="unit">%</span></div>
-            <div className="kpi-compare">{tokens(weekBudgetUsed)} sur {tokens(budget.weekTokens)} (entrée + sortie + écriture du cache)</div>
-            <div className="kpi-meaning">Part de l&apos;automatique sur 30 jours : {summary.last30Days.totalTokens + automaticSummary.last30Days.totalTokens ? Math.round((automaticSummary.last30Days.totalTokens / (summary.last30Days.totalTokens + automaticSummary.last30Days.totalTokens)) * 100) : 0} % de tous les tokens de l&apos;application.</div>
+      <GroupMemory scope="admin" />
+      <div className="settings-groups">
+        <SettingsGroup id="profils" title="Profils du test" note="chacun a sa base, sa clé Garmin et son coach ; tu ne vois que leur consommation" badge={admin.profilesBadge} icon={Users} accent="blue" open closedOnPhone>
+          {admin.profiles}
+        </SettingsGroup>
+        <SettingsGroup id="coach" title="Coach et affichage" note="modèle du coach, vue du tableau de bord, quota de l'abonnement" badge={modelLabel(model)} icon={SlidersHorizontal} accent="pink" open>
+          <div className="grid grid-3">
+            <section className="card">
+              <h2 className="section-title">Tableau de bord</h2>
+              <p className="small" style={{ margin: "6px 0 10px" }}>Ta vue : essentielle (jauges et calendrier) ou complète. Celle des invités se règle de leur côté (essentielle par défaut).</p>
+              <ViewPicker current={resolveViewMode(createAppStateRepository().get(VIEW_MODE_KEY, viewModeSchema), member.role)} />
+            </section>
+            <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-pink)" }}>
+              <h2 className="section-title">Modèle du coach</h2>
+              <p className="muted small" style={{ margin: "4px 0 12px" }}>Utilisé pour les analyses, le conseil du jour et « Demander au coach ». Actuellement : <strong>{modelLabel(model) === model ? model : modelLabel(model)}</strong>.</p>
+              <ModelPicker current={model} />
+            </section>
+            <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-orange)" }}>
+              <h2 className="section-title">Quota de l&apos;abonnement</h2>
+              {rateLimit ? (
+                <div className="facts" style={{ marginTop: 10 }}>
+                  <Fact label="État" value={rateLimit.status === "allowed" ? "OK" : rateLimit.status === "allowed_warning" ? "Proche de la limite" : "Limite atteinte"} />
+                  {rateLimit.utilization != null ? <Fact label={`Utilisé (${WINDOW_LABELS[rateLimit.window ?? ""] ?? rateLimit.window ?? "fenêtre"})`} value={`${Math.round(rateLimit.utilization * (rateLimit.utilization <= 1 ? 100 : 1))} %`} /> : null}
+                  {rateLimit.resetsAt ? <Fact label="Se réinitialise" value={generatedAtLabel(rateLimit.resetsAt)} /> : null}
+                </div>
+              ) : (
+                <p className="small" style={{ marginTop: 8 }}>Claude n&apos;a pas encore communiqué d&apos;état de quota à l&apos;application. Le suivi complet de ton abonnement (toutes utilisations confondues) est dans Claude : <span className="mono">Paramètres → Utilisation</span> sur claude.ai ou dans l&apos;application, ou la commande <span className="mono">/usage</span> dans Claude Code.</p>
+              )}
+              {rateLimit ? <p className="muted small" style={{ marginTop: 8 }}>Relevé le {generatedAtLabel(rateLimit.seenAt)}. Le quota est partagé avec ton usage de Claude ailleurs ; le détail complet est dans Claude : Paramètres → Utilisation, ou <span className="mono">/usage</span> dans Claude Code.</p> : null}
+            </section>
           </div>
-        </div>
-        <div className="card" style={{ marginTop: 16 }}>
-          <h3 className="section-title" style={{ fontSize: 18 }}>Le coach relit sa semaine</h3>
-          <p className="small" style={{ marginTop: 4 }}>Outil de réglage, retiré du tableau de bord : un bilan Opus confronte chaque semaine les analyses et consignes à ce qui a été couru, et propose des règles à tester.</p>
-          <p className="small" style={{ marginTop: 8 }}><Link href="/bilan" className="btn">Ouvrir les bilans</Link> <a href="/api/weekly-review/export" className="btn" download>Exporter en Markdown</a></p>
-        </div>
-        <div className="card" style={{ marginTop: 16 }}>
-          <h3 className="section-title" style={{ fontSize: 18 }}>Banc de tests</h3>
-          <p className="small" style={{ marginTop: 4 }}>{pending.length ? `${pending.length} tâche(s) en attente (reprises à chaque lancement, dans la limite des plafonds).` : "Rien en attente : toutes les variantes ont été évaluées."} Le banc arrête aussi si la fenêtre de 5 h dépasse {Math.round(budget.maxUtilization.fiveHour * 100)} % ou la semaine {Math.round(budget.maxUtilization.sevenDay * 100)} %{windows.length ? ` (dernier relevé : ${windows.map((window) => `${WINDOW_LABELS[window.window ?? ""] ?? window.window} ${window.utilization != null ? `${Math.round(window.utilization * (window.utilization <= 1 ? 100 : 1))} %` : "—"}`).join(", ")})` : ""}. Il propose, rien n&apos;est appliqué sans validation.</p>
-          <BenchButton pending={pending.length} running={benchIsRunning()} />
-          <p className="muted small" style={{ marginTop: 6 }}>Lance-le quand ton quota est disponible. Pour un budget plus large : <span className="mono">npm run bench -- --budget=150000</span>.</p>
-          {reports.length ? (
-            <div className="list" style={{ marginTop: 8 }}>
-              {reports.map((report) => (
-                <details key={report.file} className="more">
-                  <summary><strong>{report.variant}</strong> · {formatDate(report.date, "medium")} · {report.recommendation} <span className="muted small">— {report.why}</span></summary>
-                  <pre className="more-body" style={{ whiteSpace: "pre-wrap", fontSize: 12.5 }}>{readReportMarkdown(report.file) ?? "Rapport introuvable."}</pre>
-                </details>
-              ))}
-            </div>
-          ) : <p className="muted small" style={{ marginTop: 6 }}>Pas encore de rapport.</p>}
-        </div>
-      </section>
-
-      <div className="grid grid-main-side section" style={{ alignItems: "start" }}>
-        <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-blue)" }}>
-          <div className="section-head">
-            <h2 className="section-title">Derniers appels</h2>
-            <span className="section-note">chiffres renvoyés par Claude · « refusée » = réponse rejetée par le contrôle des chiffres, puis refaite</span>
+        </SettingsGroup>
+        <SettingsGroup id="acces" title="Accès et connexions" note="ouverture aux invités depuis l'extérieur, plafond commun, journal des connexions" badge={admin.accessBadge} icon={Globe} accent="orange">
+          {admin.access}
+        </SettingsGroup>
+        <SettingsGroup id="consommation" title="Ta consommation" note="analyses, conseils et questions ; derniers appels et moyennes" badge={`aujourd'hui ${tokens(summary.today.totalTokens)}`} icon={BarChart3} accent="green">
+          <p className="section-note" style={{ marginTop: -6 }}>{first ? `suivi depuis le ${formatDate(first.createdAt, "long")}` : "suivi démarré : aucun appel enregistré pour l'instant"}</p>
+          <div className="grid grid-3">
+            <TotalsCard title="Aujourd'hui" totals={summary.today} />
+            <TotalsCard title="7 derniers jours" totals={summary.last7Days} />
+            <TotalsCard title="30 derniers jours" totals={summary.last30Days} />
           </div>
-          {records.length ? (
-            <div className="table-wrap">
-              <table className="data">
-                <thead><tr><th>Quand</th><th>Type</th><th>Modèle</th><th>Entrée</th><th>Sortie</th><th>Cache lu</th><th>Durée</th><th>État</th></tr></thead>
-                <tbody>
-                  {records.slice(0, 25).map((record) => (
-                    <tr key={record.id}>
-                      <td>{generatedAtLabel(record.createdAt)}</td>
-                      <td>{KIND_LABELS[record.kind] ?? record.kind}</td>
-                      <td>{modelLabel(record.model)}</td>
-                      <td>{tokens(record.inputTokens)}</td>
-                      <td>{tokens(record.outputTokens)}</td>
-                      <td>{tokens(record.cacheReadTokens)}</td>
-                      <td>{record.durationMs ? `${formatNumber(record.durationMs / 1000, 0)} s` : "—"}</td>
-                      <td className="muted">{OUTCOME_LABELS[record.outcome] ?? record.outcome}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : <p className="muted">Aucun appel depuis le démarrage du suivi. Les appels apparaîtront ici dès la prochaine analyse ou question.</p>}
-        </section>
-        <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-green)" }}>
-          <h2 className="section-title">En moyenne</h2>
-          <div className="table-wrap" style={{ marginTop: 10 }}>
-            <table className="data">
-              <thead><tr><th></th><th>Entrée</th><th>Sortie</th><th>Cache</th></tr></thead>
-              <tbody>
-                {([["Par analyse de séance", summary.averagePerAnalysis], ["Par question", summary.averagePerQuestion]] as const).map(([label, value]) => (
-                  <tr key={label}><td className="muted">{label}{value ? ` (${value.calls})` : ""}</td><td>{value ? tokens(value.inputTokens) : "—"}</td><td>{value ? tokens(value.outputTokens) : "—"}</td><td>{value ? tokens(value.cacheTokens) : "—"}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="small" style={{ marginTop: 10 }}>Réponses refusées par le contrôle des chiffres : <strong className="num">{summary.rejectionRate != null ? `${Math.round(summary.rejectionRate * 100)} %` : "—"}</strong>{summary.rejectedCalls ? ` (${summary.rejectedCalls} sur 30 jours)` : ""}. <span className="muted">Une réponse refusée est redemandée une fois, en signalant à Claude le chiffre en cause ; tu ne vois que la réponse validée.</span></p>
-          <h3 className="fact-label" style={{ marginTop: 18 }}>Répartition sur 30 jours</h3>
-          <div className="list" style={{ marginTop: 6 }}>
-            {summary.byKind.map((entry) => (
-              <div key={entry.kind} className="row-between" style={{ padding: "7px 0", borderTop: "1.5px solid var(--sl-grid)" }}>
-                <span>{KIND_LABELS[entry.kind] ?? entry.kind} <span className="muted small">· {entry.calls} appel{entry.calls > 1 ? "s" : ""}</span></span>
-                <strong className="num">{tokens(entry.totalTokens)}</strong>
+          <div className="grid grid-main-side">
+            <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-blue)" }}>
+              <div className="section-head">
+                <h2 className="section-title">Derniers appels</h2>
+                <span className="section-note">chiffres renvoyés par Claude · « refusée » = réponse rejetée par le contrôle des chiffres, puis refaite</span>
               </div>
-            ))}
-            {!summary.byKind.length ? <p className="muted small">—</p> : null}
+              {records.length ? (
+                <div className="table-wrap">
+                  <table className="data">
+                    <thead><tr><th>Quand</th><th>Type</th><th>Modèle</th><th>Entrée</th><th>Sortie</th><th>Cache lu</th><th>Durée</th><th>État</th></tr></thead>
+                    <tbody>
+                      {records.slice(0, 25).map((record) => (
+                        <tr key={record.id}>
+                          <td>{generatedAtLabel(record.createdAt)}</td>
+                          <td>{KIND_LABELS[record.kind] ?? record.kind}</td>
+                          <td>{modelLabel(record.model)}</td>
+                          <td>{tokens(record.inputTokens)}</td>
+                          <td>{tokens(record.outputTokens)}</td>
+                          <td>{tokens(record.cacheReadTokens)}</td>
+                          <td>{record.durationMs ? `${formatNumber(record.durationMs / 1000, 0)} s` : "—"}</td>
+                          <td className="muted">{OUTCOME_LABELS[record.outcome] ?? record.outcome}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <p className="muted">Aucun appel depuis le démarrage du suivi. Les appels apparaîtront ici dès la prochaine analyse ou question.</p>}
+            </section>
+            <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-green)" }}>
+              <h2 className="section-title">En moyenne</h2>
+              <div className="table-wrap" style={{ marginTop: 10 }}>
+                <table className="data">
+                  <thead><tr><th></th><th>Entrée</th><th>Sortie</th><th>Cache</th></tr></thead>
+                  <tbody>
+                    {([["Par analyse de séance", summary.averagePerAnalysis], ["Par question", summary.averagePerQuestion]] as const).map(([label, value]) => (
+                      <tr key={label}><td className="muted">{label}{value ? ` (${value.calls})` : ""}</td><td>{value ? tokens(value.inputTokens) : "—"}</td><td>{value ? tokens(value.outputTokens) : "—"}</td><td>{value ? tokens(value.cacheTokens) : "—"}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="small" style={{ marginTop: 10 }}>Réponses refusées par le contrôle des chiffres : <strong className="num">{summary.rejectionRate != null ? `${Math.round(summary.rejectionRate * 100)} %` : "—"}</strong>{summary.rejectedCalls ? ` (${summary.rejectedCalls} sur 30 jours)` : ""}. <span className="muted">Une réponse refusée est redemandée une fois, en signalant à Claude le chiffre en cause ; tu ne vois que la réponse validée.</span></p>
+              <h3 className="fact-label" style={{ marginTop: 18 }}>Répartition sur 30 jours</h3>
+              <div className="list" style={{ marginTop: 6 }}>
+                {summary.byKind.map((entry) => (
+                  <div key={entry.kind} className="row-between" style={{ padding: "7px 0", borderTop: "1.5px solid var(--sl-grid)" }}>
+                    <span>{KIND_LABELS[entry.kind] ?? entry.kind} <span className="muted small">· {entry.calls} appel{entry.calls > 1 ? "s" : ""}</span></span>
+                    <strong className="num">{tokens(entry.totalTokens)}</strong>
+                  </div>
+                ))}
+                {!summary.byKind.length ? <p className="muted small">—</p> : null}
+              </div>
+              <p className="muted small" style={{ marginTop: 12 }}>Entrée : consignes et données envoyées ; sortie : la réponse ; cache : consignes déjà envoyées, relues à moindre coût. Le montant en dollars est l&apos;équivalent tarif API indiqué par Claude : avec l&apos;abonnement, rien n&apos;est facturé à l&apos;appel.</p>
+            </section>
           </div>
-          <p className="muted small" style={{ marginTop: 12 }}>Entrée : consignes et données envoyées ; sortie : la réponse ; cache : consignes déjà envoyées, relues à moindre coût. Le montant en dollars est l&apos;équivalent tarif API indiqué par Claude : avec l&apos;abonnement, rien n&apos;est facturé à l&apos;appel.</p>
-        </section>
+          <p className="muted small" style={{ marginTop: 18 }}>{records.length ? `Total depuis ${first ? formatDate(first.createdAt, "medium") : "le début"} : ${tokens(records.reduce((sum, record) => sum + totalTokens(record), 0))} tokens.` : ""}</p>
+        </SettingsGroup>
+        <SettingsGroup id="controle" title="Contrôle des analyses" note="règles vérifiées en code après chaque analyse, et relecture IA par lots ; jamais visible des invités" badge={admin.qualityBadge} icon={ShieldCheck} accent="yellow">
+          {admin.quality}
+        </SettingsGroup>
+        <SettingsGroup id="reglage" title="Bilan et banc de tests" note="outils de réglage du coach, comptés à part de ton usage" badge={pending.length ? `${pending.length} en attente` : null} icon={FlaskConical} accent="blue">
+          <p className="section-note" style={{ marginTop: -6 }}>plafonds : {tokens(budget.nightTokens)} par lancement, {tokens(budget.weekTokens)} sur 7 jours</p>
+          <div className="grid grid-3">
+            <TotalsCard title="7 derniers jours" totals={automaticSummary.last7Days} />
+            <TotalsCard title="30 derniers jours" totals={automaticSummary.last30Days} />
+            <div className="card" style={{ ["--shadow-color" as string]: "var(--sl-orange)" }}>
+              <div className="card-eyebrow">Plafond de la semaine</div>
+              <div className="kpi-value">{Math.round((weekBudgetUsed / budget.weekTokens) * 100)}<span className="unit">%</span></div>
+              <div className="kpi-compare">{tokens(weekBudgetUsed)} sur {tokens(budget.weekTokens)} (entrée + sortie + écriture du cache)</div>
+              <div className="kpi-meaning">Part de l&apos;automatique sur 30 jours : {summary.last30Days.totalTokens + automaticSummary.last30Days.totalTokens ? Math.round((automaticSummary.last30Days.totalTokens / (summary.last30Days.totalTokens + automaticSummary.last30Days.totalTokens)) * 100) : 0} % de tous les tokens de l&apos;application.</div>
+            </div>
+          </div>
+          <div className="card" style={{ marginTop: 16 }}>
+            <h3 className="section-title" style={{ fontSize: 18 }}>Le coach relit sa semaine</h3>
+            <p className="small" style={{ marginTop: 4 }}>Outil de réglage, retiré du tableau de bord : un bilan Opus confronte chaque semaine les analyses et consignes à ce qui a été couru, et propose des règles à tester.</p>
+            <p className="small" style={{ marginTop: 8 }}><Link href="/bilan" className="btn">Ouvrir les bilans</Link> <a href="/api/weekly-review/export" className="btn" download>Exporter en Markdown</a></p>
+          </div>
+          <div className="card" style={{ marginTop: 16 }}>
+            <h3 className="section-title" style={{ fontSize: 18 }}>Banc de tests</h3>
+            <p className="small" style={{ marginTop: 4 }}>{pending.length ? `${pending.length} tâche(s) en attente (reprises à chaque lancement, dans la limite des plafonds).` : "Rien en attente : toutes les variantes ont été évaluées."} Le banc arrête aussi si la fenêtre de 5 h dépasse {Math.round(budget.maxUtilization.fiveHour * 100)} % ou la semaine {Math.round(budget.maxUtilization.sevenDay * 100)} %{windows.length ? ` (dernier relevé : ${windows.map((window) => `${WINDOW_LABELS[window.window ?? ""] ?? window.window} ${window.utilization != null ? `${Math.round(window.utilization * (window.utilization <= 1 ? 100 : 1))} %` : "—"}`).join(", ")})` : ""}. Il propose, rien n&apos;est appliqué sans validation.</p>
+            <BenchButton pending={pending.length} running={benchIsRunning()} />
+            <p className="muted small" style={{ marginTop: 6 }}>Lance-le quand ton quota est disponible. Pour un budget plus large : <span className="mono">npm run bench -- --budget=150000</span>.</p>
+            {reports.length ? (
+              <div className="list" style={{ marginTop: 8 }}>
+                {reports.map((report) => (
+                  <details key={report.file} className="more">
+                    <summary><strong>{report.variant}</strong> · {formatDate(report.date, "medium")} · {report.recommendation} <span className="muted small">— {report.why}</span></summary>
+                    <pre className="more-body" style={{ whiteSpace: "pre-wrap", fontSize: 12.5 }}>{readReportMarkdown(report.file) ?? "Rapport introuvable."}</pre>
+                  </details>
+                ))}
+              </div>
+            ) : <p className="muted small" style={{ marginTop: 6 }}>Pas encore de rapport.</p>}
+          </div>
+        </SettingsGroup>
       </div>
-      <p className="muted small" style={{ marginTop: 18 }}>{records.length ? `Total depuis ${first ? formatDate(first.createdAt, "medium") : "le début"} : ${tokens(records.reduce((sum, record) => sum + totalTokens(record), 0))} tokens.` : ""}</p>
     </>
   );
 }

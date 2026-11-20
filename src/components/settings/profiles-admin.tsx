@@ -4,6 +4,7 @@ import { Copy, FlaskConical, KeyRound, RotateCcw, ShieldOff, Smartphone, Sparkle
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { PrepareStatus } from "@/lib/server/prepare-service";
+import { DeviceList } from "./device-list";
 
 export type DeviceView = { id: string; device: string; lastSeenAt: string };
 
@@ -262,11 +263,7 @@ function ProfileCard({ profile, onSecret, prepareEstimate, testCoachSimulated }:
         <div>
           <div className="fact-label">Appareils connectés ({profile.devices.length})</div>
           {profile.devices.length ? (
-            <ul className="device-list">
-              {profile.devices.map((device) => (
-                <li key={device.id}><Smartphone size={13} /> {device.device} <span className="muted small">· vu {when(device.lastSeenAt)}</span> <button type="button" className="btn btn-ghost" onClick={() => void revoke(device.id)}>Déconnecter</button></li>
-              ))}
-            </ul>
+            <DeviceList items={profile.devices.map((device) => ({ key: device.id, node: <><Smartphone size={13} /> {device.device} <span className="muted small">· vu {when(device.lastSeenAt)}</span> <button type="button" className="btn btn-ghost" onClick={() => void revoke(device.id)}>Déconnecter</button></> }))} />
           ) : <p className="muted small" style={{ margin: "4px 0" }}>Aucun.{profile.invitationUntil ? ` Lien d'invitation valable jusqu'au ${when(profile.invitationUntil)}.` : ""}</p>}
         </div>
       </div>
