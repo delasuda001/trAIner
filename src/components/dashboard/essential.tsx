@@ -53,7 +53,7 @@ function ChronoSlide({ page, level }: { page: ChronoPage; level: AthleteLevel })
             <div className="lever-label"><span>{lever.label}</span><span className="num">{lever.current} <span className="muted">/ {lever.needed}</span>{lever.met ? " ✓" : ""}</span></div>
             <div className="lever-track" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(Math.min(1, lever.share) * 100)} aria-label={lever.label}>
               <span className="lever-fill" style={{ width: `${Math.round(Math.min(1, Math.max(0.04, lever.share)) * 100)}%`, background: LEVER_COLOR[lever.key] ?? "var(--sl-blue)" }} />
-              {lever.possibleShare != null ? <span className="lever-cap" style={{ left: `${Math.round(lever.possibleShare * 100)}%` }} title="Sorties possibles selon votre agenda" /> : null}
+              {lever.possibleShare != null ? <span className="lever-cap" style={{ left: `${Math.round(lever.possibleShare * 100)}%` }} title="Sorties possibles selon ton agenda" /> : null}
             </div>
           </li>
         ))}

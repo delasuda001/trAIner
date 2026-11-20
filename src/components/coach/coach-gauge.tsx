@@ -21,9 +21,9 @@ export function useCoachGauge(): CoachGauge | null {
 }
 
 const LEVELS = {
-  large: { label: "large", text: "Le coach fonctionne avec l'abonnement Claude de Bastien, partagé entre les testeurs : il reste de la marge, n'hésitez pas." },
-  menager: { label: "à ménager", text: "L'abonnement de Bastien se remplit : réservez le coach aux questions qui comptent." },
-  plein: { label: "presque plein", text: "Le coach fait une pause pour ménager l'abonnement de Bastien. Tous vos chiffres restent consultables." },
+  large: { label: "large", text: "Le coach fonctionne avec l'abonnement Claude de Bastien, partagé entre les testeurs : il reste de la marge, n'hésite pas." },
+  menager: { label: "à ménager", text: "L'abonnement de Bastien se remplit : réserve le coach aux questions qui comptent." },
+  plein: { label: "presque plein", text: "Le coach fait une pause pour ménager l'abonnement de Bastien. Tous tes chiffres restent consultables." },
 } as const;
 
 /** Heure de remise à zéro, dans le fuseau de l'appareil (calculée après l'affichage pour éviter tout décalage). */
@@ -63,8 +63,8 @@ export function CoachGaugeLine({ reveal = false, popover = false }: { reveal?: b
         <span className="gauge-text" role="status">
           {level.text}
           {gauge.level !== "large" && reset ? ` Remise à zéro ${reset}.` : ""}
-          {gauge.left === 1 ? " Il vous reste une analyse aujourd'hui : choisissez celle qui vous intéresse le plus." : ""}
-          {gauge.left === 0 ? " Vos analyses du jour sont faites : le coach sera de nouveau disponible demain, et tout ce qui est déjà analysé reste consultable." : ""}
+          {gauge.left === 1 ? " Il te reste une analyse aujourd'hui : choisis celle qui t'intéresse le plus." : ""}
+          {gauge.left === 0 ? " Tes analyses du jour sont faites : le coach sera de nouveau disponible demain, et tout ce qui est déjà analysé reste consultable." : ""}
         </span>
       ) : null}
     </div>

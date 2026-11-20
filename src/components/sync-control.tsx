@@ -25,7 +25,7 @@ function relative(iso: string | null): string {
 function explain(error: string, guest: boolean): { title: string; action: React.ReactNode } {
   const lower = error.toLowerCase();
   if (guest && (lower.includes("clé") || lower.includes("401") || lower.includes("403") || lower.includes("garmin_api_key"))) {
-    return { title: "Votre clé Garmin n'est pas encore active dans l'application.", action: <>Merci de prévenir Bastien : il doit ajouter ou renouveler votre clé Garmin Connect (Personal API) de son côté.</> };
+    return { title: "Ta clé Garmin n'est pas encore active dans l'application.", action: <>Merci de prévenir Bastien : il doit ajouter ou renouveler ta clé Garmin Connect (Personal API) de son côté.</> };
   }
   if (lower.includes("clé") || lower.includes("401") || lower.includes("403") || lower.includes("garmin_api_key")) {
     return {
@@ -85,7 +85,7 @@ export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = f
       void warmPages(latestNewRunId != null);
       // Seule une nouvelle course déclenche Claude, et seulement pour la plus récente.
       if (latestNewRunId) {
-        setStatus(guest ? "Le coach analyse votre dernière séance…" : "Le coach analyse ta dernière séance…");
+        setStatus("Le coach analyse ta dernière séance…");
         await Promise.allSettled([
           fetch(`/api/activities/${encodeURIComponent(latestNewRunId)}/coach`, { method: "POST" }),
           fetch("/api/coach/outlook", { method: "POST" }),
@@ -99,7 +99,7 @@ export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = f
     } finally {
       setBusy(false);
     }
-  }, [router, guest, markOffline]);
+  }, [router, markOffline]);
 
   useEffect(() => {
     if (offline) return;

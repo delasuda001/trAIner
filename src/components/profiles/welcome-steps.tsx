@@ -12,27 +12,27 @@ export function InstallHint() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- détection unique de l'appareil après le rendu
     setPlatform(standalone ? "installed" : /iPhone|iPad|iPod/.test(ua) ? "ios" : /Android/.test(ua) ? "android" : "other");
   }, []);
-  if (platform === "installed") return <p className="small">C&apos;est fait : vous utilisez déjà l&apos;application depuis votre écran d&apos;accueil.</p>;
+  if (platform === "installed") return <p className="small">C&apos;est fait : tu utilises déjà l&apos;application depuis ton écran d&apos;accueil.</p>;
   if (platform === "ios") {
     return (
       <ol className="welcome-steps">
-        <li>Ouvrez cette page dans <strong>Safari</strong> (depuis une autre application, touchez ⋯ puis « Ouvrir dans Safari »).</li>
-        <li>Touchez le bouton <strong>Partager</strong> (le carré avec une flèche vers le haut, en bas de l&apos;écran).</li>
-        <li>Faites défiler et touchez <strong>« Sur l&apos;écran d&apos;accueil »</strong>, puis <strong>Ajouter</strong>.</li>
-        <li>Ouvrez ensuite Sillage depuis la nouvelle icône : vous restez connecté.</li>
+        <li>Ouvre cette page dans <strong>Safari</strong> (depuis une autre application, touche ⋯ puis « Ouvrir dans Safari »).</li>
+        <li>Touche le bouton <strong>Partager</strong> (le carré avec une flèche vers le haut, en bas de l&apos;écran).</li>
+        <li>Fais défiler et touche <strong>« Sur l&apos;écran d&apos;accueil »</strong>, puis <strong>Ajouter</strong>.</li>
+        <li>Ouvre ensuite Sillage depuis la nouvelle icône : tu restes connecté.</li>
       </ol>
     );
   }
   if (platform === "android") {
     return (
       <ol className="welcome-steps">
-        <li>Dans Chrome, touchez le menu <strong>⋮</strong> en haut à droite.</li>
-        <li>Touchez <strong>« Ajouter à l&apos;écran d&apos;accueil »</strong> (ou « Installer l&apos;application »).</li>
-        <li>Ouvrez ensuite Sillage depuis la nouvelle icône.</li>
+        <li>Dans Chrome, touche le menu <strong>⋮</strong> en haut à droite.</li>
+        <li>Touche <strong>« Ajouter à l&apos;écran d&apos;accueil »</strong> (ou « Installer l&apos;application »).</li>
+        <li>Ouvre ensuite Sillage depuis la nouvelle icône.</li>
       </ol>
     );
   }
-  return <p className="small">Sur un autre appareil (téléphone, ordinateur), ouvrez la même adresse et entrez votre prénom et votre code, une seule fois. Sur téléphone, ajoutez ensuite la page à l&apos;écran d&apos;accueil : Sillage s&apos;ouvrira comme une application.</p>;
+  return <p className="small">Sur un autre appareil (téléphone, ordinateur), ouvre la même adresse et entre ton prénom et ton code, une seule fois. Sur téléphone, ajoute ensuite la page à l&apos;écran d&apos;accueil : Sillage s&apos;ouvrira comme une application.</p>;
 }
 
 export function WelcomeDone({ hasGoal }: { hasGoal: boolean }) {
@@ -53,8 +53,8 @@ export function WelcomeDone({ hasGoal }: { hasGoal: boolean }) {
 }
 
 const STAGES: Array<{ stage: string; label: string }> = [
-  { stage: "sync", label: "Lecture de vos séances Garmin" },
-  { stage: "metrics", label: "Calcul de vos chiffres" },
+  { stage: "sync", label: "Lecture de tes séances Garmin" },
+  { stage: "metrics", label: "Calcul de tes chiffres" },
   { stage: "coach", label: "Premiers commentaires du coach" },
 ];
 
@@ -68,8 +68,8 @@ export function PreparingNotice({ stage, activities }: { stage: string | null; a
   const current = STAGES.findIndex((entry) => entry.stage === stage);
   return (
     <section className="card welcome-card">
-      <h2 className="section-title">Bastien prépare votre espace</h2>
-      <p className="small">Sillage lit vos 12 derniers mois Garmin et calcule tout pour vous. Cela prend quelques minutes, une seule fois ; cette page se met à jour toute seule.</p>
+      <h2 className="section-title">Bastien prépare ton espace</h2>
+      <p className="small">Sillage lit tes 12 derniers mois Garmin et calcule tout pour toi. Cela prend quelques minutes, une seule fois ; cette page se met à jour toute seule.</p>
       <ol className="prepare-steps">
         {STAGES.map((entry, index) => (
           <li key={entry.stage} className={index < current ? "done" : index === current ? "current" : ""}>{entry.label}{index === 0 && activities ? ` · ${activities} activités` : ""}</li>

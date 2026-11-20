@@ -43,7 +43,7 @@ export function GoalCarousel({ labels, children }: { labels: string[]; children:
 
   if (pages.length <= 1) return <section className="card goal-carousel single">{pages}</section>;
   return (
-    <section className="card goal-carousel" aria-roledescription="carrousel" aria-label="Vos objectifs">
+    <section className="card goal-carousel" aria-roledescription="carrousel" aria-label="Tes objectifs">
       <div className="goal-carousel-track" ref={track} style={height ? { height } : undefined} tabIndex={0} onKeyDown={(event) => { if (event.key === "ArrowRight") go(active + 1); if (event.key === "ArrowLeft") go(active - 1); }}>
         {pages.map((page, index) => (
           <div key={labels[index] ?? index} className="goal-slide" role="group" aria-roledescription="page" aria-label={`${index + 1} sur ${pages.length} : ${labels[index] ?? ""}`} aria-hidden={index !== active}>

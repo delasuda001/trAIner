@@ -28,11 +28,11 @@ export function LoginForm() {
   return (
     <form className="login-form" onSubmit={(event) => void submit(event)}>
       <label className="field">
-        <span>Votre prénom</span>
+        <span>Ton prénom</span>
         <input value={name} onChange={(event) => setName(event.target.value)} autoComplete="username" autoCapitalize="words" autoCorrect="off" spellCheck={false} placeholder="ex. Marie" required />
       </label>
       <label className="field">
-        <span>Votre code</span>
+        <span>Ton code</span>
         <input value={code} onChange={(event) => setCode(event.target.value)} autoComplete="current-password" inputMode={letters ? "text" : "numeric"} autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder={letters ? "xxxx-xxxx-xxxx-xxxx-xxxx" : "6 chiffres"} required />
       </label>
       <button type="button" className="link-button" onClick={() => setLetters((value) => !value)}>{letters ? "Mon code est à 6 chiffres" : "Mon code contient des lettres"}</button>

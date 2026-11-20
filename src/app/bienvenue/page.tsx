@@ -48,10 +48,10 @@ function renderWelcome(member: Member) {
   return (
     <div className="welcome rise">
       <p className="eyebrow">Bienvenue dans Sillage</p>
-      <h1 className="page-title">Bonjour {member.name}, <mark>votre espace est prêt.</mark></h1>
-      <p className="page-sub">Vos 12 derniers mois Garmin sont déjà importés et analysés. Voici ce qu&apos;en retient Sillage.</p>
+      <h1 className="page-title">Bonjour {member.name}, <mark>ton espace est prêt.</mark></h1>
+      <p className="page-sub">Tes 12 derniers mois Garmin sont déjà importés et analysés. Voici ce qu&apos;en retient Sillage.</p>
 
-      <section className="welcome-stats" aria-label="Vos chiffres marquants">
+      <section className="welcome-stats" aria-label="Tes chiffres marquants">
         <div className="welcome-stat">
           <div className="card-eyebrow">12 derniers mois</div>
           <div className="glance-big">{formatNumber(highlights.km)}<span className="unit">km</span></div>
@@ -67,7 +67,7 @@ function renderWelcome(member: Member) {
           ) : (
             <>
               <div className="glance-big">{highlights.longestKm != null ? formatNumber(highlights.longestKm, 1) : "—"}<span className="unit">km</span></div>
-              <p className="glance-line">votre plus longue sortie de l&apos;année ; la tendance à FC égale apparaîtra après quelques sorties faciles</p>
+              <p className="glance-line">ta plus longue sortie de l&apos;année ; la tendance à FC égale apparaîtra après quelques sorties faciles</p>
             </>
           )}
         </div>
@@ -82,17 +82,17 @@ function renderWelcome(member: Member) {
       </section>
 
       <section className="card welcome-next">
-        <div className="card-eyebrow">Votre prochaine séance · {suggestion.when.label}</div>
+        <div className="card-eyebrow">Ta prochaine séance · {suggestion.when.label}</div>
         <div className="welcome-stat-title">{suggestion.primary.title}{suggestion.primary.durationMin ? ` · ${formatDuration(suggestion.primary.durationMin * 60)}` : ""}</div>
         <p className="small" style={{ margin: "4px 0 0" }}>{suggestion.reason}</p>
       </section>
 
       <div className="welcome-two">
         <section className="card welcome-card">
-          <h2 className="section-title">Vous pouvez</h2>
+          <h2 className="section-title">Tu peux</h2>
           <ul className="welcome-list">
             <li><Route size={15} /> Ouvrir chaque séance : ce qui a marché, ce qui est à travailler, chiffres à l&apos;appui.</li>
-            <li><Check size={15} /> Suivre la séance proposée et votre progression, comparée à vous-même.</li>
+            <li><Check size={15} /> Suivre la séance proposée et ta progression, comparée à toi-même.</li>
             <li><MessageCircle size={15} /> Poser une question au coach, ou lui signaler une contrainte.</li>
           </ul>
         </section>
@@ -100,22 +100,22 @@ function renderWelcome(member: Member) {
           <h2 className="section-title">Sillage ne fait pas</h2>
           <ul className="welcome-list muted-list">
             <li><X size={15} /> D&apos;avis médical : une douleur relève d&apos;un médecin.</li>
-            <li><X size={15} /> De plan imposé : il propose, vous décidez.</li>
-            <li><ShieldCheck size={15} /> D&apos;usage d&apos;autres données que vos données Garmin.</li>
+            <li><X size={15} /> De plan imposé : il propose, tu décides.</li>
+            <li><ShieldCheck size={15} /> D&apos;usage d&apos;autres données que tes données Garmin.</li>
           </ul>
         </section>
       </div>
 
       <section className="card welcome-card">
         <h2 className="section-title">Le coach, une ressource partagée</h2>
-        <p className="small">Vos chiffres sont calculés pour chaque séance, sans limite. Les commentaires du coach passent par l&apos;abonnement Claude de Bastien : la jauge indique la marge disponible avant d&apos;en demander.</p>
+        <p className="small">Tes chiffres sont calculés pour chaque séance, sans limite. Les commentaires du coach passent par l&apos;abonnement Claude de Bastien : la jauge indique la marge disponible avant d&apos;en demander.</p>
         <CoachGaugeLine />
       </section>
 
       <PrivacyNotice trainingOptOut={trainingOptOut()} />
 
       <details className="card welcome-card welcome-install">
-        <summary><strong>Installer Sillage sur votre téléphone comme une application</strong></summary>
+        <summary><strong>Installer Sillage sur ton téléphone comme une application</strong></summary>
         <InstallHint />
       </details>
 

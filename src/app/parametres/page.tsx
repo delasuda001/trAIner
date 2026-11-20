@@ -162,8 +162,8 @@ function renderGuest(member: Member) {
       <div className="page-head">
         <div>
           <p className="eyebrow">Paramètres</p>
-          <h1 className="page-title">Votre test</h1>
-          <p className="page-sub">Vos chiffres sont toujours calculés ; le coach, lui, partage l&apos;abonnement de Bastien.</p>
+          <h1 className="page-title">Ton test</h1>
+          <p className="page-sub">Tes chiffres sont toujours calculés ; le coach, lui, partage l&apos;abonnement de Bastien.</p>
         </div>
       </div>
       <AccountRow name={member.name} />
@@ -179,13 +179,13 @@ function renderGuest(member: Member) {
           <ViewPicker current={resolveViewMode(createAppStateRepository().get(VIEW_MODE_KEY, viewModeSchema), member.role)} />
         </section>
         <section className="card">
-          <h2 className="section-title">Vos appareils connectés</h2>
+          <h2 className="section-title">Tes appareils connectés</h2>
           <MyDevices devices={devices} />
           <div className="other-device">
             <div className="fact-label">Ouvrir Sillage sur un autre appareil</div>
-            <p className="small" style={{ margin: "4px 0 0" }}>Allez sur {address ? <strong className="mono">{address.replace(/^https?:\/\//, "")}</strong> : "la même adresse"}, puis entrez votre prénom <strong>{member.name}</strong> et votre code {record?.guestCode ? <strong className="mono">{record.guestCode}</strong> : "(demandez-le à Bastien)"}. Une seule fois par appareil.</p>
+            <p className="small" style={{ margin: "4px 0 0" }}>Va sur {address ? <strong className="mono">{address.replace(/^https?:\/\//, "")}</strong> : "la même adresse"}, puis entre ton prénom <strong>{member.name}</strong> et ton code {record?.guestCode ? <strong className="mono">{record.guestCode}</strong> : "(demande-le à Bastien)"}. Une seule fois par appareil.</p>
           </div>
-          <p className="muted small" style={{ marginTop: 10 }}>Un appareil perdu ? Déconnectez-le ici, ou prévenez Bastien. <Link href="/bienvenue">Revoir l&apos;accueil du test</Link></p>
+          <p className="muted small" style={{ marginTop: 10 }}>Un appareil perdu ? Déconnecte-le ici, ou préviens Bastien. <Link href="/bienvenue">Revoir l&apos;accueil du test</Link></p>
         </section>
       </div>
       <section className="section"><PrivacyNotice trainingOptOut={trainingOptOut()} /></section>

@@ -68,15 +68,15 @@ export function decideQuota(input: QuotaInput): QuotaDecision {
   if (input.role === "admin") return { allowed: true, ...state };
   const estimate = input.estimate ?? TASK_ESTIMATE.generation;
   const deny = (message: string): QuotaDecision => ({ allowed: false, message, ...state });
-  if (!input.preparation && state.remainingToday != null && state.remainingToday < estimate) return deny("Vos analyses du jour sont faites : le coach sera de nouveau disponible demain. Tous vos chiffres restent consultables.");
-  if (!input.preparation && state.remainingWeek != null && state.remainingWeek < estimate) return deny("Vous avez bien profité du coach cette semaine : il se libère de nouveau au fil des jours. Tous vos chiffres restent consultables.");
+  if (!input.preparation && state.remainingToday != null && state.remainingToday < estimate) return deny("Tes analyses du jour sont faites : le coach sera de nouveau disponible demain. Tous tes chiffres restent consultables.");
+  if (!input.preparation && state.remainingWeek != null && state.remainingWeek < estimate) return deny("Tu as bien profité du coach cette semaine : il se libère de nouveau au fil des jours. Tous tes chiffres restent consultables.");
   if (input.guestsWeeklyCap != null) {
     const weekStartIso = new Date(input.now.getTime() - 7 * 86_400_000).toISOString();
-    if (sum(input.allGuests, weekStartIso) + estimate > input.guestsWeeklyCap) return deny("Le coach a beaucoup servi aux testeurs cette semaine : il fait une pause de quelques jours. Tous vos chiffres restent consultables.");
+    if (sum(input.allGuests, weekStartIso) + estimate > input.guestsWeeklyCap) return deny("Le coach a beaucoup servi aux testeurs cette semaine : il fait une pause de quelques jours. Tous tes chiffres restent consultables.");
   }
   // Protège le quota de Bastien : on s'arrête avant que son abonnement sature.
   const windows = canSpend({ estimate: 0, nightUsed: 0, weekUsed: 0, config: { nightTokens: Number.MAX_SAFE_INTEGER, weekTokens: Number.MAX_SAFE_INTEGER, maxUtilization: GUEST_RATE_LIMITS }, windows: input.windows, now: input.now });
-  if (!windows.ok) return deny("Le coach fait une pause pour ménager l'abonnement de Bastien : merci de réessayer dans quelques heures. Tous vos chiffres restent consultables.");
+  if (!windows.ok) return deny("Le coach fait une pause pour ménager l'abonnement de Bastien : réessaie dans quelques heures. Tous tes chiffres restent consultables.");
   return { allowed: true, ...state };
 }
 

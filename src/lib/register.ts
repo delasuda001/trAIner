@@ -10,8 +10,10 @@
  */
 export type Register = "tu" | "vous";
 
-export function registerForRole(role: string | null | undefined): Register {
-  return role === "admin" ? "tu" : "vous";
+/** Tout le monde est tutoyé (choix de Bastien, 20 nov. 2026) ; le vouvoiement reste disponible pour plus tard. */
+export function registerForRole(role?: string | null): Register {
+  void role; // même registre pour tous les profils
+  return "tu";
 }
 
 export function say(register: Register, tu: string, vous: string): string {

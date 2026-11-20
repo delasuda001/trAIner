@@ -49,10 +49,10 @@ describe("vouvoyer", () => {
     expect(voiceDeep(value, "vous")).toEqual({ reason: "Votre dernière course date de 9 jours.", nested: [{ text: "gardez la prochaine séance facile" }], count: 3 });
   });
 
-  it("registre : tu pour l'administrateur, vous pour un invité ou sans profil", () => {
+  it("registre : tout le monde est tutoyé", () => {
     expect(registerForRole("admin")).toBe("tu");
-    expect(registerForRole("guest")).toBe("vous");
-    expect(registerForRole(null)).toBe("vous");
+    expect(registerForRole("guest")).toBe("tu");
+    expect(registerForRole(null)).toBe("tu");
     expect(say("vous", "Tu peux", "Vous pouvez")).toBe("Vous pouvez");
   });
 });

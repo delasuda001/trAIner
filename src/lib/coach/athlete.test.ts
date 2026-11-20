@@ -15,8 +15,8 @@ describe("consignes du coach selon le profil", () => {
       expect(guest).not.toContain("Bastien");
       expect(guest).not.toContain("1 à 2");
       expect(guest).toContain("environ 6 fois par semaine");
-      expect(guest).toContain("vouvoie");
-      expect(guest.toLowerCase()).not.toContain("tutoi");
+      expect(guest).toContain("Tu le tutoies");
+      expect(guest.toLowerCase()).not.toContain("vouvoi");
     }
   });
 

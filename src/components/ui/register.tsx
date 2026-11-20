@@ -8,7 +8,7 @@ import { vouvoyer, type Register } from "@/lib/register";
  * fourni par le layout. Les composants serveur ne peuvent pas lire un contexte : ils
  * passent par `<Say>`, les composants client par `useRegister`.
  */
-const RegisterContext = createContext<Register>("vous");
+const RegisterContext = createContext<Register>("tu");
 
 export function RegisterProvider({ register, children }: { register: Register; children: React.ReactNode }) {
   return <RegisterContext.Provider value={register}>{children}</RegisterContext.Provider>;
