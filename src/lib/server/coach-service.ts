@@ -6,6 +6,7 @@ import { createClaudeAgentClient } from "@/lib/coach/claude-agent-client";
 import { LLM_FAILURE_MESSAGES, LlmError, type LlmClient, type LlmFailureKind } from "@/lib/coach/llm";
 import { buildWeeklyPrompt, WEEKLY_MODEL, WEEKLY_PROMPT_VERSION, WEEKLY_SYSTEM_PROMPT, weeklyReviewJsonSchema, weeklyReviewSchema, type WeeklyReview } from "@/lib/coach/weekly-review";
 import { buildWeeklyDossier } from "./weekly-dossier";
+import { afterOutlook, afterSessionAnalysis } from "@/lib/server/quality-service";
 import { allowedNumbers, collectText, excerpt, findUnsupportedCauses, findStateJudgements, findUnsupportedMultiples, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
 import { zoneOf } from "@/lib/engine/zones";
 import { goalForCoach } from "@/lib/goal/goal";
@@ -165,16 +166,27 @@ export function readSessionCoach(analysis: SessionAnalysis): CoachResult<Session
 }
 
 export function generateSessionCoach(analysis: SessionAnalysis): Promise<CoachResult<SessionCoachOutput>> {
-  return generate(sessionJob(analysis));
+  return generate(sessionJob(analysis)).then((result) => checkedSession(analysis, result));
+}
+
+/** Contrôle de cohérence après chaque analyse produite (règles en code ; constats vus par Bastien seul). */
+function checkedSession(analysis: SessionAnalysis, result: CoachResult<SessionCoachOutput>): CoachResult<SessionCoachOutput> {
+  if (result.status === "ready") afterSessionAnalysis(analysis, loadContext(), result.output);
+  return result;
+}
+
+function checkedOutlook(dashboard: Dashboard, result: CoachResult<OutlookCoachOutput>): CoachResult<OutlookCoachOutput> {
+  if (result.status === "ready") afterOutlook(dashboard, loadContext(), result.output);
+  return result;
 }
 
 /** Préparation d'un invité par Bastien : mêmes analyses, comptées « préparation ». */
 export function prepareSessionCoach(analysis: SessionAnalysis): Promise<CoachResult<SessionCoachOutput>> {
-  return generate(sessionJob(analysis), { preparation: true });
+  return generate(sessionJob(analysis), { preparation: true }).then((result) => checkedSession(analysis, result));
 }
 
 export function prepareOutlookCoach(dashboard: Dashboard): Promise<CoachResult<OutlookCoachOutput>> {
-  return generate(outlookJob(dashboard), { preparation: true });
+  return generate(outlookJob(dashboard), { preparation: true }).then((result) => checkedOutlook(dashboard, result));
 }
 
 export function readOutlookCoach(dashboard: Dashboard): CoachResult<OutlookCoachOutput> {
@@ -182,7 +194,7 @@ export function readOutlookCoach(dashboard: Dashboard): CoachResult<OutlookCoach
 }
 
 export function generateOutlookCoach(dashboard: Dashboard): Promise<CoachResult<OutlookCoachOutput>> {
-  return generate(outlookJob(dashboard));
+  return generate(outlookJob(dashboard)).then((result) => checkedOutlook(dashboard, result));
 }
 
 /** Sorties du coach reprises par un profil de test : séances (identifiants) et conseil du jour. */

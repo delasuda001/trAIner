@@ -29,6 +29,7 @@ import { readLastRateLimit, readRateLimits } from "@/lib/server/usage";
 import { budgetFromEnv, budgetTokens } from "@/lib/bench/budget";
 import { benchIsRunning, pendingTasks } from "@/lib/bench/runner";
 import { BenchButton } from "@/components/settings/bench-button";
+import { QualityPanel } from "@/components/settings/quality-panel";
 import { readReportIndex, readReportMarkdown } from "@/lib/bench/store";
 
 export const dynamic = "force-dynamic";
@@ -107,8 +108,16 @@ async function adminSections() {
   const guestsWeekUsed = records.filter((record) => record.role === "guest" && record.testOf == null).flatMap((record) => usageOf(record, weekAgo)).reduce((sum, record) => sum + budgetTokens(record), 0);
   const url = publicUrl("");
   const logins = registry.listLogins(40);
+  const findings = registry.listQualityFindings({ limit: 200 }).map((finding) => ({ id: finding.id, profileName: names.get(finding.profileId) ?? finding.profileId, subjectKind: finding.subjectKind, subjectId: finding.subjectId, source: finding.source, code: finding.code, severity: finding.severity, where: finding.where, message: finding.message, createdAt: finding.createdAt }));
   return (
     <>
+      <section className="section">
+        <div className="section-head">
+          <h2 className="section-title">Contrôle des analyses</h2>
+          <span className="section-note">règles vérifiées en code après chaque analyse, et relecture IA par lots ; jamais visible des invités</span>
+        </div>
+        <div className="card"><QualityPanel findings={findings} /></div>
+      </section>
       <section className="section">
         <div className="section-head">
           <h2 className="section-title">Profils du test</h2>

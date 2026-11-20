@@ -72,6 +72,22 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE profiles ADD COLUMN test_of TEXT;`,
   // Code personnel court des invités, gardé lisible pour que Bastien puisse le redonner (le registre reste sur son Mac).
   `ALTER TABLE profiles ADD COLUMN guest_code TEXT;`,
+  // Contrôle qualité des analyses (règles en code, relecture IA par lots) : vue administrateur seulement.
+  `CREATE TABLE quality_findings (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL,
+    subject_kind TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    code TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    location TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    dismissed_at TEXT
+  );
+  CREATE INDEX quality_findings_subject_idx ON quality_findings(profile_id, subject_kind, subject_id, source);
+  CREATE INDEX quality_findings_created_idx ON quality_findings(created_at);`,
 ];
 
 export const ADMIN_ID = "bastien";
@@ -166,6 +182,28 @@ function toFeedback(row: z.infer<typeof feedbackRowSchema>): FeedbackRecord {
     promptVersion: row.prompt_version,
     note: row.note,
   };
+}
+
+export type QualitySource = "rules" | "review";
+export type QualityFindingInput = { code: string; severity: "error" | "warning" | "info"; where: string; message: string };
+export type QualityFindingRecord = QualityFindingInput & { id: string; profileId: string; subjectKind: string; subjectId: string; source: QualitySource; createdAt: string; dismissedAt: string | null };
+
+const qualityRowSchema = z.object({
+  id: z.string(),
+  profile_id: z.string(),
+  subject_kind: z.string(),
+  subject_id: z.string(),
+  source: z.enum(["rules", "review"]),
+  code: z.string(),
+  severity: z.enum(["error", "warning", "info"]),
+  location: z.string(),
+  message: z.string(),
+  created_at: z.string(),
+  dismissed_at: z.string().nullable(),
+});
+
+function toQualityFinding(row: z.infer<typeof qualityRowSchema>): QualityFindingRecord {
+  return { id: row.id, profileId: row.profile_id, subjectKind: row.subject_kind, subjectId: row.subject_id, source: row.source, code: row.code, severity: row.severity, where: row.location, message: row.message, createdAt: row.created_at, dismissedAt: row.dismissed_at };
 }
 
 export function migrateRegistry(connection: Database.Database): void {
@@ -442,6 +480,33 @@ export function createRegistry(connection: Database.Database, clock: () => Date 
 
     deleteFeedback(id: string): void {
       connection.prepare("DELETE FROM feedback WHERE id = ?").run(id);
+    },
+
+    /**
+     * Remplace les constats ouverts d'un sujet (profil, séance ou conseil, source) par les nouveaux.
+     * Un constat écarté par Bastien ne revient pas tant que son texte est identique.
+     */
+    replaceQualityFindings(key: { profileId: string; subjectKind: string; subjectId: string; source: QualitySource }, findings: QualityFindingInput[]): number {
+      const dismissed = new Set(z.array(z.object({ code: z.string(), message: z.string() })).parse(
+        connection.prepare("SELECT code, message FROM quality_findings WHERE profile_id = ? AND subject_kind = ? AND subject_id = ? AND source = ? AND dismissed_at IS NOT NULL").all(key.profileId, key.subjectKind, key.subjectId, key.source),
+      ).map((row) => `${row.code}|${row.message}`));
+      const now = nowIso();
+      const fresh = findings.filter((finding) => !dismissed.has(`${finding.code}|${finding.message}`));
+      connection.transaction(() => {
+        connection.prepare("DELETE FROM quality_findings WHERE profile_id = ? AND subject_kind = ? AND subject_id = ? AND source = ? AND dismissed_at IS NULL").run(key.profileId, key.subjectKind, key.subjectId, key.source);
+        const insert = connection.prepare("INSERT INTO quality_findings (id, profile_id, subject_kind, subject_id, source, code, severity, location, message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        for (const finding of fresh) insert.run(randomUUID(), key.profileId, key.subjectKind, key.subjectId, key.source, finding.code, finding.severity, finding.where, finding.message, now);
+      })();
+      return fresh.length;
+    },
+
+    listQualityFindings(filter: { includeDismissed?: boolean; limit?: number } = {}): QualityFindingRecord[] {
+      const sql = `SELECT * FROM quality_findings${filter.includeDismissed ? "" : " WHERE dismissed_at IS NULL"} ORDER BY created_at DESC LIMIT ?`;
+      return z.array(qualityRowSchema).parse(connection.prepare(sql).all(filter.limit ?? 500)).map(toQualityFinding);
+    },
+
+    dismissQualityFinding(id: string): void {
+      connection.prepare("UPDATE quality_findings SET dismissed_at = ? WHERE id = ?").run(nowIso(), id);
     },
   };
   return registry;
