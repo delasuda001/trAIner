@@ -711,3 +711,25 @@ mark.key-reco { background: var(--sl-yellow); color: var(--fixed-ink); font-weig
 .link-button { justify-self: start; background: none; border: 0; padding: 0; font: inherit; font-size: 12.5px; color: var(--sl-ink-muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .other-device { margin-top: 12px; padding-top: 10px; border-top: 1.5px solid var(--sl-grid); }
 .guest-access { margin: 6px 0 4px; }
+
+/* ---------- Clin d'œil (profil de Marie seulement, cf. lib/profiles/celebration) ---------- */
+.header-hearts { display: inline-flex; gap: 2px; margin-left: 6px; align-self: flex-start; color: var(--sl-pink); font-size: 10px; line-height: 1; }
+.header-hearts span:nth-child(2) { font-size: 7px; transform: translateY(6px); opacity: 0.7; }
+.header-hearts span:nth-child(3) { font-size: 8px; transform: translateY(-2px); opacity: 0.85; }
+.celebration { position: fixed; inset: 0; z-index: 80; pointer-events: none; overflow: hidden; }
+.celebration-hearts span { position: absolute; bottom: -40px; color: var(--sl-pink); text-shadow: 2px 2px 0 var(--sl-yellow); animation: heart-rise 2.6s cubic-bezier(.2,.7,.3,1) forwards; opacity: 0; }
+@keyframes heart-rise {
+  0% { transform: translate(0, 0) scale(0.6) rotate(-10deg); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(var(--drift), -105vh) scale(1.1) rotate(12deg); opacity: 0; }
+}
+.celebration-banner { position: absolute; top: 18%; left: 50%; transform: translateX(-50%) rotate(-3deg); white-space: nowrap; padding: 12px 26px; background: var(--sl-yellow); color: var(--fixed-ink); border: var(--sl-stroke) solid var(--fixed-ink); border-radius: var(--sl-radius-pill); box-shadow: var(--sl-shadow-hero) var(--sl-pink); font-family: var(--font-display); font-weight: 800; font-size: clamp(20px, 6vw, 34px); letter-spacing: -0.02em; animation: banner-in 3.4s ease forwards; }
+@keyframes banner-in {
+  0% { transform: translate(-50%, -40px) rotate(-8deg) scale(0.6); opacity: 0; }
+  12% { transform: translate(-50%, 0) rotate(-3deg) scale(1.06); opacity: 1; }
+  20%, 80% { transform: translate(-50%, 0) rotate(-3deg) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -12px) rotate(-3deg) scale(0.98); opacity: 0; }
+}
+.celebration.reduced .celebration-banner { animation: banner-fade 3.4s linear forwards; transform: translateX(-50%) rotate(-3deg); }
+@keyframes banner-fade { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .celebration-hearts { display: none; } }

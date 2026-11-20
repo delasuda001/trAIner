@@ -17,6 +17,8 @@ import { coachGauge } from "@/lib/server/quota";
 import { RegisterProvider } from "@/components/ui/register";
 import { ConnectionProvider, OfflineBanner } from "@/components/offline/connection";
 import { registerForRole } from "@/lib/register";
+import { ArrivalCelebration, HeaderHearts } from "@/components/fun/celebration";
+import { celebrated } from "@/lib/profiles/celebration";
 import "./globals.css";
 
 // Polices auto-hébergées par Next au build : aucune requête externe à l'usage.
@@ -58,7 +60,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <ConnectionProvider>
         <header className="topbar">
           <div className="topbar-inner">
-            <Link href="/" className="brand" aria-label={`${BRAND.name}, tableau de bord`}><LogoMark /><Wordmark /></Link>
+            <Link href="/" className="brand" aria-label={`${BRAND.name}, tableau de bord`}><LogoMark /><Wordmark />{celebrated(member?.id) ? <HeaderHearts /> : null}</Link>
             {member ? <Nav admin={member.role === "admin"} /> : null}
             <span className="topbar-spacer" />
             {member ? (
@@ -71,6 +73,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             {member ? <span className="desktop-only"><LogoutButton name={member.name} /></span> : null}
           </div>
         </header>
+        {celebrated(member?.id) ? <ArrivalCelebration /> : null}
         <main className="shell"><OfflineBanner /><GaugeProvider gauge={gauge}>{children}</GaugeProvider></main>
         {member ? <FeedbackButton /> : null}
         </ConnectionProvider>
