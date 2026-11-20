@@ -47,13 +47,14 @@ export function zonesFromHistory(runs: Array<{ localDate: string; maxHeartRateBp
 export type ZonesSource = "watch" | "history" | "default";
 
 /** D'où viennent les zones, en une phrase courte (affichée sous le calendrier et dans la séance). */
-export function zonesSourceSentence(zones: HeartRateZones, source: ZonesSource): string {
+export function zonesSourceSentence(zones: HeartRateZones, source: ZonesSource, recalibration?: EasyZonesRecalibration | null): string {
+  const recalibrated = recalibration ? ` Z2 recalée sur tes footings (médiane ${recalibration.easyMedianBpm} bpm sur ${recalibration.runs} sorties) : haut de Z2 à ${recalibration.z2HighBpm} bpm au lieu de ${recalibration.watchZ2HighBpm}.` : "";
   if (source === "watch") {
     const lthr = zones.lactateThresholdHeartRateBpm;
     const parts = [lthr ? `seuil ${lthr} bpm${thresholdAtZ4Z5Boundary(zones) ? ", à la limite Z4/Z5" : ""}` : null, zones.maxHeartRateBpm ? `FC max ${zones.maxHeartRateBpm} bpm` : null].filter(Boolean);
-    return `Zones de ta montre${parts.length ? ` (${parts.join(", ")})` : ""}.`;
+    return `Zones de ta montre${parts.length ? ` (${parts.join(", ")})` : ""}.${recalibrated}`;
   }
-  if (source === "history") return `Zones déduites de tes courses : FC max observée ${zones.maxHeartRateBpm} bpm, en % de FC max.`;
+  if (source === "history") return `Zones déduites de tes courses : FC max observée ${zones.maxHeartRateBpm} bpm, en % de FC max.${recalibrated}`;
   return "Zones provisoires : pas encore de course avec fréquence cardiaque.";
 }
 

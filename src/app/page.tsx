@@ -9,7 +9,7 @@ import { getDashboard } from "@/lib/server/analytics";
 import { readPrepareStatus } from "@/lib/server/prepare-service";
 import { PreparingNotice } from "@/components/profiles/welcome-steps";
 import { readOutlookCoach, readSessionCoach } from "@/lib/server/coach-service";
-import { registerForRole, say } from "@/lib/register";
+import { registerForRole, say, voiceDeep } from "@/lib/register";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { GoalPages } from "@/components/dashboard/essential";
@@ -46,7 +46,7 @@ function renderHome(member: Member, query: string | null) {
   const register = registerForRole(member.role);
   const view = resolveViewMode(createAppStateRepository().get(VIEW_MODE_KEY, viewModeSchema), member.role, query);
   const guideResetAt = getRegistry().getSetting(`guide_reset_${member.id}`, z.string());
-  const zonesNote = zonesSourceSentence(dashboard.profile.zones, dashboard.profile.zonesSource);
+  const zonesNote = voiceDeep(zonesSourceSentence(dashboard.profile.zones, dashboard.profile.zonesSource, dashboard.profile.easyZones), register);
   // Tête et cartes du haut identiques dans les deux vues : passer de l'une à l'autre ne fait rien bouger.
   const head = (
     <div className="page-head home-head">
