@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 20 novembre 2026 (zones génériques recalées, contrôle de cohérence et relecture IA des analyses ; branche `claude/project-thread-s7rvwt`, pas encore en ligne).
+Dernière mise à jour : 20 novembre 2026, soir (zones génériques recalées, allure facile réelle, contrôle de cohérence et relecture IA ; EN LIGNE depuis la branche `claude/project-thread-s7rvwt`, sauvegardes `data/backups/*-2026-11-20-avant-correctifs.db`).
 
 ## En deux phrases
 
@@ -491,7 +491,7 @@ Aucun détail de ses données ici (engagement de confidentialité). Défauts gé
   Vue complète inchangée. `GoalGap.targetTimeS` : temps visé exact (l'allure arrondie donnait 1:45:08).
 - Reste à vérifier : écart « à FC égale » en endurance face à des comparables à FC très dispersées (`comparable.ts`).
 
-## Zones génériques et contrôle qualité des analyses (20 nov., branche `claude/project-thread-s7rvwt`)
+## Zones génériques et contrôle qualité des analyses (20 nov., branche `claude/project-thread-s7rvwt`, en ligne)
 
 Déclencheur : revue du profil de Charles (coureur entraîné, zones montre en % de FC max, footings à
 139–148 bpm pour une Z2 qui finissait à 133). Toutes les règles sont générales et déclenchées par les
@@ -534,6 +534,11 @@ concernés ne bougent pas.
   « FC sous la cible » dit comme tel (plus « dans la cible »).
 - Écart à FC égale > 45 s/km → non concluant (FC du capteur faussée) ; zones recalées : « seuil » exige
   une FC moyenne en Z4, sinon tempo.
+- Après la 1re relecture IA (Haiku, ≈ 37 k tokens pour 2 profils) : allure facile prescrite à l'allure
+  habituelle ou un peu plus lente (médiane −⅙, +⅚ de la largeur), sortie longue dimensionnée sur les
+  sorties longues hors course (effet aérobie < 4,5), conseil du jour qui porte l'alternative quand la
+  récupération est dégradée (`outlook-v6`, contrôle `alternative_missing`).
+- Analyses de Charles régénérées (« préparation », ≈ 65 k tokens au total).
 - **Profils types** (`lib/quality/archetypes.test.ts`) : entraîné à zones génériques, zones mesurées,
   zones personnalisées, débutant ; toute la chaîne puis le contrôleur, sans erreur.
 - Audit sur copie après correctifs : restent le profil de test (analyses reprises de Bastien au « tu »)
