@@ -59,6 +59,11 @@ export function checkOutlook(dashboard: Dashboard, context: Pick<Context, "runs"
   if (primary.target && ["endurance", "long", "recovery_run"].includes(primary.type) && primary.target.paceSlowMps) {
     findings.push(...checkEasyTargets({ zones: dashboard.profile.zones, easy, easyTarget: { paceSlowS: paceSeconds(primary.target.paceSlowMps), heartRateLow: primary.target.heartRateLow, heartRateHigh: primary.target.heartRateHigh } }, "séance proposée"));
   }
+  // Récupération dégradée : le conseil affiché doit porter l'alternative, pas une recommandation sans condition.
+  const alternative = dashboard.suggestion.alternative;
+  if (alternative && coachOutput != null && !stringsOf(coachOutput).some((text) => text.includes(`${alternative.durationMin} min`))) {
+    findings.push({ code: "alternative_missing", severity: "warning", where: "conseil du jour (Claude)", message: `Signaux de récupération dégradés : l'alternative (${alternative.title}, ${alternative.durationMin} min) n'apparaît pas dans le conseil affiché.` });
+  }
   const texts = [...stringsOf(dashboard.suggestion).map((text) => ({ where: "séance proposée", text })), ...stringsOf(coachOutput).map((text) => ({ where: "conseil du jour (Claude)", text }))];
   findings.push(...texts.flatMap((entry) => checkText(entry.text, entry.where, register)));
   const seen = new Set<string>();

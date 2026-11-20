@@ -140,6 +140,9 @@ const HARD_FAMILIES: ReadonlySet<SessionFamily> = new Set(["intervals", "steady"
 /** Demi-largeur de la fourchette d'allure affichée en endurance (s/km). */
 const EASY_PACE_HALF_RANGE_S = 8;
 
+/** Effet aérobie de la montre à partir duquel une sortie longue est une course (effort maximal), pas un repère de durée. */
+const RACE_LIKE_AEROBIC_EFFECT = 4.5;
+
 function isHard(run: SuggestionRun): boolean {
   return HARD_FAMILIES.has(run.family) || (run.aerobicTrainingEffect ?? 0) >= 4;
 }
@@ -369,7 +372,9 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
   const recent8w = runs.filter((run) => daysBetween(run.localDate, today) < 56);
   const easyDurations = present(recent8w.filter((run) => run.family === "easy").map((run) => run.movingTimeS));
   const typicalEasyMin = easyDurations.length ? (median(easyDurations) as number) / 60 : 45;
-  const longest8w = Math.max(0, ...present(recent8w.map((run) => run.movingTimeS))) / 60;
+  // Durée de référence d'une sortie longue : les sorties longues ou faciles seulement. Une course ou un effort
+  // longue menée comme une course (effet aérobie ≥ 4,5) n'est pas reproductible : 2 h de trail en course ne donnent pas 2 h de footing.
+  const longest8w = Math.max(0, ...present(recent8w.filter((run) => !(run.family === "long" && (run.aerobicTrainingEffect ?? 0) >= RACE_LIKE_AEROBIC_EFFECT)).map((run) => run.movingTimeS))) / 60;
   const easyDuration = roundTo5(Math.min(60, Math.max(40, typicalEasyMin)));
 
   const qualitySession = (): { session: SuggestedSession; why: string } => {

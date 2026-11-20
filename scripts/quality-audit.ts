@@ -2,7 +2,7 @@
  * Contrôle qualité des analyses, tous profils.
  *   npx tsx --conditions=react-server scripts/quality-audit.ts [--days=84] [--print]
  *     contrôle de cohérence en code, sans appel à Claude (voir lib/quality/coherence.ts) ;
- *   … --review [--scheduled]
+ *   … --review [--scheduled] [--week-budget=200000]
  *     en plus, relecture IA indépendante par lots (Haiku, plafonds du banc). Avec --scheduled,
  *     seulement entre 21 h et 5 h (quota de Bastien libre).
  * Les constats sont enregistrés dans le registre (vue Paramètres) ; --print les affiche aussi.
@@ -16,6 +16,10 @@ async function main() {
   const { adminMember, getRegistry, runAs } = await import("@/lib/profiles/context");
   const { runQualityAudit } = await import("@/lib/server/quality-audit");
   const { runQualityReview } = await import("@/lib/server/quality-review-service");
+  const { budgetFromEnv } = await import("@/lib/bench/budget");
+  const weekBudget = Number(process.argv.find((arg) => arg.startsWith("--week-budget="))?.slice(14) ?? 0);
+  const config = budgetFromEnv(process.env);
+  if (weekBudget > 0) config.weekTokens = weekBudget;
   await runAs(adminMember(), async () => {
     const summary = runQualityAudit(days);
     console.log(`Règles : ${summary.profiles} profil(s), ${summary.subjects} sujet(s), ${summary.findings} constat(s).`);
@@ -24,7 +28,7 @@ async function main() {
       if (process.argv.includes("--scheduled") && hour >= 5 && hour < 21) {
         console.log("Relecture IA : hors fenêtre 21 h – 5 h, reportée.");
       } else {
-        const review = await runQualityReview();
+        const review = await runQualityReview({ config });
         console.log(`Relecture IA : ${review.profiles} profil(s), ${review.cases} cas, ${review.findings} constat(s)${review.stoppedBecause ? `, arrêt : ${review.stoppedBecause}` : ""}.`);
       }
     }

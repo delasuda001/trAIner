@@ -9,7 +9,7 @@ import { median } from "./stats";
  * courent dans cette même zone. Règles, dans l'ordre :
  * 1. Au moins 3 footings sur route courus aux FC où la cible est calculée (haut de la zone visée ;
  *    6 dernières semaines, sinon 12) :
- *    la fourchette entoure la médiane de ses 6 plus récents (un tiers plus vite, deux tiers plus lent),
+ *    la fourchette entoure la médiane de ses 6 plus récents (un sixième plus vite, le reste plus lent : un footing ne se prescrit pas plus vite que d'habitude),
  *    large comme leur écart interquartile (entre 20 et 30 s/km).
  * 2. Sinon, la fourchette du modèle, dont le bas (allure la plus lente) ne dépasse pas l'allure
  *    médiane de ses footings de plus de 30 s/km (3 footings au moins).
@@ -56,9 +56,9 @@ export function easyPaceRange(model: { fastS: number; slowS: number } | null, ta
     // Largeur bornée (20 à 30 s/km) autour de la médiane de ces sorties.
     const width = Math.min(MAX_WIDTH_S, Math.max(MIN_WIDTH_S, slow - fast));
     const middle = quantile(inZone, 0.5);
-    // Penchée vers le lent : un footing se court plutôt sous son allure habituelle que dessus.
-    fast = middle - width / 3;
-    slow = middle + (2 * width) / 3;
+    // Penchée vers le lent : un footing se prescrit à son allure habituelle ou un peu en dessous, jamais au-dessus.
+    fast = middle - width / 6;
+    slow = middle + (5 * width) / 6;
     return { fastS: Math.round(fast), slowS: Math.round(slow) };
   }
   if (!model) return null;

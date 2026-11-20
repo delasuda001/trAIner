@@ -7,7 +7,7 @@ describe("allure facile tirée des footings réels", () => {
   it("footings courus à ces FC : fourchette autour de leur médiane, penchée vers le lent", () => {
     // Coureuse dont l'allure bouge peu avec la FC : le modèle (7:15–7:43) était 50 s/km trop lent.
     const samples = [sample(428, 149, "2026-08-22"), sample(391, 149, "2026-10-24"), sample(387, 142, "2026-10-31")];
-    expect(easyPaceRange({ fastS: 435, slowS: 463 }, { heartRateLow: 137, heartRateHigh: 149 }, samples)).toEqual({ fastS: 384, slowS: 405 });
+    expect(easyPaceRange({ fastS: 435, slowS: 463 }, { heartRateLow: 137, heartRateHigh: 149 }, samples)).toEqual({ fastS: 388, slowS: 408 });
   });
 
   it("6 dernières semaines d'abord", () => {

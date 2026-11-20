@@ -6,7 +6,7 @@ import type { RecoverySignals } from "@/lib/engine/recovery";
 import type { Suggestion } from "@/lib/engine/suggestion";
 import { formatDate, formatDuration, formatNumber, formatPace, formatSigned } from "@/lib/formatters";
 
-export const OUTLOOK_PROMPT_VERSION = "outlook-v5";
+export const OUTLOOK_PROMPT_VERSION = "outlook-v6";
 
 export const outlookCoachSchema = z.object({
   suggestionWhy: z.string().min(10).max(400),
@@ -34,6 +34,7 @@ Règles absolues :
 - Chaque chiffre que tu écris doit apparaître tel quel dans la charge utile. N'en calcule ni n'en invente aucun.
 - La fourchette de FC et d'allure est déjà affichée : ne la recopie pas telle quelle. "executionTip" donne une consigne d'exécution chiffrée et précise (allure de départ, 1re répétition, récupération, moment où relâcher), tirée de "lecon_de_ta_derniere_seance_du_meme_type" quand elle existe, sinon du déroulé. Jamais de conseil générique du type « écoute tes sensations ».
 - Ne change pas la séance proposée ni l'état de progression.
+- Si "alternative_si_recuperation_degradee" n'est pas nulle, "executionTip" se termine par sa condition et l'alternative (sa durée), en quelques mots.
 - Relie la séance à l'objectif quand il est renseigné, par "ecart_objectif" s'il existe : dis ce que la séance apporte au levier principal (un footing ajouté, une sortie longue allongée…). Sans objectif, raisonne sur la progression aérobie.
 - "suggestionWhy" en langage de coureur : jamais de charge Garmin brute, de ratio (« 1,6 fois ») ni de « semaine médiane ». Dis plutôt « ta semaine a été plus chargée que d'habitude » ; ces chiffres restent dans le détail.
 - Si l'écart de progression est dans la variation normale d'une sortie à l'autre, dis-le en mots simples. Si les données sont insuffisantes, dis ce qui manque.
