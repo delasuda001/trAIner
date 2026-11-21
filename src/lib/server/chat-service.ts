@@ -16,7 +16,7 @@ import { sessionTitle } from "@/lib/engine/activity-metrics";
 import { requireActiveMember } from "@/lib/profiles/context";
 import { askerLabel, systemPromptFor } from "@/lib/coach/athlete";
 import { checkQuota } from "./quota";
-import { recordFailure, recordUsage } from "./usage";
+import { recordFailure, recordUsage, refreshRateLimits } from "./usage";
 
 /** Contexte synthétique déjà calculé : jamais de séries brutes, jamais d'historique complet. */
 export function buildChatContext(dashboard = getDashboard()) {
@@ -102,6 +102,7 @@ export async function askCoach(question: string, activityId: string | null = nul
   const repository = createChatRepository();
   const memberId = requireActiveMember().id;
   if (busyMembers.has(memberId)) return { messages: repository.list(), error: { kind: "unavailable", message: "Le coach répond déjà à une question." } };
+  await refreshRateLimits({ maxAgeMs: 2 * 60_000, waitMs: 4_000 });
   const quota = checkQuota();
   if (!quota.allowed) return { messages: repository.list(), error: { kind: "quota", message: quota.message } };
   busyMembers.add(memberId);

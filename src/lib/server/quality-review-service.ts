@@ -15,7 +15,7 @@ import { stringsOf } from "@/lib/quality/coherence";
 import { analyzeSession, getDashboard, loadContext } from "@/lib/server/analytics";
 import { outlookPayload, readOutlookCoach, readSessionCoach, sessionPayload } from "@/lib/server/coach-service";
 import { easyBaselineAt } from "@/lib/server/quality-service";
-import { readRateLimits, recordUsage } from "@/lib/server/usage";
+import { readRateLimits, recordUsage, refreshRateLimits } from "@/lib/server/usage";
 
 /**
  * Relecture indépendante par lots (voir lib/coach/quality-review.ts) : un appel par profil,
@@ -101,6 +101,7 @@ export async function runQualityReview(options: { sinceDays?: number; config?: B
   for (const record of registry.list().filter((entry) => entry.disabledAt == null)) {
     const batch = runAs(toMember(record), () => collectBatch(record.id, options.sinceDays ?? 7, seen));
     if (!batch) continue;
+    await refreshRateLimits({ maxAgeMs: 2 * 60_000, waitMs: 10_000 });
     // Budget et quota vérifiés avant chaque appel, dans le contexte de Bastien (sa base porte l'usage automatique).
     const decision = runAs(adminMember(), () => canSpend({
       estimate: REVIEW_ESTIMATE,

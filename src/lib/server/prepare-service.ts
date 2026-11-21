@@ -8,6 +8,7 @@ import { analyzeSession, getDashboard, loadContext } from "./analytics";
 import { prepareOutlookCoach, prepareSessionCoach } from "./coach-service";
 import { checkQuota, coachGauge } from "./quota";
 import { syncNow } from "./sync-service";
+import { refreshRateLimits } from "./usage";
 
 /**
  * Préparation d'un invité par Bastien, avant que l'invité n'ouvre son lien :
@@ -112,6 +113,7 @@ export async function prepareProfile(member: Member, sync: (member: Member) => R
   save(member.id, { stage: "coach", runs: context.runs.length });
 
   // 3. Coach : les 2 dernières séances et le conseil du jour, si la garde le permet.
+  await refreshRateLimits({ maxAgeMs: 2 * 60_000, waitMs: 4_000 });
   const allowed = checkQuota(PREPARATION_ESTIMATE, { preparation: true });
   if (!allowed.allowed) {
     save(member.id, { stage: "ready", note: "Analyses du coach non préparées (abonnement chargé) : elles se feront à la demande." });

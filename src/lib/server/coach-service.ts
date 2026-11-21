@@ -17,7 +17,7 @@ import { requireActiveMember } from "@/lib/profiles/context";
 import { systemPromptFor } from "@/lib/coach/athlete";
 import { fingerprintMatch, hashPayload, storedFingerprint } from "@/lib/coach/fingerprint";
 import { checkQuota } from "./quota";
-import { recordFailure, recordUsage } from "./usage";
+import { recordFailure, recordUsage, refreshRateLimits } from "./usage";
 import { analyzeSession, getDashboard, loadContext, type Dashboard, type SessionAnalysis } from "./analytics";
 
 export type CoachResult<T> =
@@ -80,6 +80,8 @@ async function generate<T>(job: Job<T>, options: { preparation?: boolean } = {})
   const running = inFlight.get(key);
   if (running) return running as Promise<CoachResult<T>>;
   // Plafonds du test familial : vérifiés seulement quand un appel serait réellement fait.
+  // Relevé de l'abonnement de moins de 2 min avant de décider (sans token, ≈ 1 s au plus).
+  await refreshRateLimits({ maxAgeMs: 2 * 60_000, waitMs: 4_000 });
   const quota = checkQuota(undefined, options);
   const usageKind = options.preparation ? "prepare" : job.kind;
   if (!quota.allowed) return { status: "error", kind: "quota", message: quota.message };

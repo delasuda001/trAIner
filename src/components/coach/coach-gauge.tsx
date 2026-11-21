@@ -40,6 +40,22 @@ function useLocalTime(iso: string | null): string | null {
   return label;
 }
 
+/** Âge du relevé de l'abonnement (« à l'instant », « il y a 3 min », « il y a 2 h »), calculé côté navigateur. */
+function useAgo(iso: string | null): string | null {
+  const [label, setLabel] = useState<string | null>(null);
+  useEffect(() => {
+    if (!iso) return;
+    const update = () => {
+      const minutes = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60_000));
+      setLabel(minutes < 1 ? "à l'instant" : minutes < 60 ? `il y a ${minutes} min` : `il y a ${Math.round(minutes / 60)} h`);
+    };
+    update();
+    const timer = setInterval(update, 60_000);
+    return () => clearInterval(timer);
+  }, [iso]);
+  return label;
+}
+
 /**
  * Une seule ligne discrète : trois pastilles et le niveau. Le détail (remise à zéro,
  * dernière analyse du jour) ne s'ouvre qu'au toucher, ou quand l'invité vient
@@ -49,6 +65,7 @@ export function CoachGaugeLine({ reveal = false, popover = false }: { reveal?: b
   const gauge = useCoachGauge();
   const [open, setOpen] = useState(false);
   const reset = useLocalTime(gauge && gauge.level !== "large" ? gauge.resetsAt : null);
+  const ago = useAgo(gauge?.checkedAt ?? null);
   if (!gauge || !gauge.guest) return null;
   const level = LEVELS[gauge.level];
   const filled = gauge.level === "large" ? 1 : gauge.level === "menager" ? 2 : 3;
@@ -63,6 +80,7 @@ export function CoachGaugeLine({ reveal = false, popover = false }: { reveal?: b
         <span className="gauge-text" role="status">
           {level.text}
           {gauge.level !== "large" && reset ? ` Remise à zéro ${reset}.` : ""}
+          {gauge.stale ? ` Dernier relevé de l'abonnement ${ago ?? "inconnu"} : la jauge reste prudente.` : ago ? ` Relevé ${ago}.` : ""}
           {gauge.left === 1 ? " Il te reste une analyse aujourd'hui : choisis celle qui t'intéresse le plus." : ""}
           {gauge.left === 0 ? " Tes analyses du jour sont faites : le coach sera de nouveau disponible demain, et tout ce qui est déjà analysé reste consultable." : ""}
         </span>

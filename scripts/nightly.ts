@@ -28,7 +28,7 @@ async function main() {
   const { createUsageRepository } = await import("@/lib/db/repositories/usage-repository");
   const { getDashboard } = await import("@/lib/server/analytics");
   const { generateWeeklyReview, listWeeklyReviews } = await import("@/lib/server/coach-service");
-  const { readRateLimits } = await import("@/lib/server/usage");
+  const { readRateLimits, refreshRateLimits } = await import("@/lib/server/usage");
   const { defaultReviewWeek } = await import("@/lib/server/weekly-dossier");
 
   const scheduled = process.argv.includes("--scheduled");
@@ -52,6 +52,8 @@ async function main() {
     maxUtilization: { ...base.maxUtilization, fiveHour: Number(option("max-five-hour")) || base.maxUtilization.fiveHour },
   };
   const startIso = now.toISOString();
+  // Relevé complet de l'abonnement (sans token) avant de décider quoi que ce soit.
+  await refreshRateLimits({ maxAgeMs: 0, waitMs: 15_000 });
   const windows = () => Object.values(readRateLimits()).map((window) => ({ window: window.window ?? "inconnue", utilization: window.utilization, resetsAt: window.resetsAt, status: window.status }));
   log(`début${scheduled ? " (planifié)" : " (manuel)"} : plafonds ${config.nightTokens} pour ce lancement, ${config.weekTokens} sur 7 jours (déjà ${automaticTokensSince(new Date(now.getTime() - 7 * 86_400_000).toISOString())}), arrêt si 5 h ≥ ${Math.round(config.maxUtilization.fiveHour * 100)} % ; modèle ${currentCoachModel()}`);
 

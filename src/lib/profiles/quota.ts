@@ -92,7 +92,16 @@ export type SubscriptionGauge = {
   resetsAt: string | null;
   /** Aucun relevé de l'abonnement encore reçu. */
   known: boolean;
+  /** Heure du dernier relevé complet de l'abonnement (ISO), si connue. */
+  checkedAt: string | null;
+  /** Relevé trop ancien (au-delà de GAUGE_STALE_MS) : l'affichage devient prudent. */
+  stale: boolean;
 };
+
+/** Au-delà de 30 minutes sans relevé, la jauge n'affiche plus « large » sur la foi d'un vieux chiffre. */
+export const GAUGE_STALE_MS = 30 * 60_000;
+/** Relevé ancien : on passe à « à ménager » dès la moitié du seuil d'arrêt. */
+export const GAUGE_STALE_EASE_FROM = 0.5;
 
 /** À partir de 75 % du seuil d'arrêt, on invite à ménager l'abonnement. */
 export const GAUGE_EASE_FROM = 0.75;
@@ -101,7 +110,7 @@ export const GAUGE_EASE_FROM = 0.75;
  * Trois niveaux (large, à ménager, presque plein) : la charge de chaque fenêtre (5 h,
  * 7 jours) rapportée au seuil où le coach s'arrête pour les invités. Fonction pure.
  */
-export function subscriptionGauge(windows: RateWindow[], now: Date): SubscriptionGauge {
+export function subscriptionGauge(windows: RateWindow[], now: Date, checkedAt: string | null = null): SubscriptionGauge {
   let worst: { load: number; resetsAt: string | null } | null = null;
   let known = false;
   for (const window of windows) {
@@ -112,7 +121,9 @@ export function subscriptionGauge(windows: RateWindow[], now: Date): Subscriptio
     if (!worst || load > worst.load) worst = { load, resetsAt: window.resetsAt };
   }
   const load = worst?.load ?? 0;
-  return { level: load >= 1 ? "plein" : load >= GAUGE_EASE_FROM ? "menager" : "large", load: Math.min(1, load), resetsAt: worst?.resetsAt ?? null, known };
+  const stale = !checkedAt || now.getTime() - Date.parse(checkedAt) > GAUGE_STALE_MS;
+  const easeFrom = stale ? GAUGE_STALE_EASE_FROM : GAUGE_EASE_FROM;
+  return { level: load >= 1 ? "plein" : load >= easeFrom ? "menager" : "large", load: Math.min(1, load), resetsAt: worst?.resetsAt ?? null, known, checkedAt, stale };
 }
 
 /** Analyses encore possibles pour un invité (plafonds personnels), ou null sans plafond. */

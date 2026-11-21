@@ -70,6 +70,16 @@ describe("jauge de l'abonnement", () => {
     expect(gauge).toMatchObject({ level: "large", known: false });
   });
 
+  it("devient prudente quand le relevé de l'abonnement est ancien", () => {
+    const windows = [{ window: "seven_day", utilization: 0.4, resetsAt: later, status: "allowed" }];
+    const fresh = new Date(now.getTime() - 2 * 60_000).toISOString();
+    const old = new Date(now.getTime() - 2 * 3_600_000).toISOString();
+    expect(subscriptionGauge(windows, now, fresh)).toMatchObject({ level: "large", stale: false, checkedAt: fresh });
+    expect(subscriptionGauge(windows, now, old)).toMatchObject({ level: "menager", stale: true });
+    expect(subscriptionGauge(windows, now, null)).toMatchObject({ level: "menager", stale: true });
+    expect(subscriptionGauge([{ window: "seven_day", utilization: 0.2, resetsAt: later, status: "allowed" }], now, old).level).toBe("large");
+  });
+
   it("compte les analyses restantes sur le plafond le plus serré", () => {
     expect(analysesLeft({ usedToday: 0, usedWeek: 0, remainingToday: 20_000, remainingWeek: 100_000 })).toBe(2);
     expect(analysesLeft({ usedToday: 0, usedWeek: 0, remainingToday: null, remainingWeek: null })).toBeNull();

@@ -3,6 +3,7 @@ import "server-only";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import { LlmError, type LlmClient, type LlmRateLimit, type LlmUsage, type StructuredRequest, type StructuredResponse } from "./llm";
+import { windowsFromPlanUsage } from "./rate-limits";
 
 /**
  * Backend « abonnement Claude local » : le SDK Agent pilote le CLI Claude Code
@@ -48,12 +49,35 @@ function usageOf(result: SDKResultMessage): LlmUsage {
   };
 }
 
+/** État de quota communiqué par le dernier appel (remis à zéro au début de chaque appel). */
 let lastRateLimit: LlmRateLimit | null = null;
-/** Dernier état connu de chaque fenêtre de quota (5 h, semaine…) : sert aux plafonds du travail automatique. */
-const rateLimitsByWindow = new Map<string, LlmRateLimit>();
 
-export function observedRateLimits(): LlmRateLimit[] {
-  return [...rateLimitsByWindow.values()];
+/** Prompt qui n'envoie jamais rien : le CLI démarre, répond aux demandes de contrôle, et aucun modèle n'est appelé. */
+async function* silentPrompt(signal: AbortSignal): AsyncGenerator<never> {
+  await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+}
+
+/**
+ * Relevé de l'abonnement (fenêtres 5 h, 7 jours…) tel que `/usage` l'affiche : lu sur le
+ * compte claude.ai par le CLI, SANS appel de modèle ni token consommé (≈ 1 s). Null si
+ * indisponible. API marquée expérimentale par le SDK : tout échec est sans conséquence
+ * (on garde le dernier relevé et l'affichage devient prudent).
+ */
+export async function fetchPlanWindows(timeoutMs = 8_000): Promise<LlmRateLimit[] | null> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), timeoutMs);
+  const stream = query({ prompt: silentPrompt(abort.signal), options: { tools: [], settingSources: [], persistSession: false, env: cleanEnvironment(), abortController: abort } });
+  try {
+    const timeout = new Promise<null>((resolve) => abort.signal.addEventListener("abort", () => resolve(null), { once: true }));
+    const response = await Promise.race([stream.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }), timeout]);
+    return response ? windowsFromPlanUsage(response) : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+    abort.abort();
+    stream.close();
+  }
 }
 
 export function createClaudeAgentClient(model: string): LlmClient {
@@ -65,6 +89,7 @@ export function createClaudeAgentClient(model: string): LlmClient {
       const timer = setTimeout(() => abort.abort(), TIMEOUT_MS);
       let usedModel = model;
       let assistantError: string | undefined;
+      lastRateLimit = null;
       try {
         const stream = query({
           prompt: request.prompt,
@@ -85,8 +110,7 @@ export function createClaudeAgentClient(model: string): LlmClient {
           if (message.type === "assistant" && message.error) assistantError = message.error;
           if (message.type === "rate_limit_event") {
             const info = message.rate_limit_info;
-            lastRateLimit = { status: info.status, window: info.rateLimitType ?? null, utilization: info.utilization ?? null, resetsAt: info.resetsAt ? new Date(info.resetsAt * (info.resetsAt < 1e12 ? 1000 : 1)).toISOString() : null };
-            rateLimitsByWindow.set(lastRateLimit.window ?? "inconnue", lastRateLimit);
+            lastRateLimit = { status: info.status, window: info.rateLimitType ?? null, utilization: info.utilization == null ? null : info.utilization > 1 ? info.utilization / 100 : info.utilization, resetsAt: info.resetsAt ? new Date(info.resetsAt * (info.resetsAt < 1e12 ? 1000 : 1)).toISOString() : null };
           }
           if (message.type === "result") {
             const usage = usageOf(message);

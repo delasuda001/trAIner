@@ -7,7 +7,7 @@ import { getRegistry, requireActiveMember } from "@/lib/profiles/context";
 import { analysesLeft, decideQuota, quotaState, subscriptionGauge, type QuotaDecision, type QuotaState, type SubscriptionGauge } from "@/lib/profiles/quota";
 import { simulatedCoachForActive } from "@/lib/profiles/test-profile";
 import { DEFAULT_GUESTS_WEEKLY_CAP, type MemberRecord } from "@/lib/profiles/types";
-import { readRateLimits } from "./usage";
+import { rateLimitsCheckedAt, readRateLimits } from "./usage";
 
 export const GUESTS_WEEKLY_CAP_KEY = "guests_weekly_cap";
 
@@ -83,7 +83,7 @@ export type CoachGauge = SubscriptionGauge & {
 /** État de l'abonnement de Bastien et du plafond de l'invité, pour la jauge près des boutons du coach. */
 export function coachGauge(now = new Date()): CoachGauge {
   const member = requireActiveMember();
-  const gauge = subscriptionGauge(windows(), now);
+  const gauge = subscriptionGauge(windows(), now, rateLimitsCheckedAt());
   if (member.role !== "guest") return { ...gauge, left: null, guest: false };
   const record = getRegistry().find(member.id);
   const state = quotaState({ own: createUsageRepository().since(windowStart(member.id, now)), dailyCap: record?.dailyTokenCap ?? null, weeklyCap: record?.weeklyTokenCap ?? null, now, startOfTodayIso: startOfToday(now) });

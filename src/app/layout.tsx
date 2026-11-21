@@ -14,6 +14,7 @@ import { LogoutButton } from "@/components/profiles/logout-button";
 import { FeedbackButton } from "@/components/feedback/feedback-button";
 import { GaugeProvider } from "@/components/coach/coach-gauge";
 import { coachGauge } from "@/lib/server/quota";
+import { refreshRateLimits } from "@/lib/server/usage";
 import { RegisterProvider } from "@/components/ui/register";
 import { ConnectionProvider, OfflineBanner } from "@/components/offline/connection";
 import { registerForRole } from "@/lib/register";
@@ -49,6 +50,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const member = await requestMember();
   const sync = member ? runAs(member, () => readSyncState()) : null;
   // Jauge de l'abonnement de Bastien, montrée aux invités près des boutons du coach.
+  // Relevé de l'abonnement s'il date de plus de 5 min (sans token, attente bornée à 2,5 s).
+  if (member?.role === "guest") await refreshRateLimits({ waitMs: 2_500 });
   const gauge = member?.role === "guest" ? runAs(member, () => coachGauge()) : null;
   return (
     <html lang="fr" className={`${display.variable} ${text.variable}`} data-rendered-at={new Date().toISOString()} suppressHydrationWarning>

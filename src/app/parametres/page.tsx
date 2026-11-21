@@ -25,7 +25,7 @@ import { generatedAtLabel, modelLabel } from "@/lib/coach/model-label";
 import { summarizeUsage, totalTokens, type UsageTotals } from "@/lib/coach/usage-summary";
 import { createUsageRepository } from "@/lib/db/repositories/usage-repository";
 import { formatDate, formatNumber } from "@/lib/formatters";
-import { readLastRateLimit, readRateLimits } from "@/lib/server/usage";
+import { rateLimitsCheckedAt, readLastRateLimit, readRateLimits, refreshRateLimits } from "@/lib/server/usage";
 import { budgetFromEnv, budgetTokens } from "@/lib/bench/budget";
 import { benchIsRunning, pendingTasks } from "@/lib/bench/runner";
 import { BenchButton } from "@/components/settings/bench-button";
@@ -209,7 +209,9 @@ async function renderAdmin(member: Member) {
   const automaticSummary = summarizeUsage(automatic, now, startOfToday);
   const budget = budgetFromEnv(process.env);
   const weekBudgetUsed = automatic.filter((record) => record.createdAt >= new Date(now.getTime() - 7 * 86_400_000).toISOString()).reduce((sum, record) => sum + budgetTokens(record), 0);
+  await refreshRateLimits({ waitMs: 2_500 });
   const windows = Object.values(readRateLimits());
+  const checkedAt = rateLimitsCheckedAt();
   const reports = readReportIndex().slice(0, 8);
   const pending = pendingTasks();
   const first = repository.first();
@@ -246,16 +248,16 @@ async function renderAdmin(member: Member) {
             </section>
             <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-orange)" }}>
               <h2 className="section-title">Quota de l&apos;abonnement</h2>
-              {rateLimit ? (
+              {windows.length ? (
                 <div className="facts" style={{ marginTop: 10 }}>
-                  <Fact label="État" value={rateLimit.status === "allowed" ? "OK" : rateLimit.status === "allowed_warning" ? "Proche de la limite" : "Limite atteinte"} />
-                  {rateLimit.utilization != null ? <Fact label={`Utilisé (${WINDOW_LABELS[rateLimit.window ?? ""] ?? rateLimit.window ?? "fenêtre"})`} value={`${Math.round(rateLimit.utilization * (rateLimit.utilization <= 1 ? 100 : 1))} %`} /> : null}
-                  {rateLimit.resetsAt ? <Fact label="Se réinitialise" value={generatedAtLabel(rateLimit.resetsAt)} /> : null}
+                  {windows.filter((window) => !window.resetsAt || new Date(window.resetsAt) > now).map((window) => (
+                    <Fact key={window.window ?? "inconnue"} label={`${WINDOW_LABELS[window.window ?? ""] ?? window.window ?? "fenêtre"}`} value={`${window.utilization != null ? `${Math.round(window.utilization * (window.utilization <= 1 ? 100 : 1))} %` : window.status === "rejected" ? "limite atteinte" : window.status === "allowed_warning" ? "proche de la limite" : "—"}${window.resetsAt ? ` · remise à zéro ${generatedAtLabel(window.resetsAt)}` : ""}`} />
+                  ))}
                 </div>
               ) : (
-                <p className="small" style={{ marginTop: 8 }}>Claude n&apos;a pas encore communiqué d&apos;état de quota à l&apos;application. Le suivi complet de ton abonnement (toutes utilisations confondues) est dans Claude : <span className="mono">Paramètres → Utilisation</span> sur claude.ai ou dans l&apos;application, ou la commande <span className="mono">/usage</span> dans Claude Code.</p>
+                <p className="small" style={{ marginTop: 8 }}>Aucun relevé de ton abonnement pour l&apos;instant. Le suivi complet est dans Claude : <span className="mono">Paramètres → Utilisation</span> sur claude.ai, ou <span className="mono">/usage</span> dans Claude Code.</p>
               )}
-              {rateLimit ? <p className="muted small" style={{ marginTop: 8 }}>Relevé le {generatedAtLabel(rateLimit.seenAt)}. Le quota est partagé avec ton usage de Claude ailleurs ; le détail complet est dans Claude : Paramètres → Utilisation, ou <span className="mono">/usage</span> dans Claude Code.</p> : null}
+              <p className="muted small" style={{ marginTop: 8 }}>{checkedAt ? `Relevé ${generatedAtLabel(checkedAt)}` : "Pas encore de relevé complet"} : lu sur ton compte Claude sans consommer de quota, au plus toutes les 5 min quand un invité ouvre une page, et après chaque appel du coach. Il compte toute ton utilisation de Claude, ailleurs comprise.{rateLimit?.status === "rejected" ? " Dernier appel du coach refusé : limite atteinte." : ""}</p>
             </section>
           </div>
         </SettingsGroup>

@@ -9,7 +9,7 @@ import { buildSessionPayload, buildSessionPrompt, SESSION_PROMPT_VERSION, SESSIO
 import { createUsageRepository } from "@/lib/db/repositories/usage-repository";
 import { zoneOf } from "@/lib/engine/zones";
 import { localDate } from "@/lib/dates";
-import { recordUsage, readRateLimits } from "@/lib/server/usage";
+import { recordUsage, readRateLimits, refreshRateLimits } from "@/lib/server/usage";
 import { budgetTokens, canSpend, TASK_ESTIMATE, type BudgetConfig } from "./budget";
 import { gradeSessionOutput } from "./grade";
 import { buildJudgePrompt, JUDGE_MODEL, JUDGE_PROMPT_VERSION, JUDGE_SYSTEM_PROMPT, judgeJsonSchema, judgeSchema, resolveJudgement, type JudgeCase } from "./judge";
@@ -191,6 +191,7 @@ async function runQueue(config: BudgetConfig, options: { nightStartIso: string; 
     const task = tasks[0];
     const estimate = task.type === "judge" ? TASK_ESTIMATE.judge : TASK_ESTIMATE.generation;
     const nightUsed = automaticTokensSince(options.nightStartIso);
+    await refreshRateLimits({ maxAgeMs: 2 * 60_000, waitMs: 10_000 });
     const decision = canSpend({ estimate, nightUsed, weekUsed: automaticTokensSince(weekStartIso), config, windows: Object.values(readRateLimits()).map((window) => ({ window: window.window ?? "inconnue", utilization: window.utilization, resetsAt: window.resetsAt, status: window.status })), now: new Date() });
     if (!decision.ok) return { done, stoppedBecause: decision.reason, remaining: tasks.length, tokensUsed: nightUsed };
     const label = task.type === "judge" ? `jugement ${task.variant.name}` : `${task.variant.name} / ${task.fixture.id}`;
