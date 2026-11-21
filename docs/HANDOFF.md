@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 21 novembre 2026, 10 h 30 Toronto (jauge de l'abonnement fiable par le relevé /usage sans token, schéma `docs/ARCHITECTURE.md` ; EN LIGNE depuis la branche `claude/project-thread-uaymy0` ; avant, 20 nov. 18 h 40 : récupération et volume des fractionnés, continus longs, allure du moment ; avant : zones génériques recalées, allure facile réelle, contrôle de cohérence et relecture IA ; EN LIGNE depuis la branche `claude/project-thread-p09am7` (= s7rvwt + page Paramètres en catégories repliables, 20 nov. 16 h 30 Toronto), sauvegardes `data/backups/*-2026-11-20-avant-correctifs.db`).
+Dernière mise à jour : 21 novembre 2026, 14 h 30 Toronto (ouverture à Benoît, effort de course et coureur multisport, EN LIGNE depuis `claude/project-thread-bl665v` ; avant, 10 h 30 : jauge de l'abonnement fiable par le relevé /usage sans token, schéma `docs/ARCHITECTURE.md` ; EN LIGNE depuis la branche `claude/project-thread-uaymy0` ; avant, 20 nov. 18 h 40 : récupération et volume des fractionnés, continus longs, allure du moment ; avant : zones génériques recalées, allure facile réelle, contrôle de cohérence et relecture IA ; EN LIGNE depuis la branche `claude/project-thread-p09am7` (= s7rvwt + page Paramètres en catégories repliables, 20 nov. 16 h 30 Toronto), sauvegardes `data/backups/*-2026-11-20-avant-correctifs.db`).
 
 ## En deux phrases
 
@@ -676,3 +676,31 @@ les seuils 4:01 / 4:02 et « l'allure du moment ». Règles générales, vérifi
   fenêtres + heure du relevé.
 - Mesuré au déploiement (21 nov. 10 h 25) : 5 h à 7 %, 7 j à 62 % (seuil invités 70 %) → jauge de Marie « à ménager »
   (avant : « large »). API marquée expérimentale par le SDK : si elle change, la jauge devient prudente, rien ne casse.
+
+## Ouverture à Benoît (21 nov., branche `claude/project-thread-bl665v`, en ligne)
+
+- L'app en ligne (port 3000) était ARRÊTÉE à 14 h (Toronto) : relancée (`nohup npm start`), Funnel répond.
+- Clé `GARMIN_API_KEY_BENOIT` relue à chaud ; première synchro : 209 activités sur 12 mois dont 111 courses, 121 jours
+  de bien-être. Coureur multisport (vélo, natation autant que la course), environ 1 sortie de course par semaine,
+  zones montre HR_MAX avec FC seuil, niveau « confirmé ». Dernière course = semi en compétition (effet aérobie 5,0),
+  classé « continu au seuil ».
+- Règles générales ajoutées (photographie avant/après : suggestions, tableaux de bord et pages d'objectif de Bastien,
+  Marie, Charles identiques ; consignes changées sur 6 vieilles séances de Bastien et 2 de Charles, toutes des continus
+  > 60 min à effet ≥ 4,5, aucune analyse du coach stockée dessus) :
+  - `prescribe` : continu seuil/tempo plus long que son format (60/80 min) ET effet aérobie ≥ 4,5 → effort de course :
+    pas de « même effort » à refaire, 2 à 3 jours de footing, cible de la prochaine fois en Z2 (`RACE_LIKE_AEROBIC_EFFECT`
+    exporté de `prescription.ts`, `aerobicTrainingEffect` passé par `analyzeSession`).
+  - `suggestion` : la durée de sortie longue ne se cale plus sur un tel effort (avant : 90 min tirées du semi ; après 70).
+  - `goalPages` : sans objectif, cible de régularité = rythme de course habituel (≥ 1) si les autres sports sont au moins
+    aussi fréquents que la course sur 8 semaines (≥ 4 séances, `isCrossTraining` dans analytics), sinon 2 comme avant.
+    Singulier « 1 sortie ».
+  - Exemples de chronos du formulaire d'objectif réalistes (23:00, 48:00, 1:45:00, 3:45:00 ; avant 19:00 / 1:27:00 partout).
+  - Note de préparation : dit « plafond commun des invités » ou « abonnement chargé ».
+- Préparation : synchro + métriques faites, statut « prêt », MAIS 0 analyse du coach : le plafond commun des invités
+  (250 k / 7 j glissants) est presque atteint (231,7 k : Charles 144 k dont les régénérations, Marie 88 k ; 18 k libres).
+  Les 27 k de la préparation se libèrent le 25 nov. vers 11 h 20 (Toronto). Décision de Bastien : relever le plafond
+  commun (Paramètres) puis relancer « Préparer le profil », ou attendre. Garde jamais contournée.
+- Restent : le code à 6 chiffres de Benoît et son message (Bastien) ; la forme aérobie dit « Ça recule » à confiance
+  faible (même comportement que Bastien, « À confirmer » dans le détail) ; les séances comparables d'un semi en course
+  sont d'anciens continus « seuil » lents (classés sur l'étiquette Garmin), écart à FC égale peu parlant.
+- Sauvegardes : `data/backups/*-2026-11-21-avant-benoit.db`.
