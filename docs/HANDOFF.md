@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 20 novembre 2026, 18 h 40 Toronto (récupération et volume des fractionnés, continus longs, allure du moment ; avant : zones génériques recalées, allure facile réelle, contrôle de cohérence et relecture IA ; EN LIGNE depuis la branche `claude/project-thread-p09am7` (= s7rvwt + page Paramètres en catégories repliables, 20 nov. 16 h 30 Toronto), sauvegardes `data/backups/*-2026-11-20-avant-correctifs.db`).
+Dernière mise à jour : 21 novembre 2026, 10 h 30 Toronto (jauge de l'abonnement fiable par le relevé /usage sans token, schéma `docs/ARCHITECTURE.md` ; EN LIGNE depuis la branche `claude/project-thread-uaymy0` ; avant, 20 nov. 18 h 40 : récupération et volume des fractionnés, continus longs, allure du moment ; avant : zones génériques recalées, allure facile réelle, contrôle de cohérence et relecture IA ; EN LIGNE depuis la branche `claude/project-thread-p09am7` (= s7rvwt + page Paramètres en catégories repliables, 20 nov. 16 h 30 Toronto), sauvegardes `data/backups/*-2026-11-20-avant-correctifs.db`).
 
 ## En deux phrases
 
@@ -655,3 +655,24 @@ les seuils 4:01 / 4:02 et « l'allure du moment ». Règles générales, vérifi
   de confirmation (POST) ; obtenir le cookie avec `curl --form-string t=<jeton> …/api/session/invitation`
   puis le poser dans Chrome (CDP `Network.setCookie`).
 - Attention : ne jamais `pkill -P 1` sur next-server, cela arrête aussi le serveur en ligne (port 3000).
+
+## Jauge de l'abonnement fiable, schéma de fonctionnement (21 nov., branche `claude/project-thread-uaymy0`, en ligne)
+
+- Schéma : `docs/ARCHITECTURE.md` (Mermaid : vue d'ensemble, analyse d'un invité, jauge) ; version illustrée publiée en page privée.
+- Cause du retard : l'état de l'abonnement ne venait que du `rate_limit_event` joint à chaque appel du coach (une fenêtre,
+  pourcentage seulement en alerte). Le 7 j datait du 16 nov. ; sa remise à zéro passée, la jauge tombait à « large ». Elle
+  ignorait aussi la consommation de Bastien hors app (Claude Code ≈ 94 % de sa semaine).
+- Correctif : `fetchPlanWindows` (`coach/claude-agent-client.ts`) ouvre une requête SDK sans message et appelle
+  `usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true })` : le CLI lit `/usage` du compte
+  (toutes fenêtres en %), sans modèle ni token, ≈ 0,8 s. Lecture validée par Zod (`coach/rate-limits.ts`, pourcentage → fraction ;
+  1 % reste 0,01). `refreshRateLimits` (`server/usage.ts`) : un relevé à la fois, attente bornée, jamais d'exception ; registre
+  `claude_rate_limits` + `claude_rate_limits_checked_at`. Appelé : layout des invités et Paramètres (si > 5 min, 2,5 s max),
+  avant `checkQuota` coach / question / préparation (> 2 min), banc, relecture Haiku, `scripts/nightly.ts`, et en arrière-plan
+  après chaque appel réel. Sauté si `SILLAGE_FAKE_COACH=1`.
+- `mergeRateWindows` : un événement d'appel sans pourcentage garde le pourcentage connu tant que la remise à zéro est la même ;
+  seul l'événement de l'appel en cours est fusionné (plus de carte mémoire des anciens événements).
+- `subscriptionGauge(windows, now, checkedAt)` : `stale` au-delà de 30 min sans relevé → « à ménager » dès 50 % du seuil ;
+  la jauge des invités affiche « Relevé il y a X » (ou « dernier relevé … : la jauge reste prudente »). Paramètres : les deux
+  fenêtres + heure du relevé.
+- Mesuré au déploiement (21 nov. 10 h 25) : 5 h à 7 %, 7 j à 62 % (seuil invités 70 %) → jauge de Marie « à ménager »
+  (avant : « large »). API marquée expérimentale par le SDK : si elle change, la jauge devient prudente, rien ne casse.
