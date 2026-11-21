@@ -116,7 +116,8 @@ export async function prepareProfile(member: Member, sync: (member: Member) => R
   await refreshRateLimits({ maxAgeMs: 2 * 60_000, waitMs: 4_000 });
   const allowed = checkQuota(PREPARATION_ESTIMATE, { preparation: true });
   if (!allowed.allowed) {
-    save(member.id, { stage: "ready", note: "Analyses du coach non préparées (abonnement chargé) : elles se feront à la demande." });
+    const why = coachGauge().level === "plein" ? "abonnement chargé" : "plafond commun des invités atteint cette semaine";
+    save(member.id, { stage: "ready", note: `Analyses du coach non préparées (${why}) : elles se feront à la demande.` });
     return;
   }
   let analyses = 0;
