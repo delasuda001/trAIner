@@ -64,9 +64,10 @@ export function regularityPage(runs: PageRun[], today: string, target: number): 
   const weeksAtTarget = Array.from({ length: 8 }, (_, index) => countIn(addDays(currentStart, -7 * (index + 1)))).filter((count) => count >= target).length;
   const milestone = STREAK_MILESTONES.find((value) => value > streak) ?? streak + 4;
   const left = Math.max(0, target - thisWeekRuns);
+  const runsWord = `${target} sortie${target > 1 ? "s" : ""}`;
   const next = streak === 0
-    ? `Prochain palier : ${target} sorties cette semaine pour lancer ta série${left > 0 && left < target ? ` (encore ${left})` : ""}.`
-    : `Prochain palier : ${milestone} semaines d'affilée à ${target} sorties (encore ${milestone - streak}).`;
+    ? `Prochain palier : ${runsWord} cette semaine pour lancer ta série${left > 0 && left < target ? ` (encore ${left})` : ""}.`
+    : `Prochain palier : ${milestone} semaines d'affilée à ${runsWord} (encore ${milestone - streak}).`;
   return { kind: "regularity", key: "regularity", title: "Régularité", target, streakWeeks: streak, weeksAtTarget, thisWeekRuns, milestone, next };
 }
 
@@ -98,12 +99,14 @@ export function chronoPage(gap: GoalGap, marker: GoalMarker | null): ChronoPage 
  * Pages dans l'ordre du niveau : un débutant voit d'abord sa régularité, puis la distance ;
  * un confirmé d'abord le chrono qui décide de la semaine type.
  */
-export function goalPages(input: { level: AthleteLevel; gaps: GoalGap[]; markers: GoalMarker[]; runs: PageRun[]; today: string; goal: { distanceKm: number | null; targetTimeS: number | null; runsPerWeek: number } | null; habitualRunsPerWeek: number }): GoalPage[] {
+export function goalPages(input: { level: AthleteLevel; gaps: GoalGap[]; markers: GoalMarker[]; runs: PageRun[]; today: string; goal: { distanceKm: number | null; targetTimeS: number | null; runsPerWeek: number } | null; habitualRunsPerWeek: number; /** Autres sports d'endurance au moins aussi fréquents que la course (8 semaines). */ crossTraining?: boolean }): GoalPage[] {
   const main = primaryGap(input.gaps);
   const chrono = [...input.gaps].sort((a, b) => (a === main ? -1 : b === main ? 1 : 0)).map((gap) => chronoPage(gap, input.markers.find((marker) => marker.race === gap.race) ?? null));
   const goal = input.goal;
   const distanceOnly = goal?.distanceKm && !input.gaps.some((gap) => Math.abs(gap.distanceKm - (goal.distanceKm as number)) < 0.05) ? [distancePage(input.runs, input.today, goal.distanceKm)] : [];
-  const target = goal?.runsPerWeek ?? Math.max(2, Math.round(input.habitualRunsPerWeek));
+  // Sans objectif, 2 sorties par semaine au moins ; un coureur qui s'entraîne autant ou plus dans d'autres sports
+  // (vélo, natation…) garde son rythme de course habituel, 1 sortie au moins : ses autres séances ne sont pas un manque.
+  const target = goal?.runsPerWeek ?? Math.max(input.crossTraining ? 1 : 2, Math.round(input.habitualRunsPerWeek));
   const regularity = regularityPage(input.runs, input.today, target);
   if (input.level === "beginner") return [regularity, ...distanceOnly, ...chrono];
   return [...chrono, ...distanceOnly, regularity];

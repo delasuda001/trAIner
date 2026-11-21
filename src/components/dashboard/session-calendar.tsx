@@ -22,7 +22,7 @@ export function SessionCalendar({ calendar, zonesNote, plain = false, declared =
     <section className="card cal-card" aria-labelledby="cal-title">
       <div className="row-between">
         <div className="card-eyebrow"><CalendarDays size={13} /> <span id="cal-title"><Say tu="Tes séances" /> · {calendar.weeks.length} semaines</span></div>
-        {target ? <span className="cal-target">cible {target} sorties / sem.</span> : null}
+        {target ? <span className="cal-target">cible {target} sortie{target > 1 ? "s" : ""} / sem.</span> : null}
       </div>
       <div className="cal-grid" role="table" aria-label="Séances par jour">
         <div className="cal-row cal-head" role="row">

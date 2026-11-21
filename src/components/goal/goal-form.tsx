@@ -114,7 +114,7 @@ export function GoalForm({ initial }: { initial: Goal }) {
               return (
                 <label key={race.label} className="chip-input-group">
                   <small className="muted">{race.label}</small>
-                  <input className="chip-input" value={value} placeholder={race.value >= 21 ? "1:27:00" : "19:00"} onChange={(event) => { setRaceTimes((current) => ({ ...current, [race.label]: event.target.value })); setState("idle"); }} />
+                  <input className="chip-input" value={value} placeholder={race.value >= 42 ? "3:45:00" : race.value >= 21 ? "1:45:00" : race.value >= 10 ? "48:00" : "23:00"} onChange={(event) => { setRaceTimes((current) => ({ ...current, [race.label]: event.target.value })); setState("idle"); }} />
                   {racePace ? <small className="muted">{racePace}</small> : null}
                 </label>
               );

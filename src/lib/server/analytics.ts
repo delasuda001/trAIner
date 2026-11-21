@@ -296,6 +296,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     recentSpeedPerBeat: perBeat.length ? median(perBeat) : null,
     easySamples: easySamplesBefore(history, current.localDate),
     movingTimeS: current.movingTimeS,
+    aerobicTrainingEffect: current.row.aerobicTrainingEffect,
     weeklyRunMinutes: history.filter((run) => run.localDate >= addDays(current.localDate, -28)).reduce((sum, run) => sum + (run.movingTimeS ?? 0), 0) / 60 / 4,
     raceTargets: context.goal?.raceTargets ?? [],
     efforts: recentEfforts(history, current.localDate),
@@ -477,6 +478,13 @@ export function suggestionBefore(activityId: string, context: Context = loadCont
   return { suggestion: computeOutlook(past).suggestion, run };
 }
 
+/** Autres sports (vélo, natation…) au moins aussi fréquents que la course sur 8 semaines, 4 séances au moins. */
+function isCrossTraining(rows: ReadonlyArray<{ sport: string; localDate: string }>, today: string): boolean {
+  const recent = rows.filter((row) => row.localDate > addDays(today, -56) && row.localDate <= today);
+  const others = recent.filter((row) => !isRun(row.sport)).length;
+  return others >= 4 && others >= recent.length - others;
+}
+
 export function getDashboard(): Dashboard {
   const context = loadContext();
   const { today, rows, runs, profile } = context;
@@ -495,7 +503,7 @@ export function getDashboard(): Dashboard {
   const goalMarkers = (goal?.raceTargets ?? []).map((target) => goalMarker(goal?.raceTargets ?? [], target.distanceKm, { lactateThresholdSpeedMps: profile.lactateThresholdSpeedMps, thresholdLabel: thresholdLabel(profile), efforts: recentEfforts(runs, addDays(today, 1)) })).filter((marker): marker is GoalMarker => marker != null);
   return {
     level,
-    goalPages: voiceDeep(goalPages({ level: level.level, gaps: goalGaps, markers: goalMarkers, runs: [...runs.map((run) => ({ localDate: run.localDate, distanceM: run.distanceM })), ...declared.map((run) => ({ localDate: run.date, distanceM: null }))].sort((a, b) => a.localDate.localeCompare(b.localDate)), today, goal: goal ? { distanceKm: goal.distanceKm, targetTimeS: goal.targetTimeS, runsPerWeek: goal.runsPerWeek } : null, habitualRunsPerWeek: rhythm.runsPerWeek12w }), currentRegister()),
+    goalPages: voiceDeep(goalPages({ level: level.level, gaps: goalGaps, markers: goalMarkers, runs: [...runs.map((run) => ({ localDate: run.localDate, distanceM: run.distanceM })), ...declared.map((run) => ({ localDate: run.date, distanceM: null }))].sort((a, b) => a.localDate.localeCompare(b.localDate)), today, goal: goal ? { distanceKm: goal.distanceKm, targetTimeS: goal.targetTimeS, runsPerWeek: goal.runsPerWeek } : null, habitualRunsPerWeek: rhythm.runsPerWeek12w, crossTraining: isCrossTraining(rows, today) }), currentRegister()),
     declaredRuns: declared.filter((run) => run.date >= calendarStart),
     rhythm,
     today,

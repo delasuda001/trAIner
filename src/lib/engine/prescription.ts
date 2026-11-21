@@ -152,6 +152,8 @@ export type PrescriptionInput = {
   /** Footings des 12 semaines précédentes (allure, FC) : bornent l'allure facile à ce qui a été couru (voir easy-pace.ts). */
   easySamples?: EasySample[];
   movingTimeS: number | null;
+  /** Effet aérobie de la montre (0–5) : à 4,5 et plus sur un continu plus long que son format, c'est un effort de course. */
+  aerobicTrainingEffect?: number | null;
   /** Temps de course hebdomadaire moyen (min) des 4 semaines avant la séance : plafonne le volume de qualité proposé. */
   weeklyRunMinutes?: number | null;
   raceTargets: RaceTarget[];
@@ -543,6 +545,8 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
 /** Part du temps en Z4–Z5 qui fait d'une sortie longue un effort voulu. */
 const HARD_LONG_HIGH_SHARE = 0.4;
 const HARD_LONG_MIN_S = 60 * 60;
+/** Effet aérobie de la montre à partir duquel un effort long est mené comme une course. */
+export const RACE_LIKE_AEROBIC_EFFECT = 4.5;
 
 export function prescribe(input: PrescriptionInput): Prescription {
   const { metrics } = input;
@@ -563,12 +567,18 @@ export function prescribe(input: PrescriptionInput): Prescription {
   // voulu (course, sortie longue soutenue), pas une endurance mal dosée.
   const shares = metrics.zoneShares;
   const mostlyHard = shares != null && shares[3] + shares[4] >= HARD_LONG_HIGH_SHARE;
-  if (metrics.family === "long" && mainHr != null && (mainHr >= input.zones.floors[3] || mostlyHard) && (input.movingTimeS ?? 0) >= HARD_LONG_MIN_S) {
+  // Même chose pour un continu au seuil ou au tempo plus long que son format, mené comme une course (effet aérobie
+  // ≥ 4,5) : un semi en compétition n'est pas une séance de seuil à reproduire ni à allonger.
+  const formatMax = CONTINUOUS_MAX_MIN[metrics.kind] ?? null;
+  const raceLikeSteady = metrics.family === "steady" && formatMax != null && (input.movingTimeS ?? 0) > formatMax * 60 && (input.aerobicTrainingEffect ?? 0) >= RACE_LIKE_AEROBIC_EFFECT;
+  if (raceLikeSteady || (metrics.family === "long" && mainHr != null && (mainHr >= input.zones.floors[3] || mostlyHard) && (input.movingTimeS ?? 0) >= HARD_LONG_MIN_S)) {
     const [easyLow, easyHigh] = hr(2, input.zones);
     const steady = halves == null || halves.fadeSPerKm <= FADE_LIMIT_S;
     const keep = steady && mainS != null ? `Effort long soutenu : ${minutes} min à ${pace(mainS)} pour ${mainHr} bpm, sans perte en 2e moitié.` : null;
     const cue = `Après un effort de cette durée, 2 à 3 jours de footing facile entre ${easyLow} et ${easyHigh} bpm avant la prochaine séance de qualité.`;
-    return { status: "ok", target, goal: null, shouldHave: [], keep, next: { format: "footing facile", target, recoveryS: null, cue } };
+    // Après un continu de course, la cible de la prochaine fois est celle du footing, pas le seuil couru.
+    const nextTarget: PrescriptionTarget = raceLikeSteady ? { label: "footing facile", paceFastS: null, paceSlowS: null, heartRateLow: easyLow, heartRateHigh: easyHigh, zone: "Z2" } : target;
+    return { status: "ok", target, goal: null, shouldHave: [], keep, next: { format: "footing facile", target: nextTarget, recoveryS: null, cue } };
   }
 
   if (metrics.family === "easy" || metrics.family === "long") {

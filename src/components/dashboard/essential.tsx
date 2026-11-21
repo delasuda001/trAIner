@@ -92,7 +92,7 @@ function RegularitySlide({ page, noGoal }: { page: RegularityPage; noGoal: boole
   const unit = page.streakWeeks > 1 ? "semaines" : "semaine";
   return (
     <div className="essential-goal">
-      <div className="card-eyebrow"><Repeat size={13} /> Régularité · {page.target} sorties / sem.</div>
+      <div className="card-eyebrow"><Repeat size={13} /> Régularité · {page.target} sortie{page.target > 1 ? "s" : ""} / sem.</div>
       {/* Jamais de 0 en gros : sans série en cours, on montre ce qui a été tenu sur 8 semaines. */}
       <div className="goal-figure">
         {page.streakWeeks > 0 ? <span className="big-number">{page.streakWeeks}<span className="unit">{unit} d&apos;affilée</span></span>
