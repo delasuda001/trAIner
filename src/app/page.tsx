@@ -14,6 +14,7 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { GoalPages } from "@/components/dashboard/essential";
 import { StartGuide } from "@/components/dashboard/start-guide";
+import { tourPending } from "@/lib/server/tour";
 import { getRegistry } from "@/lib/profiles/context";
 import { z } from "zod";
 import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
@@ -55,7 +56,7 @@ function renderHome(member: Member, query: string | null) {
         <h1 className="page-title">{say(register, "Ta forme", "Votre forme")}, <mark>{say(register, "ta prochaine séance", "votre prochaine séance")}</mark></h1>
       </div>
       <div className="home-actions">
-        <StartGuide resetAt={guideResetAt} />
+        <StartGuide resetAt={guideResetAt} autoOpen={!tourPending(member.id)} />
         {outlook.status !== "ready" ? <CoachRequest endpoint="/api/coach/outlook" label="Demander l'avis du coach" queueLabel="Conseil du jour du coach" initialError={outlook.status === "error" ? outlook.message : null} gaugePopover /> : null}
       </div>
     </div>

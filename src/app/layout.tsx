@@ -20,6 +20,9 @@ import { ConnectionProvider, OfflineBanner } from "@/components/offline/connecti
 import { registerForRole } from "@/lib/register";
 import { ArrivalCelebration, HeaderHearts } from "@/components/fun/celebration";
 import { celebrated } from "@/lib/profiles/celebration";
+import { WelcomeTour } from "@/components/tour/welcome-tour";
+import { tourPending } from "@/lib/server/tour";
+import { displayFirstName } from "@/lib/tour/tour";
 import "./globals.css";
 
 // Polices auto-hébergées par Next au build : aucune requête externe à l'usage.
@@ -79,6 +82,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         {celebrated(member?.id) ? <ArrivalCelebration /> : null}
         <main className="shell"><OfflineBanner /><GaugeProvider gauge={gauge}>{children}</GaugeProvider></main>
         {member ? <FeedbackButton /> : null}
+        {member ? <WelcomeTour firstName={displayFirstName(member.name)} guest={member.role === "guest"} autoOpen={tourPending(member.id)} /> : null}
         </ConnectionProvider>
         </RegisterProvider>
       </body>

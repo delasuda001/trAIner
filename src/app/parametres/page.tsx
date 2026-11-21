@@ -18,6 +18,7 @@ import { checkGarminKey } from "@/lib/source/garmin";
 import { Fact } from "@/components/ui/fact";
 import { ModelPicker } from "@/components/settings/model-picker";
 import { ViewPicker } from "@/components/settings/view-picker";
+import { ReplayTourButton } from "@/components/tour/welcome-tour";
 import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
 import { resolveViewMode, VIEW_MODE_KEY, viewModeSchema } from "@/lib/view-mode";
 import { currentCoachModel } from "@/lib/coach";
@@ -176,6 +177,8 @@ function renderGuest(member: Member) {
               <h2 className="section-title">Tableau de bord</h2>
               <p className="small" style={{ margin: "6px 0 10px" }}>Vue essentielle (jauges et calendrier) ou complète (toutes les cartes).</p>
               <ViewPicker current={resolveViewMode(createAppStateRepository().get(VIEW_MODE_KEY, viewModeSchema), member.role)} />
+              <p className="small" style={{ margin: "14px 0 8px" }}>Besoin d&apos;un rappel ? Accueil, coach et objectif en une minute.</p>
+              <ReplayTourButton />
             </section>
           </div>
         </SettingsGroup>
@@ -240,6 +243,8 @@ async function renderAdmin(member: Member) {
               <h2 className="section-title">Tableau de bord</h2>
               <p className="small" style={{ margin: "6px 0 10px" }}>Ta vue : essentielle (jauges et calendrier) ou complète. Celle des invités se règle de leur côté (essentielle par défaut).</p>
               <ViewPicker current={resolveViewMode(createAppStateRepository().get(VIEW_MODE_KEY, viewModeSchema), member.role)} />
+              <p className="small" style={{ margin: "14px 0 8px" }}>La visite guidée (accueil, coach, objectif) que voit chaque profil à sa première connexion.</p>
+              <ReplayTourButton />
             </section>
             <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-pink)" }}>
               <h2 className="section-title">Modèle du coach</h2>

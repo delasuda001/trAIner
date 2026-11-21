@@ -704,3 +704,19 @@ les seuils 4:01 / 4:02 et « l'allure du moment ». Règles générales, vérifi
   faible (même comportement que Bastien, « À confirmer » dans le détail) ; les séances comparables d'un semi en course
   sont d'anciens continus « seuil » lents (classés sur l'étiquette Garmin), écart à FC égale peu parlant.
 - Sauvegardes : `data/backups/*-2026-11-21-avant-benoit.db`.
+
+## Visite guidée de premier lancement (21 nov., branche `claude/project-thread-m3xi1u`, en ligne)
+
+- 5 étapes (bienvenue, accueil, coach, objectif, fin) : `components/tour/welcome-tour.tsx`, textes dans `lib/tour/tour.ts`
+  (tutoiement, prénom, typographie française, une variante invité/Bastien pour la phrase sur l'abonnement), tests
+  `lib/tour/tour.test.ts`. Illustrations en HTML/CSS marquées « Exemple », jamais les chiffres du profil ; aucun appel au coach.
+- Montée dans le layout pour tout profil connecté ; ne s'ouvre jamais d'office sur /connexion ni /bienvenue (l'invité la voit
+  en arrivant sur l'accueil). Téléphone : plein écran au-dessus de la barre d'onglets, l'onglet de l'étape clignote avec
+  « C'est ici » ; ordinateur : carte centrée, l'onglet en haut mis en avant. Glisser, flèches, Échap ; animations coupées
+  si l'appareil demande moins de mouvement.
+- « Déjà vue » par profil dans le registre (`tour_seen_<id>`, POST `/api/tour` à la fermeture ou « Passer »), sur tous ses
+  appareils ; revient si Bastien réinitialise l'accueil (`guide_reset_<id>` plus récent, `shouldShowTour`). Rejouable depuis
+  Paramètres (« Revoir la visite guidée », événement `sillage:tour`). Le mini-guide du tableau de bord ne s'ouvre plus d'office
+  tant que la visite est due, et elle le marque vu (localStorage) ; son bouton « Guide » reste.
+- Tous les profils existants (Bastien, Marie, Charles, Benoît…) la verront une fois à leur prochaine ouverture.
+- Captures vérifiées (390 × 844, clair et sombre, et ordinateur) sur un serveur d'essai séparé (port 3300, build `.next-tour`).
