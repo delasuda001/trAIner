@@ -720,3 +720,8 @@ les seuils 4:01 / 4:02 et « l'allure du moment ». Règles générales, vérifi
   tant que la visite est due, et elle le marque vu (localStorage) ; son bouton « Guide » reste.
 - Tous les profils existants (Bastien, Marie, Charles, Benoît…) la verront une fois à leur prochaine ouverture.
 - Captures vérifiées (390 × 844, clair et sombre, et ordinateur) sur un serveur d'essai séparé (port 3300, build `.next-tour`).
+- (22 nov.) Le Mac a redémarré : app relancée. Benoît a mis un objectif (triathlon, course à pied sur semi, 2 sorties/sem.) :
+  la semaine type proposait « Sortie longue : 20–21 km » (1 h 55) car `nextLongRunKm` prenait son semi en compétition
+  comme plus longue sortie. Désormais `isRaceLikeEffort` (prescription.ts, partagé avec la suggestion) écarte les
+  courses de ce repère : 13 km (≈ 1 h 10). Photographie : Bastien, Marie, Charles identiques. Sauvegardes
+  `data/backups/*-2026-11-22-avant-longue-course.db`.
