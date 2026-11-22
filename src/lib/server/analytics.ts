@@ -17,7 +17,7 @@ import { computeProgression, easyRunHeartRates, historicalEstimate, historyEntri
 import { assessRecovery, type RecoverySignals } from "@/lib/engine/recovery";
 import { runningRhythm, type Rhythm } from "@/lib/engine/rhythm";
 import { median, present } from "@/lib/engine/stats";
-import { goalMarker, prescribe, type GoalMarker, type Prescription, type RecentEffort } from "@/lib/engine/prescription";
+import { goalMarker, isRaceLikeEffort, prescribe, type GoalMarker, type Prescription, type RecentEffort } from "@/lib/engine/prescription";
 import { suggestNextSession, type Suggestion, type WeekPlan } from "@/lib/engine/suggestion";
 import { estimateThreshold, type ThresholdEstimate } from "@/lib/engine/threshold";
 import type { EasySample } from "@/lib/engine/easy-pace";
@@ -268,7 +268,7 @@ function weekPlanFor(goal: Goal | null, gaps: GoalGap[], runs: AnalyzedRun[], to
   if (!gap || !structuralLever(gap)) return null;
   const benchmark = longRunBenchmarkKm(gap.distanceKm, gap.goalPaceS);
   if (benchmark == null) return null;
-  const long = nextLongRunKm(runs.map((run) => ({ localDate: run.localDate, distanceM: run.distanceM })), today, benchmark);
+  const long = nextLongRunKm(runs.map((run) => ({ localDate: run.localDate, distanceM: run.distanceM, raceLike: isRaceLikeEffort({ family: run.metrics.family, movingTimeS: run.movingTimeS, aerobicTrainingEffect: run.row.aerobicTrainingEffect }) })), today, benchmark);
   // Sorties possibles déclarées = plafond de la semaine type (l'écart à l'objectif ne propose jamais plus).
   return { runsPerWeek: goal?.runsPerWeek ?? gap.nextRunsPerWeek, longRunKm: long.km, longRunStep: long.step, longestKm: long.longestKm, lever: LEVER_WORDS[gap.main as string] ?? "la fréquence", race: gap.race };
 }

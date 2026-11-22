@@ -8,7 +8,7 @@ import { HIGH_LOAD_RATIO, type LoadAlert, type LoadSummary } from "./load";
 import { DEFAULT_QUALITY_SPACING_DAYS, type Rhythm } from "./rhythm";
 import type { RecoverySignals } from "./recovery";
 import { median, present, round } from "./stats";
-import { intervalTarget, RACE_LIKE_AEROBIC_EFFECT, type RaceTarget, type RecentEffort } from "./prescription";
+import { intervalTarget, isRaceLikeEffort, type RaceTarget, type RecentEffort } from "./prescription";
 import { zoneRange } from "./zones";
 
 /**
@@ -374,8 +374,7 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
   // longue menée comme une course (effet aérobie ≥ 4,5) n'est pas reproductible : 2 h de trail en course ne donnent pas 2 h de footing.
   // Vaut aussi pour un continu mené comme une course (semi en compétition classé « continu au seuil ») : seules les
   // sorties longues et faciles servent alors de repère, et un continu dur qui tient dans son format reste compté.
-  const raceLike = (run: SuggestionRun) => (run.aerobicTrainingEffect ?? 0) >= RACE_LIKE_AEROBIC_EFFECT && (run.family === "long" || (run.family === "steady" && (run.movingTimeS ?? 0) > 60 * 60));
-  const longest8w = Math.max(0, ...present(recent8w.filter((run) => !raceLike(run)).map((run) => run.movingTimeS))) / 60;
+  const longest8w = Math.max(0, ...present(recent8w.filter((run) => !isRaceLikeEffort(run)).map((run) => run.movingTimeS))) / 60;
   const easyDuration = roundTo5(Math.min(60, Math.max(40, typicalEasyMin)));
 
   const qualitySession = (): { session: SuggestedSession; why: string } => {

@@ -37,7 +37,7 @@ function benchmarks(distanceKm: number, goalPaceS: number): Benchmarks | null {
   return null;
 }
 
-export type GapRun = { localDate: string; distanceM: number | null };
+export type GapRun = { localDate: string; distanceM: number | null; /** Effort de course (cf. isRaceLikeEffort) : pas un repère de sortie longue à l'entraînement. */ raceLike?: boolean };
 
 export type GoalLever = {
   key: "frequency" | "volume" | "long_run" | "threshold";
@@ -196,7 +196,8 @@ export function longRunBenchmarkKm(distanceKm: number, goalPaceS: number): numbe
  * jamais au-delà du repère.
  */
 export function nextLongRunKm(runs: GapRun[], today: string, benchmarkKm: number): { km: number; step: boolean; longestKm: number } {
-  const recent = runs.filter((run) => run.localDate > addDays(today, -7 * GAP_WINDOW_WEEKS) && run.localDate <= today);
+  // Une course (semi en compétition…) prouve la distance mais ne se refait pas en sortie longue : seules les sorties d'entraînement comptent.
+  const recent = runs.filter((run) => !run.raceLike && run.localDate > addDays(today, -7 * GAP_WINDOW_WEEKS) && run.localDate <= today);
   const longestKm = Math.max(0, ...recent.map((run) => (run.distanceM ?? 0) / 1000));
   const base = Math.max(6, Math.round(longestKm));
   const held = recent.filter((run) => run.localDate > addDays(today, -28) && (run.distanceM ?? 0) / 1000 >= longestKm - 0.7).length;

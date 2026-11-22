@@ -548,6 +548,15 @@ const HARD_LONG_MIN_S = 60 * 60;
 /** Effet aérobie de la montre à partir duquel un effort long est mené comme une course. */
 export const RACE_LIKE_AEROBIC_EFFECT = 4.5;
 
+/**
+ * Effort de course : sortie longue, ou continu de plus d'une heure, menés à un effet aérobie ≥ 4,5 (semi en
+ * compétition, trail en course). Il n'est pas reproductible à l'entraînement : il ne sert jamais de repère de
+ * durée ou de distance pour la sortie longue proposée.
+ */
+export function isRaceLikeEffort(run: { family: string; movingTimeS: number | null; aerobicTrainingEffect?: number | null }): boolean {
+  return (run.aerobicTrainingEffect ?? 0) >= RACE_LIKE_AEROBIC_EFFECT && (run.family === "long" || (run.family === "steady" && (run.movingTimeS ?? 0) > 60 * 60));
+}
+
 export function prescribe(input: PrescriptionInput): Prescription {
   const { metrics } = input;
   if (metrics.family === "intervals") return intervalPrescription(input);

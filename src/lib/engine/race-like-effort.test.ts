@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addDays } from "@/lib/dates";
 import type { HeartRateZones } from "@/lib/source/types";
 import type { ActivityMetrics } from "./activity-metrics";
+import { nextLongRunKm } from "./goal-gap";
 import { goalPages, regularityPage } from "./goal-pages";
 import type { LoadSummary } from "./load";
 import { prescribe } from "./prescription";
@@ -77,5 +78,13 @@ describe("régularité d'un coureur multisport", () => {
   });
   it("singulier à une sortie", () => {
     expect(regularityPage([], today, 1).next).toBe("Prochain palier : 1 sortie cette semaine pour lancer ta série.");
+  });
+});
+
+describe("sortie longue de la semaine type après un semi en course", () => {
+  it("la course ne fixe pas la distance : seules les sorties d'entraînement comptent", () => {
+    const runs = [{ localDate: addDays(today, -19), distanceM: 12_900 }, { localDate: addDays(today, -6), distanceM: 21_240, raceLike: true }];
+    expect(nextLongRunKm(runs, today, 20)).toEqual({ km: 13, step: false, longestKm: 12.9 });
+    expect(nextLongRunKm(runs.map((run) => ({ ...run, raceLike: false })), today, 20).km).toBe(20);
   });
 });
