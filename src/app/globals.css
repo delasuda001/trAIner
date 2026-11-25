@@ -959,7 +959,7 @@ html[data-env="test"] .topbar { border-bottom: 4px solid transparent; border-ima
 button.next-after { width: 100%; font: inherit; color: inherit; cursor: pointer; text-align: left; -webkit-touch-callout: none; user-select: none; transition: transform .15s ease; }
 button.next-after:hover { transform: translate(-1px, -1px); }
 button.next-after.pressing { transform: scale(0.98); }
-.sheet-backdrop { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 18px; background: color-mix(in srgb, var(--sl-paper) 35%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: sheet-fade .18s ease both; }
+.sheet-backdrop { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 18px; background: color-mix(in srgb, var(--sl-paper) 35%, transparent); backdrop-filter: blur(10px); animation: sheet-fade .18s ease both; }
 .sheet { position: relative; width: min(520px, 100%); max-height: 85vh; overflow-y: auto; animation: sheet-rise .22s cubic-bezier(.2,.8,.2,1) both; }
 .sheet-close { position: absolute; top: 10px; right: 10px; }
 @keyframes sheet-fade { from { opacity: 0; } }
@@ -991,3 +991,4 @@ button.next-after.pressing { transform: scale(0.98); }
 .view-as-banner strong { font-family: var(--font-display); font-weight: 800; }
 .view-as-back { font-weight: 800; color: #FFFFFF; background: var(--fixed-ink, #15151e); padding: 3px 10px; border-radius: 999px; text-decoration: none; }
 html[data-view-as] .topbar { top: 37px; }
+.point-side { margin-top: 10px; border-left-color: var(--sl-yellow); display: grid; gap: 6px; }

@@ -63,7 +63,7 @@ function CoachCard({ analysis, coach }: { analysis: SessionAnalysis; coach: Coac
       <ul className="bullets">
         {(ready ? ready.bullets : verdict.signals.map((signal) => signal.label).filter((label) => label !== verdict.wentWell && label !== verdict.toWork)).map((line) => <li key={line}>{line}</li>)}
       </ul>
-      <SessionPoints ready={ready} prescription={analysis.prescription} fallbackKeep={verdict.wentWell} />
+      <SessionPoints ready={ready} prescription={analysis.prescription} fallbackKeep={verdict.wentWell} metrics={analysis.metrics} />
       {goalLink ? <p className="goal-link"><strong><Say tu="Pour ton objectif" vous="Pour votre objectif" /> :</strong> <CoachText text={goalLink} /></p> : null}
       {ready ? (
         <details className="more">

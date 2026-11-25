@@ -40,7 +40,7 @@ export function NextAfter({ then }: { then: Then }) {
   }
 
   const target = then.target ?? null;
-  const pace = target?.paceFastMps && target.paceSlowMps ? `${formatPace(target.paceSlowMps)}–${formatPace(target.paceFastMps)}` : null;
+  const pace = target?.paceFastMps && target.paceSlowMps ? `${formatPace(target.paceSlowMps).replace("/km", "")}–${formatPace(target.paceFastMps)}` : null;
 
   return (
     <>

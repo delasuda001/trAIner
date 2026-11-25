@@ -1,4 +1,6 @@
-import { ArrowRight, ThumbsUp, Wrench } from "lucide-react";
+import { ArrowRight, Dumbbell, ThumbsUp, Wrench } from "lucide-react";
+import type { ActivityMetrics } from "@/lib/engine/activity-metrics";
+import { sideWork } from "@/lib/engine/side-work";
 import type { SessionCoachOutput } from "@/lib/coach/session-coach";
 import type { Prescription, PrescriptionTarget } from "@/lib/engine/prescription";
 import { formatClock, formatPace } from "@/lib/formatters";
@@ -17,14 +19,17 @@ function targetChip(target: PrescriptionTarget, recoveryS: number | null): strin
  * quand l'analyse existe, sinon directement du moteur ; la cible chiffrée,
  * elle, vient toujours du moteur.
  */
-export function SessionPoints({ ready, prescription, fallbackKeep }: { ready: SessionCoachOutput | null; prescription: Prescription; fallbackKeep: string | null }) {
+/** `metrics` : pistes « à travailler à côté » du moteur quand le coach n'en a pas encore parlé. */
+export function SessionPoints({ ready, prescription, fallbackKeep, metrics }: { ready: SessionCoachOutput | null; prescription: Prescription; fallbackKeep: string | null; metrics?: ActivityMetrics }) {
   const ok = prescription.status === "ok" ? prescription : null;
   const keep = ready?.keep || ok?.keep || fallbackKeep;
   // Rien de dégradé selon le moteur : case vide plutôt qu'un reproche artificiel.
   const shouldHave = ok && ok.shouldHave.length === 0 ? null : ready?.shouldHave || ok?.shouldHave[0] || null;
   const nextTime = ready?.nextTime || ok?.next.cue || null;
-  if (!keep && !shouldHave && !nextTime) return null;
+  const side = ready?.sideWork ? [ready.sideWork] : !ready && metrics ? sideWork({ metrics }).slice(0, 2).map((item) => item.text) : [];
+  if (!keep && !shouldHave && !nextTime && !side.length) return null;
   return (
+    <>
     <div className={shouldHave ? "three-points" : "two-points"}>
       {keep ? <div className="point point-good"><div className="point-label"><ThumbsUp size={12} /> À reproduire</div><CoachText text={keep} /></div> : null}
       {shouldHave ? (
@@ -42,5 +47,12 @@ export function SessionPoints({ ready, prescription, fallbackKeep }: { ready: Se
         </div>
       ) : null}
     </div>
+    {side.length ? (
+      <div className="point point-side">
+        <div className="point-label"><Dumbbell size={12} /> À travailler à côté</div>
+        {side.map((text) => <CoachText key={text} text={text} />)}
+      </div>
+    ) : null}
+    </>
   );
 }

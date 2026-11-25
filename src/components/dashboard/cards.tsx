@@ -80,7 +80,7 @@ export function SuggestionCard({ dashboard, coach, plain = false }: { dashboard:
       <div className="target">
         {primary.durationMin ? <span className="pill">{formatDuration(primary.durationMin * 60)}</span> : null}
         {/* Fractionné : l'allure guide, la FC n'est qu'un repère (elle monte en retard sur des répétitions courtes). */}
-        {intervals && target?.paceFastMps && target.paceSlowMps ? <span className="pill pill-strong">Allure {formatPace(target.paceSlowMps)}–{formatPace(target.paceFastMps)}</span> : null}
+        {intervals && target?.paceFastMps && target.paceSlowMps ? <span className="pill pill-strong">Allure {formatPace(target.paceSlowMps).replace("/km", "")}–{formatPace(target.paceFastMps)}</span> : null}
         {target ? <span className="pill"><ZoneDot zone={zone} />{plain ? plainZone(target.zone) : target.zone} · {intervals ? "FC repère " : ""}{target.heartRateLow}–{target.heartRateHigh} bpm</span> : null}
         {paceCenter && !intervals ? <span className="pill" title={`${formatPace(target?.paceSlowMps)} à ${formatPace(target?.paceFastMps)}`}>≈ {formatPace(paceCenter)}</span> : null}
       </div>
@@ -252,7 +252,7 @@ export function LastSessionCard({ dashboard, coach }: { dashboard: Dashboard; co
         <Fact label="Allure moy." value={formatPace(activity.averageSpeedMps).replace("/km", "")} unit="/km" />
         <Fact label="FC moy." value={activity.averageHeartRateBpm ? String(Math.round(activity.averageHeartRateBpm)) : "—"} unit="bpm" />
       </div>
-      <SessionPoints ready={ready} prescription={last.prescription} fallbackKeep={verdict.wentWell} />
+      <SessionPoints ready={ready} prescription={last.prescription} fallbackKeep={verdict.wentWell} metrics={metrics} />
       <div className="row-between" style={{ alignItems: "center", marginTop: 16, flexWrap: "wrap" }}>
         {shown && !stale ? <span className="muted small"><CoachStamp model={shown.model} createdAt={shown.createdAt} />{verdict.fewComparables ? " · comparaison fragile (moins de 3 séances comparables)" : ""}</span> : stale && shown ? <span className="row small" style={{ flexWrap: "wrap" }}><CoachStamp model={shown.model} createdAt={shown.createdAt} /><CoachRequest endpoint={`/api/activities/${encodeURIComponent(activity.id)}/coach`} label="Mettre à jour l'analyse" queueLabel={`Analyse de la séance du ${formatDate(activity.localDate, "short")}`} /></span> : <CoachRequest endpoint={`/api/activities/${encodeURIComponent(activity.id)}/coach`} label="Demander l'analyse du coach" queueLabel={`Analyse de la séance du ${formatDate(activity.localDate, "short")}`} initialError={coach?.status === "error" ? coach.message : null} />}
         <Link href={href} className="btn btn-primary">Voir la séance <ArrowRight size={14} /></Link>

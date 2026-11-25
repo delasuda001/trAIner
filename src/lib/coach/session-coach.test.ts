@@ -36,9 +36,9 @@ function payloadFor(reps: number) {
 }
 
 describe("charge utile du débrief", () => {
-  it("reste sous ~2 450 tokens même pour 20 répétitions (≈ 3,2 caractères par token en français ; session-v13 : +~40 en entrée pour la ligne objectif, contre ~40 % de sortie en moins)", () => {
+  it("reste sous ~2 650 tokens même pour 20 répétitions (≈ 3,2 caractères par token en français ; session-v13 : +~40 en entrée pour la ligne objectif ; session-v16 : +~150 pour les pistes à côté et la règle prescriptive)", () => {
     const size = buildSessionPrompt(payloadFor(20)).length + SESSION_SYSTEM_PROMPT.length;
-    expect(size / 3.2).toBeLessThan(2450);
+    expect(size / 3.2).toBeLessThan(2650);
   });
 
   it("détaille au plus 8 répétitions", () => {

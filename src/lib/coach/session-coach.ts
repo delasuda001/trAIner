@@ -7,8 +7,12 @@ import { VERDICT_LABELS, type SessionVerdict } from "@/lib/engine/verdict";
 import { thresholdAtZ4Z5Boundary, ZONE_LABELS, zoneOf, zoneRange } from "@/lib/engine/zones";
 import { formatClock, formatDate, formatDistance, formatDuration, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
+import { sideWork } from "@/lib/engine/side-work";
+import type { GoalLever } from "@/lib/engine/goal-gap";
 
-export const SESSION_PROMPT_VERSION = "session-v15";
+type GoalLeverKey = GoalLever["key"];
+
+export const SESSION_PROMPT_VERSION = "session-v16";
 
 export const sessionCoachSchema = z.object({
   verdict: z.string().min(10).max(260),
@@ -18,6 +22,8 @@ export const sessionCoachSchema = z.object({
   nextTime: z.string().min(10).max(280),
   /** Depuis session-v13 : ce que la séance change pour l'objectif (absent des analyses plus anciennes). */
   goalLink: z.string().max(280).optional(),
+  /** Depuis session-v16 : pistes de travail à côté de la séance (renforcement, gammes…), reprises de « pistes_a_cote ». */
+  sideWork: z.string().max(520).optional(),
   detail: z.string().min(20).max(1800),
 });
 
@@ -37,14 +43,15 @@ export function normalizeSessionOutput(value: unknown): SessionCoachOutput | nul
 export const sessionCoachJsonSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["verdict", "bullets", "keep", "shouldHave", "nextTime", "goalLink", "detail"],
+  required: ["verdict", "bullets", "keep", "shouldHave", "nextTime", "goalLink", "sideWork", "detail"],
   properties: {
     verdict: { type: "string", description: "Une phrase de verdict, 180 caractères max." },
-    bullets: { type: "array", minItems: 3, maxItems: 4, items: { type: "string" }, description: "3 ou 4 constats chiffrés (dont la cause probable de l'écart), 200 caractères au plus chacun." },
+    bullets: { type: "array", minItems: 3, maxItems: 4, items: { type: "string" }, description: "3 constats chiffrés (4 au plus si vraiment utile) (dont la cause probable de l'écart), 200 caractères au plus chacun." },
     keep: { type: "string", description: "À reproduire : une chose réussie, avec le chiffre à garder. Une phrase, 160 caractères au plus." },
     shouldHave: { type: "string", description: "Comment elle aurait dû être menée : la consigne la plus utile de consignes_moteur.aurait_du, cible chiffrée en tête. Une ou deux phrases, 200 caractères au plus." },
     nextTime: { type: "string", description: "La prochaine séance de ce type : consignes_moteur.prochaine_fois, avec le format et la cible chiffrée. Une ou deux phrases, 200 caractères au plus." },
     goalLink: { type: "string", description: "Ce que cette séance change pour l'objectif : une phrase, 200 caractères au plus, qui reprend \"ecart_objectif\". Chaîne vide s'il n'y a pas d'objectif chiffré." },
+    sideWork: { type: "string", description: "À travailler à côté : les une ou deux pistes les plus utiles de pistes_a_cote, avec leur dosage tel quel et le constat qui les justifie. 400 caractères au plus. Chaîne vide sans pistes_a_cote." },
     detail: { type: "string", description: "Deux ou trois phrases, 450 caractères au plus, avec seulement ce qui n'est ni dans le verdict ni dans les puces." },
   },
 } as const;
@@ -65,9 +72,11 @@ Règles :
 - "shouldHave" : une consigne principale (la première de "consignes_moteur.aurait_du"), au plus une secondaire très courte. Si "aurait_du" dit qu'il n'y a rien à corriger, écris-le en une phrase, sans inventer de reproche.
 - Ne juge pas si l'objectif est atteignable. "goalLink" : en une phrase, ce que la séance apporte ou non au levier principal de "ecart_objectif", avec son action chiffrée s'il n'est pas travaillé ; vide sans "ecart_objectif".
 - Répétitions de moins de 60 s : aucune répétition isolée commentée (GPS imprécis), seulement moyenne, FC et tenue.
-- Pas de conseil générique, pas de température, aucune interprétation médicale.
+- Sois prescriptif : chaque constat qui pose problème doit trouver sa réponse dans "shouldHave", "nextTime" ou "sideWork". Un constat sans action n'a pas sa place dans "detail".
+- "sideWork" (à travailler à côté de la séance) : si "pistes_a_cote" existe, reprends la ou les deux pistes les plus utiles avec leur dosage tel quel, en disant en quelques mots quel constat les déclenche (« ta foulée se dégrade en fin de série : … »). Présente-les comme des pistes, pas comme une certitude. Sans "pistes_a_cote", chaîne vide.
+- Aucun conseil hors de "consignes_moteur" et "pistes_a_cote", pas de température, aucune interprétation médicale.
 
-Format : "verdict" (une phrase), "bullets" (3 ou 4 constats chiffrés), "keep", "shouldHave", "nextTime", "goalLink" (une ou deux phrases courtes), "detail" (deux ou trois phrases nouvelles, jamais une redite des puces).`;
+Format : "verdict" (une phrase), "bullets" (3 constats chiffrés, 4 au plus), "keep", "shouldHave", "nextTime", "goalLink" (une ou deux phrases courtes), "sideWork", "detail" (deux ou trois phrases nouvelles, jamais une redite des puces).`;
 
 type Session = {
   name: string;
@@ -196,8 +205,11 @@ export function buildSessionPayload(input: {
   goalGaps?: string[];
   feeling?: { perceivedEffort: number | null; note: string } | null;
   prescription?: Prescription | null;
+  /** Levier principal de l'objectif (pistes « volume »). */
+  goalLever?: GoalLeverKey | null;
 }) {
   const { session, metrics, deltas, verdict, zones, context } = input;
+  const pistes = sideWork({ metrics, goalLever: input.goalLever ?? null }).map((item) => item.text);
   // Chaque FC porte sa zone : Claude ne peut plus se tromper de zone.
   const bpm = (value: number | null | undefined): string => {
     if (value == null) return "—";
@@ -310,6 +322,7 @@ export function buildSessionPayload(input: {
       signaux: verdict.signals.map((signal) => `${signal.primary ? "PRINCIPAL " : ""}${signal.tone === "good" ? "positif" : signal.tone === "watch" ? "à surveiller" : "neutre"} : ${signal.label}`),
     },
     consignes_moteur: describePrescription(input.prescription ?? null),
+    ...(pistes.length ? { pistes_a_cote: pistes } : {}),
     reperes_athlete: {
       zones_fc: Object.fromEntries(([1, 2, 3, 4, 5] as const).map((zone) => [ZONE_LABELS[zone], `${zoneRange(zone, zones)[0]}–${zoneRange(zone, zones)[1]} bpm`])),
       seuil: input.lactateThresholdSpeedMps && zones.lactateThresholdHeartRateBpm ? `${formatPace(input.lactateThresholdSpeedMps)} à ${thresholdAtZ4Z5Boundary(zones) ? `${zones.lactateThresholdHeartRateBpm} bpm (limite Z4–Z5)` : bpm(zones.lactateThresholdHeartRateBpm)}${input.thresholdBasis ? ` (${input.thresholdBasis})` : ""}` : "—",

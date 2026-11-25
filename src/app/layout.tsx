@@ -85,7 +85,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             {member ? <span className="desktop-only"><LogoutButton name={member.name} /></span> : null}
           </div>
         </header>
-        {celebrated(member?.id) ? <ArrivalCelebration /> : null}
+        {celebrated(member?.id) && !member?.viewer ? <ArrivalCelebration /> : null}
         <main className="shell"><OfflineBanner /><GaugeProvider gauge={gauge}>{children}</GaugeProvider></main>
         {member ? <FeedbackButton /> : null}
         {member ? <WelcomeTour firstName={displayFirstName(member.name)} guest={member.role === "guest"} autoOpen={tourPending(member.id) && !member.viewer} /> : null}

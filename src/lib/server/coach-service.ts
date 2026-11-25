@@ -1,4 +1,5 @@
 import "server-only";
+import { primaryGap } from "@/lib/engine/goal-gap";
 
 import type { z } from "zod";
 import { getLlmClient } from "@/lib/coach";
@@ -143,6 +144,7 @@ export function sessionPayload(analysis: SessionAnalysis) {
     goalGaps: analysis.goalGaps.map((gap) => gap.summary),
     feeling: analysis.feeling,
     prescription: analysis.prescription,
+    goalLever: primaryGap(analysis.goalGaps)?.main ?? null,
   });
 }
 
