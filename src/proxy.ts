@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { sessionCookieName } from "@/lib/env/environment";
 
 /**
  * Contrôle optimiste : sans cookie de session, renvoi vers /connexion (pages)
  * ou 401 (API). La vérification réelle (signature, version, profil actif) est
  * faite par chaque page et route via `asMember` / `apiAsMember`.
  */
-const SESSION_COOKIE = "sillage_session";
+const SESSION_COOKIE = sessionCookieName();
 const PUBLIC_PATHS = ["/connexion", "/api/session", "/api/ping"];
 
 export function proxy(request: NextRequest) {

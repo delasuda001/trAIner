@@ -93,7 +93,7 @@ export function chosenSessionContext(activityId: string): Record<string, unknown
   };
 }
 
-export type AskResult = { messages: ChatMessage[]; error: { kind: LlmFailureKind; message: string } | null };
+export type AskResult = { messages: ChatMessage[]; error: { kind: LlmFailureKind; message: string; /** Quota : heure où la question pourra partir (ISO). */ freesAt?: string | null } | null };
 
 /** Une question à la fois par profil. */
 const busyMembers = new Set<string>();
@@ -104,7 +104,7 @@ export async function askCoach(question: string, activityId: string | null = nul
   if (busyMembers.has(memberId)) return { messages: repository.list(), error: { kind: "unavailable", message: "Le coach répond déjà à une question." } };
   await refreshRateLimits({ maxAgeMs: 2 * 60_000, waitMs: 4_000 });
   const quota = checkQuota();
-  if (!quota.allowed) return { messages: repository.list(), error: { kind: "quota", message: quota.message } };
+  if (!quota.allowed) return { messages: repository.list(), error: { kind: "quota", message: quota.message, freesAt: quota.freesAt } };
   busyMembers.add(memberId);
   try {
     const history = repository.list(CHAT_HISTORY_MESSAGES).filter((message) => !message.content.error).map((message) => ({ role: message.role, text: message.content.text }));

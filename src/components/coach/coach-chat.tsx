@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { CoachGaugeLine } from "./coach-gauge";
-import { ArrowUp, Clock, Sparkles, Trash2 } from "lucide-react";
+import { CoachGaugeLine, QuotaMeter, useLocalTime } from "./coach-gauge";
+import { ArrowUp, Ban, Clock, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { generatedAtLabel, modelLabel } from "@/lib/coach/model-label";
 import { RateCoach } from "@/components/feedback/rate-coach";
@@ -41,6 +41,9 @@ export function CoachChat({ initial, seen, sessions = [], preselected = null }: 
   const [asked, setAsked] = useState(false);
   const [chosen, setChosen] = useState<string | null>(preselected);
   const [allSessions, setAllSessions] = useState(false);
+  // Question refusée par le quota : elle reste affichée (non envoyée) avec la raison, et revient dans le champ.
+  const [refused, setRefused] = useState<{ question: string; message: string; freesAt: string | null } | null>(null);
+  const freesAt = useLocalTime(refused?.freesAt ?? null);
   const ordered = [...sessions].sort((a, b) => Number(matches(question, b)) - Number(matches(question, a)));
   const shownSessions = allSessions ? ordered : ordered.slice(0, 6);
   const chosenSession = sessions.find((session) => session.id === chosen) ?? null;
@@ -51,7 +54,7 @@ export function CoachChat({ initial, seen, sessions = [], preselected = null }: 
   // prendrait pour la fonction de nettoyage de l'effet (« i is not a function » au message suivant).
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, busy]);
+  }, [messages, busy, refused]);
 
   async function ask(text: string) {
     const value = text.trim();
@@ -61,6 +64,7 @@ export function CoachChat({ initial, seen, sessions = [], preselected = null }: 
       return;
     }
     setAsked(true);
+    setRefused(null);
     setBusy(true);
     setQuestion("");
     setMessages((current) => [...current, { id: `pending-${Date.now()}`, role: "user", content: { text: value, ...(chosenSession ? { activity: { id: chosenSession.id, label: `${chosenSession.title} · ${chosenSession.date}` } } : {}) }, model: null, createdAt: new Date().toISOString() }]);
@@ -78,8 +82,12 @@ export function CoachChat({ initial, seen, sessions = [], preselected = null }: 
         connection.add({ kind: "chat", question: value });
         return;
       }
-      const body = (await response.json()) as { messages?: ChatMessage[]; error?: string };
+      const body = (await response.json()) as { messages?: ChatMessage[]; error?: { kind: string; message: string; freesAt?: string | null } | string };
       if (body.messages) setMessages(body.messages);
+      if (typeof body.error === "object" && body.error?.kind === "quota") {
+        setRefused({ question: value, message: body.error.message, freesAt: body.error.freesAt ?? null });
+        setQuestion((current) => current || value);
+      }
       router.refresh();
     } finally {
       setBusy(false);
@@ -109,6 +117,19 @@ export function CoachChat({ initial, seen, sessions = [], preselected = null }: 
             {message.role === "coach" && message.model && !message.content.error ? <RateCoach subjectKind="chat" subjectId={message.id} label="Utile ?" /> : null}
           </div>
         ))}
+        {refused ? (
+          <>
+            <div className="bubble user refused">
+              <p style={{ whiteSpace: "pre-wrap" }}>{refused.question}</p>
+              <span className="coach-stamp"><Ban size={12} /> Non envoyée</span>
+            </div>
+            <div className="bubble coach notice-quota" role="alert">
+              <strong>Ta question n&apos;est pas partie au coach.</strong>
+              <p>{refused.message}</p>
+              {freesAt ? <p className="small">Possible de nouveau {freesAt}. Ta question est gardée dans le champ ci-dessous.</p> : <p className="small">Ta question est gardée dans le champ ci-dessous.</p>}
+            </div>
+          </>
+        ) : null}
         {connection.queue.flatMap((item) => (item.kind === "chat" ? [item] : [])).map((item) => (
           <div key={item.id} className="bubble user queued">
             <p style={{ whiteSpace: "pre-wrap" }}>{item.question}</p>
@@ -136,6 +157,7 @@ export function CoachChat({ initial, seen, sessions = [], preselected = null }: 
         <button type="submit" className="btn btn-primary icon-btn" disabled={busy || question.trim().length < 2} aria-label="Envoyer"><ArrowUp size={16} /></button>
       </form>
       {offline ? <p className="muted small" style={{ marginTop: 6 }}><Clock size={12} /> {say("Hors ligne : ta question sera mise en file et partira au retour du Mac.", "Hors ligne : votre question sera mise en file et partira au retour du Mac.")}</p> : null}
+      <QuotaMeter />
       <CoachGaugeLine reveal={asked} />
       <div className="row-between" style={{ marginTop: 8, alignItems: "center" }}>
         <span className="muted small">{say("Le coach voit les 6 derniers messages et un résumé de tes données, pas tes séries brutes.", "Le coach voit les 6 derniers messages et un résumé de vos données, pas vos séries brutes.")}</span>

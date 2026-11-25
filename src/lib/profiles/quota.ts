@@ -41,7 +41,28 @@ export type QuotaState = {
   remainingWeek: number | null;
 };
 
-export type QuotaDecision = ({ allowed: true } | { allowed: false; message: string }) & QuotaState;
+/** Pourquoi un appel est refusé : plafond personnel du jour, de la semaine, plafond commun des invités, ou abonnement de Bastien. */
+export type QuotaReason = "daily" | "weekly" | "guests" | "subscription";
+
+export type QuotaDecision = ({ allowed: true } | { allowed: false; message: string; reason: QuotaReason; /** Heure (ISO) où l'appel redevient possible, si on la connaît. */ freesAt: string | null }) & QuotaState;
+
+/**
+ * Heure où une fenêtre glissante de 7 jours libère assez de place pour `estimate` : on retire
+ * les appels du plus ancien au plus récent jusqu'à repasser sous le plafond. Null si rien n'y suffit.
+ */
+export function rollingFreesAt(records: UsageLike[], sinceIso: string, cap: number, estimate: number): string | null {
+  const inWindow = records.filter((record) => record.createdAt >= sinceIso).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  let used = inWindow.reduce((total, record) => total + budgetTokens(record), 0);
+  for (const record of inWindow) {
+    used -= budgetTokens(record);
+    if (used + estimate <= cap) return new Date(Date.parse(record.createdAt) + 7 * 86_400_000).toISOString();
+  }
+  return null;
+}
+
+function nextMidnightIso(startOfTodayIso: string): string {
+  return new Date(Date.parse(startOfTodayIso) + 86_400_000).toISOString();
+}
 
 export const GUEST_RATE_LIMITS = { fiveHour: 0.6, sevenDay: 0.7 } as const;
 
@@ -67,16 +88,20 @@ export function decideQuota(input: QuotaInput): QuotaDecision {
   const state = quotaState(input);
   if (input.role === "admin") return { allowed: true, ...state };
   const estimate = input.estimate ?? TASK_ESTIMATE.generation;
-  const deny = (message: string): QuotaDecision => ({ allowed: false, message, ...state });
-  if (!input.preparation && state.remainingToday != null && state.remainingToday < estimate) return deny("Tes analyses du jour sont faites : le coach sera de nouveau disponible demain. Tous tes chiffres restent consultables.");
-  if (!input.preparation && state.remainingWeek != null && state.remainingWeek < estimate) return deny("Tu as bien profité du coach cette semaine : il se libère de nouveau au fil des jours. Tous tes chiffres restent consultables.");
+  const deny = (reason: QuotaReason, message: string, freesAt: string | null): QuotaDecision => ({ allowed: false, reason, message, freesAt, ...state });
+  const weekStartIso = new Date(input.now.getTime() - 7 * 86_400_000).toISOString();
+  const own = input.own.filter((record) => record.kind !== PREPARE_KIND);
+  if (!input.preparation && state.remainingToday != null && state.remainingToday < estimate) return deny("daily", "Ton quota personnel du jour est atteint : le coach ne peut pas répondre avant demain. Tous tes chiffres restent consultables.", nextMidnightIso(input.startOfTodayIso));
+  if (!input.preparation && state.remainingWeek != null && input.weeklyCap != null && state.remainingWeek < estimate) return deny("weekly", "Ton quota personnel de la semaine (7 jours glissants) est atteint : il se libère au fur et à mesure que tes anciennes questions sortent de la fenêtre. Tous tes chiffres restent consultables.", rollingFreesAt(own, weekStartIso, input.weeklyCap, estimate));
   if (input.guestsWeeklyCap != null) {
-    const weekStartIso = new Date(input.now.getTime() - 7 * 86_400_000).toISOString();
-    if (sum(input.allGuests, weekStartIso) + estimate > input.guestsWeeklyCap) return deny("Le coach a beaucoup servi aux testeurs cette semaine : il fait une pause de quelques jours. Tous tes chiffres restent consultables.");
+    if (sum(input.allGuests, weekStartIso) + estimate > input.guestsWeeklyCap) return deny("guests", "Le quota commun des testeurs (7 jours glissants) est atteint : le coach fait une pause pour tout le monde, pas seulement pour toi. Tous tes chiffres restent consultables.", rollingFreesAt(input.allGuests, weekStartIso, input.guestsWeeklyCap, estimate));
   }
   // Protège le quota de Bastien : on s'arrête avant que son abonnement sature.
   const windows = canSpend({ estimate: 0, nightUsed: 0, weekUsed: 0, config: { nightTokens: Number.MAX_SAFE_INTEGER, weekTokens: Number.MAX_SAFE_INTEGER, maxUtilization: GUEST_RATE_LIMITS }, windows: input.windows, now: input.now });
-  if (!windows.ok) return deny("Le coach fait une pause pour ménager l'abonnement de Bastien : réessaie dans quelques heures. Tous tes chiffres restent consultables.");
+  if (!windows.ok) {
+    const resets = input.windows.map((window) => window.resetsAt).filter((value): value is string => value != null && Date.parse(value) > input.now.getTime()).sort();
+    return deny("subscription", "L'abonnement Claude de Bastien est presque plein : le coach fait une pause pour ne pas le saturer. Tous tes chiffres restent consultables.", resets.at(-1) ?? null);
+  }
   return { allowed: true, ...state };
 }
 

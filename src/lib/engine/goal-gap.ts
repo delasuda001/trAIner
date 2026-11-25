@@ -1,4 +1,4 @@
-import { addDays, daysBetween } from "@/lib/dates";
+import { addDays, daysBetween, startOfIsoWeek } from "@/lib/dates";
 import { formatPace } from "@/lib/formatters";
 import { paceSeconds } from "./activity-metrics";
 import { RACE_RATIO_FROM_THRESHOLD, type RaceTarget } from "./prescription";
@@ -13,7 +13,9 @@ import { RACE_RATIO_FROM_THRESHOLD, type RaceTarget } from "./prescription";
  *   usuels pour le niveau visé ;
  * - seuil : allure au seuil qu'implique le temps visé (mêmes ratios que les
  *   estimations d'allure de course).
- * Tout est mesuré sur les 8 dernières semaines.
+ * Fréquence et volume : moyennes des 8 dernières semaines COMPLÈTES (lundi–dimanche), la
+ * semaine en cours exclue (sinon un lundi ferait chuter la moyenne). La plus longue sortie se
+ * lit sur les 8 semaines glissantes, semaine en cours comprise (un maximum ne se dilue pas).
  */
 
 export const GAP_WINDOW_WEEKS = 8;
@@ -91,6 +93,14 @@ function pace(seconds: number): string {
   return formatPace(1000 / seconds);
 }
 
+/** Sorties et km par semaine en moyenne sur les 8 semaines complètes avant la semaine en cours. */
+export function completeWeeksAverage(runs: GapRun[], today: string, weeks = GAP_WINDOW_WEEKS): { runsPerWeek: number; kmPerWeek: number } {
+  const end = startOfIsoWeek(today);
+  const start = addDays(end, -7 * weeks);
+  const inWindow = runs.filter((run) => run.localDate >= start && run.localDate < end);
+  return { runsPerWeek: inWindow.length / weeks, kmPerWeek: inWindow.reduce((sum, run) => sum + (run.distanceM ?? 0), 0) / 1000 / weeks };
+}
+
 /**
  * `availableRunsPerWeek` : sorties possibles déclarées dans l'objectif. C'est un plafond :
  * le moteur ne conseille jamais plus de sorties que l'agenda n'en permet, il compense par
@@ -100,10 +110,9 @@ export function goalGap(input: { target: RaceTarget; runs: GapRun[]; today: stri
   const goalPaceS = Math.round(input.target.targetTimeS / input.target.distanceKm);
   const bench = benchmarks(input.target.distanceKm, goalPaceS);
   if (!bench) return null;
+  const { runsPerWeek, kmPerWeek } = completeWeeksAverage(input.runs, input.today);
   const from = addDays(input.today, -7 * GAP_WINDOW_WEEKS);
   const recent = input.runs.filter((run) => run.localDate > from && run.localDate <= input.today);
-  const runsPerWeek = recent.length / GAP_WINDOW_WEEKS;
-  const kmPerWeek = recent.reduce((sum, run) => sum + (run.distanceM ?? 0), 0) / 1000 / GAP_WINDOW_WEEKS;
   const longestKm = Math.max(0, ...recent.map((run) => (run.distanceM ?? 0) / 1000));
 
   const available = input.availableRunsPerWeek ?? null;

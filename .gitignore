@@ -34,5 +34,7 @@ clean_copilot.py
 # Sauvegardes et bases des profils invités
 /data/backups/
 /data/profiles/
-/.next-test/
+/.next-*/
 /data/test/
+/data/prod-release*.json
+/data/*.log

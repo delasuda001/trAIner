@@ -1,19 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { addDays } from "@/lib/dates";
+import { addDays, startOfIsoWeek } from "@/lib/dates";
 import { vouvoyer } from "@/lib/register";
-import { goalGap, nextLongRunKm, primaryGap, type GapRun } from "./goal-gap";
+import { completeWeeksAverage, goalGap, nextLongRunKm, primaryGap, type GapRun } from "./goal-gap";
 
 const today = "2026-11-18";
 const half = { distanceKm: 21.0975, targetTimeS: 87 * 60 };
 const fiveK = { distanceKm: 5, targetTimeS: 19 * 60 };
 
-/** N sorties par semaine sur 8 semaines, de `km` km, la plus longue à `longest` km. */
+/** N sorties par semaine sur les 8 semaines complètes avant la semaine en cours, de `km` km, la plus longue à `longest` km. */
 function weeks(perWeek: number, km: number, longest = km): GapRun[] {
   const runs: GapRun[] = [];
-  for (let week = 0; week < 8; week += 1) for (let index = 0; index < perWeek; index += 1) runs.push({ localDate: addDays(today, -(week * 7 + index * 2 + 1)), distanceM: km * 1000 });
+  for (let week = 0; week < 8; week += 1) for (let index = 0; index < perWeek; index += 1) runs.push({ localDate: addDays(startOfIsoWeek(today), -(week * 7 + index * 2 + 1)), distanceM: km * 1000 });
   runs[0] = { ...runs[0], distanceM: longest * 1000 };
   return runs;
 }
+
+describe("moyennes sur semaines complètes", () => {
+  it("la semaine en cours ne compte pas : un lundi sans sortie ne fait pas chuter la moyenne, une sortie de la semaine ne la gonfle pas", () => {
+    const runs = weeks(2, 10);
+    const monday = startOfIsoWeek(today);
+    expect(completeWeeksAverage(runs, monday)).toEqual({ runsPerWeek: 2, kmPerWeek: 20 });
+    expect(completeWeeksAverage([...runs, { localDate: today, distanceM: 30_000 }], today)).toEqual({ runsPerWeek: 2, kmPerWeek: 20 });
+    // Le lundi suivant, la semaine qui vient de finir entre dans la moyenne et la plus ancienne en sort.
+    expect(completeWeeksAverage([...runs, { localDate: today, distanceM: 30_000 }], addDays(monday, 7)).kmPerWeek).toBeCloseTo((20 * 7 + 30) / 8);
+  });
+
+  it("la plus longue sortie de la semaine en cours compte quand même (un maximum ne se dilue pas)", () => {
+    const gap = goalGap({ target: half, runs: [...weeks(3, 10), { localDate: today, distanceM: 16_000 }], today, thresholdSpeedMps: 1000 / 250 });
+    expect(gap?.levers.find((lever) => lever.key === "long_run")?.current).toBe("16 km");
+  });
+});
 
 describe("écart à l'objectif", () => {
   it("allure du moment sur semi : limite dite quand la plus longue sortie est sous 80 % du repère, pas sur 5 km", () => {

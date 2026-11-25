@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomInt, scryptSync, timingSafeEqual } from "node:crypto";
+import { sessionCookieName } from "@/lib/env/environment";
 
 /**
  * Codes d'accès, jetons de session et d'invitation. Fonctions pures (hors aléa), testées.
@@ -62,7 +63,8 @@ export function verifyCode(code: string, hash: string, salt: string): boolean {
   return expected.length === candidate.length && timingSafeEqual(candidate, expected);
 }
 
-export const SESSION_COOKIE = "sillage_session";
+/** Cookie de session de l'environnement en cours (prod : `sillage_session`, test : `sillage_test_session`). */
+export const SESSION_COOKIE = sessionCookieName();
 /** Session longue sur l'appareil (cookie persistant, pas de cookie de session : iOS les perd). */
 export const SESSION_TTL_S = 180 * 86_400;
 export const INVITATION_TTL_MS = 7 * 86_400_000;

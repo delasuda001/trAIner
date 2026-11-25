@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
+import { isTestEnv } from "@/lib/env/environment";
 import { looksLikeToken, SESSION_COOKIE } from "./credentials";
 import { getRegistry, runAs, toMember } from "./context";
 import type { Member } from "./types";
@@ -22,6 +23,8 @@ export async function requestMember(): Promise<Member | null> {
   const record = getRegistry().resolveSession(token);
   if (!record) return null;
   if (record.role === "guest" && guestsSuspended()) return null;
+  // Environnement de test : Bastien seul (les données des invités n'y sont que des copies, vues par « voir comme »).
+  if (isTestEnv() && record.role !== "admin") return null;
   return toMember(record);
 }
 

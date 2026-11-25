@@ -875,9 +875,9 @@ html[data-tour="/"] .nav a[href="/"], html[data-tour="/coach"] .nav a[href="/coa
 @keyframes grow { from { width: 0; } }
 
 .scene-coach { display: flex; flex-direction: column; justify-content: center; gap: 10px; }
-.bubble { max-width: 82%; border: var(--sl-stroke) solid var(--sl-border); border-radius: 16px; padding: 9px 12px; font-size: 13.5px; line-height: 1.35; }
-.bubble.me { align-self: flex-end; background: var(--sl-ink); color: var(--sl-paper); border-color: var(--sl-ink); border-bottom-right-radius: 4px; animation: tour-rise .35s .1s ease both; }
-.bubble.coach { position: relative; align-self: flex-start; width: 78%; min-height: 86px; background: var(--sl-surface); border-bottom-left-radius: 4px; box-shadow: 4px 4px 0 var(--sl-blue); animation: tour-rise .35s .45s ease both; }
+.scene-coach .bubble { max-width: 82%; border: var(--sl-stroke) solid var(--sl-border); border-radius: 16px; padding: 9px 12px; font-size: 13.5px; line-height: 1.35; }
+.scene-coach .bubble.me { align-self: flex-end; background: var(--sl-ink); color: var(--sl-paper); border-color: var(--sl-ink); border-bottom-right-radius: 4px; animation: tour-rise .35s .1s ease both; }
+.scene-coach .bubble.coach { position: relative; align-self: flex-start; width: 78%; min-height: 86px; background: var(--sl-surface); border-bottom-left-radius: 4px; box-shadow: 4px 4px 0 var(--sl-blue); animation: tour-rise .35s .45s ease both; }
 .typing { position: absolute; left: 12px; top: 12px; display: flex; gap: 4px; animation: vanish .2s 1.25s both; }
 .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--sl-ink-muted); animation: blink .9s infinite; }
 .typing i:nth-child(2) { animation-delay: .15s; }
@@ -917,3 +917,29 @@ html[data-tour="/"] .nav a[href="/"], html[data-tour="/coach"] .nav a[href="/coa
   .tour, .tour *, html[data-tour] .nav a { animation: none !important; transition: none !important; }
   .typing { display: none; }
 }
+
+/* Chat du coach : texte long (adresses, listes) qui ne déborde pas de la bulle ; question refusée par le quota. */
+.chat-log .bubble { min-width: 0; overflow-wrap: anywhere; }
+.chat-log .bubble p { margin: 0; }
+.chat-log .bubble .evidence { overflow-wrap: anywhere; }
+.bubble.refused { opacity: 0.7; border-style: dashed; }
+.bubble.notice-quota { border-color: var(--sl-alert); box-shadow: none; }
+.bubble.notice-quota strong { font-family: var(--font-display); }
+/* Jauge du quota près du chat. */
+.quota-meter { display: grid; gap: 5px; margin-top: 10px; padding: 8px 10px; border: 1.5px solid var(--sl-border); border-radius: 12px; background: var(--sl-surface); }
+.quota-meter-title { font-family: var(--font-display); font-weight: 800; font-size: 12.5px; }
+.quota-meter-row { display: grid; grid-template-columns: 74px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12px; }
+.quota-meter-label { color: var(--sl-ink-muted); }
+.quota-meter-track { position: relative; height: 8px; border-radius: 999px; border: 1.5px solid var(--sl-border); background: var(--sl-paper); overflow: hidden; }
+.quota-meter-track i { display: block; height: 100%; border-radius: 999px; background: var(--sl-green); transition: width .4s ease; }
+.meter-high .quota-meter-track i { background: var(--sl-yellow); }
+.meter-full .quota-meter-track i { background: var(--sl-alert); }
+.quota-meter-detail { font-family: var(--font-data); font-size: 11.5px; white-space: nowrap; }
+
+/* Environnement de test : bandeau rayé, collé en haut, impossible à confondre avec la prod. */
+.env-banner { position: sticky; top: 0; z-index: 60; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 10px; padding: 6px 12px; font-size: 12.5px; color: var(--fixed-ink, #15151e); background: repeating-linear-gradient(-45deg, var(--sl-yellow) 0 14px, #ffd400 14px 28px); border-bottom: 2px solid var(--fixed-ink, #15151e); }
+.env-banner strong { font-family: var(--font-display); font-weight: 800; }
+.env-banner-link { font-weight: 800; color: var(--fixed-ink, #15151e); text-decoration: underline; text-underline-offset: 2px; }
+.env-card { margin-bottom: 14px; }
+.env-card.is-test { border-color: var(--fixed-ink, #15151e); box-shadow: 4px 4px 0 var(--sl-yellow); }
+.env-card .section-title { display: inline-flex; align-items: center; gap: 6px; }

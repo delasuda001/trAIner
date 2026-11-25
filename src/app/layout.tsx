@@ -13,6 +13,7 @@ import { readSyncState } from "@/lib/server/analytics";
 import { LogoutButton } from "@/components/profiles/logout-button";
 import { FeedbackButton } from "@/components/feedback/feedback-button";
 import { GaugeProvider } from "@/components/coach/coach-gauge";
+import { EnvBanner } from "@/components/env/env-banner";
 import { coachGauge } from "@/lib/server/quota";
 import { refreshRateLimits } from "@/lib/server/usage";
 import { RegisterProvider } from "@/components/ui/register";
@@ -55,7 +56,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // Jauge de l'abonnement de Bastien, montrée aux invités près des boutons du coach.
   // Relevé de l'abonnement s'il date de plus de 5 min (sans token, attente bornée à 2,5 s).
   if (member?.role === "guest") await refreshRateLimits({ waitMs: 2_500 });
-  const gauge = member?.role === "guest" ? runAs(member, () => coachGauge()) : null;
+  // Bastien voit aussi la jauge (ses fenêtres 5 h / 7 j) près du chat, sans relevé supplémentaire ici.
+  const gauge = member ? runAs(member, () => coachGauge()) : null;
   return (
     <html lang="fr" className={`${display.variable} ${text.variable}`} data-rendered-at={new Date().toISOString()} suppressHydrationWarning>
       <head>
@@ -64,6 +66,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <RegisterProvider register={registerForRole(member?.role)}>
         <ConnectionProvider>
+        <EnvBanner signedIn={member != null} />
         <header className="topbar">
           <div className="topbar-inner">
             <Link href="/" className="brand" aria-label={`${BRAND.name}, tableau de bord`}><LogoMark /><Wordmark />{celebrated(member?.id) ? <HeaderHearts /> : null}</Link>

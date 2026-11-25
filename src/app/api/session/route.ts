@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { deviceLabel, GUEST_CODE_LENGTH, looksLikeToken, normalizeCode, plausibleCode, SESSION_COOKIE } from "@/lib/profiles/credentials";
 import { getRegistry } from "@/lib/profiles/context";
+import { isTestEnv } from "@/lib/env/environment";
 import { clientAddress, guestsSuspended } from "@/lib/profiles/request";
 import { loginThrottle, openSession } from "@/lib/profiles/session-http";
 
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
   const code = parsed.success ? parsed.data.code : "";
   const longCode = normalizeCode(code).length > GUEST_CODE_LENGTH;
   const record = !parsed.success || !plausibleCode(code) ? null : name ? registry.findByNameAndCode(name, code) : longCode ? registry.findByCode(code) : null;
-  if (!record || (record.role === "guest" && guestsSuspended())) {
+  if (!record || (record.role === "guest" && guestsSuspended()) || (isTestEnv() && record.role !== "admin")) {
     loginThrottle.fail(address, now);
     registry.logLogin({ profileId: null, method: "code", outcome: "refused", address, device });
     return NextResponse.json({ error: REFUSED }, { status: 401 });

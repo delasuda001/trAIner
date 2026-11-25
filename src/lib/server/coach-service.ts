@@ -24,7 +24,7 @@ export type CoachResult<T> =
   /** `goalStale` : seul l'objectif a changé depuis ; ce que la sortie dit de l'objectif (goalLink) n'est plus à jour. */
   | { status: "ready"; output: T; model: string; createdAt: string; goalStale?: boolean }
   | { status: "missing"; previous?: { output: T; model: string; createdAt: string; promptVersion: string } }
-  | { status: "error"; kind: LlmFailureKind; message: string };
+  | { status: "error"; kind: LlmFailureKind; message: string; /** Quota : heure où l'analyse redevient possible (ISO). */ freesAt?: string | null };
 
 type Job<T> = {
   kind: "session" | "outlook" | "weekly";
@@ -84,7 +84,7 @@ async function generate<T>(job: Job<T>, options: { preparation?: boolean } = {})
   await refreshRateLimits({ maxAgeMs: 2 * 60_000, waitMs: 4_000 });
   const quota = checkQuota(undefined, options);
   const usageKind = options.preparation ? "prepare" : job.kind;
-  if (!quota.allowed) return { status: "error", kind: "quota", message: quota.message };
+  if (!quota.allowed) return { status: "error", kind: "quota", message: quota.message, freesAt: quota.freesAt };
 
   const task = (async (): Promise<CoachResult<T>> => {
     const allowed = allowedNumbers(job.payload);

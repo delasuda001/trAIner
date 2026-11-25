@@ -35,6 +35,7 @@ import { reviewIsRunning } from "@/lib/server/quality-review-service";
 import { readReportIndex, readReportMarkdown } from "@/lib/bench/store";
 import { SettingsGroup } from "@/components/settings/settings-group";
 import { GroupMemory } from "@/components/settings/group-memory";
+import { EnvSwitchCard } from "@/components/env/env-switch";
 import { BarChart3, FlaskConical, Globe, Lock, ShieldCheck, SlidersHorizontal, Smartphone, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -232,6 +233,7 @@ async function renderAdmin(member: Member) {
         </div>
       </div>
       <AccountRow name={member.name} />
+      <EnvSwitchCard />
       <GroupMemory scope="admin" />
       <div className="settings-groups">
         <SettingsGroup id="profils" title="Profils du test" note="chacun a sa base, sa clé Garmin et son coach ; tu ne vois que leur consommation" badge={admin.profilesBadge} icon={Users} accent="blue" open closedOnPhone>
