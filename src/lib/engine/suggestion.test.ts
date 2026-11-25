@@ -268,3 +268,28 @@ describe("consigne d'allure des fractionnés", () => {
     expect(pacingCue({ zone: "Z5", heartRateLow: 154, heartRateHigh: 164, paceFastMps: null, paceSlowMps: null }, 3)).toContain("Sans allure de référence fiable");
   });
 });
+
+describe("contrainte de la semaine dite au coach", () => {
+  // 2026-11-18 est un mercredi ; la semaine commence le lundi 16.
+  const wednesday = "2026-11-18";
+  const runs = [{ localDate: "2026-11-09", kind: "endurance" as const, family: "easy" as const, movingTimeS: 3000, aerobicTrainingEffect: 2.8 }, { localDate: "2026-11-16", kind: "endurance" as const, family: "easy" as const, movingTimeS: 3000, aerobicTrainingEffect: 2.8 }];
+
+  it("jours indisponibles : la séance glisse au premier jour possible, et la raison le dit", () => {
+    const free = suggestNextSession(input(runs, { today: wednesday }));
+    const blocked = suggestNextSession(input(runs, { today: wednesday, weekConstraint: { weekStart: "2026-11-16", runsThisWeek: null, unavailableDays: [2, 3] } }));
+    expect(free.when.date).toBe(wednesday);
+    expect(blocked.when.date).toBe("2026-11-20");
+    expect(blocked.reason).toContain("pas mercredi ni jeudi");
+  });
+
+  it("sorties de la semaine déjà faites : la proposition passe à lundi prochain", () => {
+    const result = suggestNextSession(input(runs, { today: wednesday, weekConstraint: { weekStart: "2026-11-16", runsThisWeek: 1, unavailableDays: [] } }));
+    expect(result.when.date).toBe("2026-11-23");
+    expect(result.reason).toContain("1 sortie possible");
+  });
+
+  it("contrainte d'une autre semaine : ignorée", () => {
+    const result = suggestNextSession(input(runs, { today: wednesday, weekConstraint: { weekStart: "2026-11-09", runsThisWeek: 1, unavailableDays: [2] } }));
+    expect(result.when.date).toBe(wednesday);
+  });
+});

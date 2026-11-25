@@ -1,7 +1,8 @@
 import "server-only";
 
 import { getLlmClient } from "@/lib/coach";
-import { buildChatPrompt, CHAT_HISTORY_MESSAGES, CHAT_SYSTEM_PROMPT, chatAnswerJsonSchema, chatAnswerSchema } from "@/lib/coach/chat-coach";
+import { buildChatPrompt, CHAT_HISTORY_MESSAGES, CHAT_SYSTEM_PROMPT, chatAnswerJsonSchema, chatAnswerSchema, type ChatAnswer } from "@/lib/coach/chat-coach";
+import { DAY_INDEX, saveWeekConstraint } from "./week-constraint";
 import { LLM_FAILURE_MESSAGES, LlmError, type LlmFailureKind } from "@/lib/coach/llm";
 import { allowedNumbers, collectText, excerpt, findUnsupportedMultiples, findUnsupportedNumbers, findZoneContradictions } from "@/lib/coach/number-guard";
 import { createChatRepository, type ChatMessage } from "@/lib/db/repositories/chat-repository";
@@ -93,7 +94,37 @@ export function chosenSessionContext(activityId: string): Record<string, unknown
   };
 }
 
+/** La question porte-t-elle sur l'objectif, les jauges ou le plan ? Alors seulement, le tableau de bord part avec elle. */
+export function wantsDashboard(question: string): boolean {
+  return /jauge|tableau de bord|dashboard|objectif|levier|progress|volume|r[ée]gularit|semaine type|allure du moment|chrono|record|o[uù] j.en suis|recommand|reco\b|plan\b/i.test(question);
+}
+
+/** Jauges de l'objectif et leviers, en clair (≈ 150 tokens). */
+export function dashboardBlock(dashboard: ReturnType<typeof getDashboard>): Record<string, unknown> {
+  return {
+    jauges: dashboard.goalPages.map((page) => {
+      if (page.kind === "chrono") return { objectif: page.title, leviers: page.gap.levers.map((lever) => `${lever.label} : ${lever.current} pour ${lever.needed}${lever.met ? " (atteint)" : ""}`), a_faire_d_abord: page.gap.action ?? "rien de prioritaire" };
+      if (page.kind === "distance") return { objectif: page.title, plus_longue_sortie: `${formatNumber(page.longestKm, 1)} km sur ${formatNumber(page.targetKm, 1)} km`, palier: page.next };
+      return { objectif: page.title, cible: `${page.target} sortie${page.target > 1 ? "s" : ""} par semaine`, serie_en_cours: `${page.streakWeeks} semaine${page.streakWeeks > 1 ? "s" : ""}`, semaines_a_la_cible_sur_8: page.weeksAtTarget, palier: page.next };
+    }),
+  };
+}
+
 export type AskResult = { messages: ChatMessage[]; error: { kind: LlmFailureKind; message: string; /** Quota : heure où la question pourra partir (ISO). */ freesAt?: string | null } | null };
+
+/**
+ * Contrainte de la semaine annoncée au coach : enregistrée, puis la prochaine séance est recalculée
+ * (moteur, aucun appel de plus). Renvoie la phrase affichée sous la réponse, ou null.
+ */
+function applyPlanChange(change: ChatAnswer["planChange"], today: string): string | null {
+  if (!change?.apply) return null;
+  const unavailableDays = change.unavailableDays.map((day) => DAY_INDEX[day]).filter((day): day is number => day != null);
+  const runsThisWeek = change.runsThisWeek > 0 ? change.runsThisWeek : null;
+  if (runsThisWeek == null && !unavailableDays.length) return null;
+  saveWeekConstraint(today, { runsThisWeek, unavailableDays });
+  const next = getDashboard().suggestion;
+  return `Proposition recalculée : ${next.primary.title}, ${next.when.label.toLowerCase()}.`;
+}
 
 /** Une question à la fois par profil. */
 const busyMembers = new Set<string>();
@@ -114,8 +145,9 @@ export async function askCoach(question: string, activityId: string | null = nul
     const athlete = { isAdmin: requireActiveMember().role === "admin", runsPerWeek12w: dashboard.rhythm.runsPerWeek12w };
     const system = systemPromptFor(CHAT_SYSTEM_PROMPT, athlete);
     const { zoneOf: zoneOfHr, ...base } = buildChatContext(dashboard);
-    // Séance choisie : son résumé passe en tête ; la question porte sur elle.
-    const context = chosen ? { seance_choisie: chosen, ...base } : base;
+    // Séance choisie : son résumé passe en tête ; la question porte sur elle. Tableau de bord seulement à la demande.
+    const withBoard = wantsDashboard(question) ? { ...base, tableau_de_bord: dashboardBlock(dashboard) } : base;
+    const context = chosen ? { seance_choisie: chosen, ...withBoard } : withBoard;
     const allowed = allowedNumbers({ context, question, history });
     const basePrompt = buildChatPrompt(context, history, question, askerLabel(athlete));
     let prompt = basePrompt;
@@ -132,7 +164,8 @@ export async function askCoach(question: string, activityId: string | null = nul
       recordUsage("chat", null, response.model, issues.length ? "rejected" : "ok", response.usage);
       if (!issues.length) {
         // Certains modèles écrivent « \n » en toutes lettres dans le JSON : on rétablit les sauts de ligne.
-        repository.add("coach", { text: response.data.answer.replace(/\\n/g, "\n"), evidence: response.data.evidence }, response.model);
+        const planNote = applyPlanChange(response.data.planChange, dashboard.today);
+        repository.add("coach", { text: response.data.answer.replace(/\\n/g, "\n"), evidence: response.data.evidence, ...(planNote ? { planNote } : {}) }, response.model);
         return { messages: repository.list(), error: null };
       }
       console.warn(`[coach] chat : chiffres ou zones non sourcés (essai ${attempt}) : ${issues.map((token) => excerpt(text, token.split(" ")[0])).join(" | ")}`);

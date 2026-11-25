@@ -992,3 +992,6 @@ button.next-after.pressing { transform: scale(0.98); }
 .view-as-back { font-weight: 800; color: #FFFFFF; background: var(--fixed-ink, #15151e); padding: 3px 10px; border-radius: 999px; text-decoration: none; }
 html[data-view-as] .topbar { top: 37px; }
 .point-side { margin-top: 10px; border-left-color: var(--sl-yellow); display: grid; gap: 6px; }
+.plan-note { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; border: 1.5px solid var(--sl-border); background: var(--sl-yellow); color: var(--fixed-ink, #15151e); text-decoration: none; width: fit-content; }
+.week-constraint { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 12.5px; padding: 4px 4px 4px 10px; border-radius: 12px; border: 1.5px dashed var(--fixed-ink, #15151e); }
+.week-constraint span { flex: 1; }

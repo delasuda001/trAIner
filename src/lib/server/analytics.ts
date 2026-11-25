@@ -9,6 +9,8 @@ import type { ActivityRow, WellnessRow } from "@/lib/db/types";
 import { computeActivityMetrics, METRICS_VERSION, sessionTitle, type ActivityMetrics } from "@/lib/engine/activity-metrics";
 import { computeDeltas, selectComparables, type ComparisonDeltas, type RunForComparison } from "@/lib/engine/comparable";
 import { isRun, loadAlert, loadFigure, summarizeLoad, type LoadAlert, type LoadFigure, type LoadSummary } from "@/lib/engine/load";
+import { readWeekConstraint } from "./week-constraint";
+import type { WeekConstraint } from "@/lib/engine/suggestion";
 import { calendarZone, trainingCalendar, type TrainingCalendar } from "@/lib/engine/calendar";
 import { detectLevel, type LevelAssessment } from "@/lib/engine/athlete-level";
 import { goalPages, type GoalPage } from "@/lib/engine/goal-pages";
@@ -366,6 +368,8 @@ export function getActivityView(activityId: string): ActivityView | null {
 }
 
 export type Dashboard = {
+  /** Contrainte de la semaine dite au coach, si elle vaut pour cette semaine. */
+  weekConstraint: WeekConstraint | null;
   /** Rythme habituel (12 semaines) : règles adaptées et présentation du coureur au coach. */
   rhythm: Rhythm;
   today: string;
@@ -461,6 +465,7 @@ function computeOutlook(context: Context): Outlook {
     raceTargets: goal?.raceTargets ?? [],
     efforts: recentEfforts(runs, addDays(today, 1)),
     goal: goal ? { eventDate: goal.eventDate, distanceKm: goal.distanceKm, targetPaceMps: targetPaceMps(goal), runsPerWeek: goal.runsPerWeek, preferredDays: goal.preferredDays } : null,
+    weekConstraint: readWeekConstraint(today),
   });
   const register = currentRegister();
   return { load, loadAlert: voiceDeep(alert, register), recovery, progression, suggestion: voiceDeep(suggestion, register), rhythm };
@@ -519,6 +524,7 @@ export function getDashboard(): Dashboard {
     loadAlert: currentLoadAlert,
     goalMarkers,
     goalGaps,
+    weekConstraint: readWeekConstraint(today),
     lastSameType: sameRun && sameAnalysis ? { id: sameRun.id, localDate: sameRun.localDate, title: sessionTitle(sameRun.metrics), prescription: sameAnalysis.prescription } : null,
     recent: [...rows].reverse().slice(0, 10).map((row) => ({ id: row.id, name: row.name, sport: row.sport, localDate: row.localDate, startTimeLocal: row.startTimeLocal, distanceM: row.distanceM, movingTimeS: row.movingTimeS, averageSpeedMps: row.averageSpeedMps, averageHeartRateBpm: row.averageHeartRateBpm, kind: runById.get(row.id)?.metrics.kind ?? null, title: runById.get(row.id) ? sessionTitle((runById.get(row.id) as AnalyzedRun).metrics) : null, zoneShares: runById.get(row.id)?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null) })),
     activityCount: rows.length,

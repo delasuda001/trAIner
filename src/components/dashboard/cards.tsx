@@ -25,6 +25,8 @@ import type { CoachResult } from "@/lib/server/coach-service";
 import type { Sport } from "@/lib/source/types";
 import { calendarZone } from "@/lib/engine/calendar";
 import { NextAfter } from "./next-after";
+import { WeekConstraintNote } from "./week-constraint";
+import { constraintSentence } from "@/lib/engine/suggestion";
 import type { SessionKind } from "@/lib/engine/activity-metrics";
 
 const TONE_COLOR: Record<Tone, string> = { good: "var(--sl-ok)", warning: "var(--sl-warn)", critical: "var(--sl-alert)", neutral: "var(--sl-ink-muted)" };
@@ -84,6 +86,7 @@ export function SuggestionCard({ dashboard, coach, plain = false }: { dashboard:
         {target ? <span className="pill"><ZoneDot zone={zone} />{plain ? plainZone(target.zone) : target.zone} · {intervals ? "FC repère " : ""}{target.heartRateLow}–{target.heartRateHigh} bpm</span> : null}
         {paceCenter && !intervals ? <span className="pill" title={`${formatPace(target?.paceSlowMps)} à ${formatPace(target?.paceFastMps)}`}>≈ {formatPace(paceCenter)}</span> : null}
       </div>
+      {dashboard.weekConstraint ? <WeekConstraintNote text={constraintSentence(dashboard.weekConstraint).replace(" La proposition en tient compte.", "")} /> : null}
       {primary.type !== "endurance" && primary.type !== "long" ? <p className="structure">{primary.structure}</p> : null}
       <div className="coach-lines">
         <p className="coach-line"><span className="coach-tag">Pourquoi</span><span><CoachText text={ready ? ready.suggestionWhy : suggestion.reason} /></span></p>

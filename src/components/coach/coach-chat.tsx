@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CoachGaugeLine, QuotaMeter, useLocalTime } from "./coach-gauge";
-import { ArrowUp, Ban, Clock, Sparkles, Trash2 } from "lucide-react";
+import { ArrowUp, Ban, CalendarClock, Clock, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { generatedAtLabel, modelLabel } from "@/lib/coach/model-label";
 import { RateCoach } from "@/components/feedback/rate-coach";
@@ -112,6 +113,7 @@ export function CoachChat({ initial, seen, sessions = [], preselected = null }: 
           <div key={message.id} className={`bubble ${message.role}${message.content.error ? " error" : ""}`}>
             {message.content.activity ? <span className="chat-about">{message.content.activity.label}</span> : null}
             <p style={{ whiteSpace: "pre-wrap" }}>{message.content.text}</p>
+            {message.content.planNote ? <Link href="/" className="plan-note"><CalendarClock size={13} /> {message.content.planNote} Voir l&apos;accueil</Link> : null}
             {message.content.evidence?.length ? <ul className="evidence">{message.content.evidence.map((item) => <li key={item}>{item}</li>)}</ul> : null}
             {message.role === "coach" && message.model ? <span className="coach-stamp"><Sparkles size={12} /> {modelLabel(message.model)} · {generatedAtLabel(message.createdAt)}</span> : null}
             {message.role === "coach" && message.model && !message.content.error ? <RateCoach subjectKind="chat" subjectId={message.id} label="Utile ?" /> : null}

@@ -1,4 +1,4 @@
-import { addDays, daysBetween } from "@/lib/dates";
+import { addDays, daysBetween, startOfIsoWeek } from "@/lib/dates";
 import { easyPaceRange, type EasySample } from "./easy-pace";
 import { formatDate, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
@@ -125,11 +125,26 @@ export type SuggestionInput = {
   /** Semaine type alignée sur le levier principal de l'objectif ; sans elle, comportement d'origine. */
   weekPlan?: WeekPlan | null;
   /**
+   * Contrainte de la semaine dite au coach (« je ne peux faire que 2 séances », « pas mardi ») : ne vaut que
+   * pour la semaine `weekStart` (lundi). Plafonne les sorties de la semaine et écarte les jours indisponibles.
+   */
+  weekConstraint?: WeekConstraint | null;
+  /**
    * Coureur débutant (cf. engine/athlete-level) : ni seuil ni VO2max. Une sortie sur deux est ludique
    * (accélérations, fartlek, footing progressif), l'autre un peu plus longue, toujours facile.
    */
   beginner?: boolean;
 };
+
+export type WeekConstraint = { weekStart: string; runsThisWeek: number | null; /** 0 = lundi … 6 = dimanche. */ unavailableDays: number[] };
+
+const DAY_NAMES = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+
+/** Phrase de rappel de la contrainte (« Cette semaine : 2 sorties possibles, pas mardi ni jeudi. »). */
+export function constraintSentence(constraint: WeekConstraint): string {
+  const parts = [constraint.runsThisWeek != null ? `${constraint.runsThisWeek} sortie${constraint.runsThisWeek > 1 ? "s" : ""} possible${constraint.runsThisWeek > 1 ? "s" : ""}` : null, constraint.unavailableDays.length ? `pas ${constraint.unavailableDays.map((day) => DAY_NAMES[day]).join(" ni ")}` : null].filter(Boolean);
+  return `Cette semaine, tu as indiqué : ${parts.join(", ")}. La proposition en tient compte.`;
+}
 
 /** Footing ajouté pour la 3e sortie (min). */
 const FOOTING_MIN = 35;
@@ -373,7 +388,10 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
   const daysSinceLastQuality = since(lastQuality);
   const daysSinceLastLong = since(lastLong);
   const highShare = load.intensity28d?.high ?? null;
-  const plannedRunsPerWeek = plan?.runsPerWeek ?? goal?.runsPerWeek ?? Math.max(1, Math.round(load.runsPerWeek8w));
+  const weekStart = startOfIsoWeek(today);
+  const constraint = input.weekConstraint && input.weekConstraint.weekStart === weekStart ? input.weekConstraint : null;
+  const usualRunsPerWeek = plan?.runsPerWeek ?? goal?.runsPerWeek ?? Math.max(1, Math.round(load.runsPerWeek8w));
+  const plannedRunsPerWeek = constraint?.runsThisWeek != null ? Math.max(1, Math.min(usualRunsPerWeek, constraint.runsThisWeek)) : usualRunsPerWeek;
   const qualityEveryDays = plan ? WEEKLY_QUALITY_DAYS : 8;
   const longEveryDays = plan ? 6 : 14;
   const longSession = (): SuggestedSession => (plan ? longRunSession(input, plan) : enduranceSession(input, roundTo5(Math.min(120, Math.max(70, longest8w * 1.1))), "Sortie longue", "long"));
@@ -502,15 +520,23 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
     const habitual = snapToPreferredDay(earliest, days);
     if (explicitDays.length || daysBetween(earliest, habitual) <= MAX_WAIT_DAYS) start = habitual;
   }
+  if (constraint) {
+    // Quota de sorties de la semaine atteint : la séance passe à la semaine suivante.
+    const doneThisWeek = runs.filter((run) => run.localDate >= weekStart && run.localDate <= today).length;
+    if (constraint.runsThisWeek != null && doneThisWeek >= constraint.runsThisWeek && start < addDays(weekStart, 7)) start = addDays(weekStart, 7);
+    for (let guard = 0; guard < 7 && start < addDays(weekStart, 7) && constraint.unavailableDays.includes(weekday(start)); guard += 1) start = addDays(start, 1);
+  }
   if (goal?.eventDate && start > goal.eventDate) start = goal.eventDate;
 
   // Fenêtre de 2 jours au plus : le jour conseillé et le lendemain, sauf jour imposé (course, jours préférés, veille de course).
   const second = addDays(start, 1);
   const secondOk = primary.type !== "race"
     && (!explicitDays.length || explicitDays.includes(weekday(second)))
-    && (!goal?.eventDate || second < goal.eventDate);
+    && (!goal?.eventDate || second < goal.eventDate)
+    && !(constraint && second < addDays(weekStart, 7) && constraint.unavailableDays.includes(weekday(second)));
   const dates = secondOk ? [start, second] : [start];
 
+  if (constraint) reason = `${reason} ${constraintSentence(constraint)}`;
   return {
     primary,
     reason,
