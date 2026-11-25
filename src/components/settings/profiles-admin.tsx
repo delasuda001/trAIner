@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { PrepareStatus } from "@/lib/server/prepare-service";
 import { DeviceList } from "./device-list";
+import { ViewAsButton } from "@/components/profiles/view-as";
 
 export type DeviceView = { id: string; device: string; lastSeenAt: string };
 
@@ -283,6 +284,7 @@ function ProfileCard({ profile, onSecret, prepareEstimate, testCoachSimulated }:
           <button type="button" className="btn btn-ghost" onClick={() => void act({ action: "code" }, (json) => onSecret({ title: `Ton code de connexion`, lines: [{ label: "Code", value: String(json?.code ?? "") }], note: "À taper avec ton prénom sur un nouvel appareil. Les appareils déjà connectés le restent. Il ne sera plus affiché." }))}><KeyRound size={14} /> Nouveau code</button>
         ) : null}
         {profile.devices.length ? <button type="button" className="btn btn-ghost" onClick={() => void act({ action: "revoke-all" })}>Déconnecter tous ses appareils</button> : null}
+        {guest && !profile.disabled ? <ViewAsButton id={profile.id} name={profile.name} /> : null}
         {guest && !profile.isTest ? <button type="button" className="btn btn-ghost" onClick={() => { if (window.confirm(`Réinitialiser l'accueil de ${profile.name} ? Ses appareils sont déconnectés ; à sa prochaine connexion (prénom et code), il revoit la bienvenue et le mini-guide. Ses données et analyses restent.`)) void act({ action: "reset-onboarding" }); }}><RotateCcw size={14} /> Réinitialiser l&apos;accueil</button> : null}
         {guest ? <button type="button" className="btn btn-ghost" onClick={() => { if (window.confirm(`Remettre à zéro le quota de la semaine de ${profile.name} ? Sa consommation des 7 derniers jours ne comptera plus dans ses plafonds (elle reste dans l'historique).`)) void act({ action: "reset-quota" }); }}><Sparkles size={14} /> Remettre le quota de la semaine à zéro</button> : null}
         {guest ? <button type="button" className="btn btn-ghost" onClick={() => void act({ action: profile.disabled ? "enable" : "disable" })}><ShieldOff size={14} /> {profile.disabled ? "Réactiver" : "Désactiver"}</button> : null}

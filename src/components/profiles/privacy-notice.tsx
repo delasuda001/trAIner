@@ -1,12 +1,13 @@
-import { Bot, EyeOff, HardDrive, Trash2 } from "lucide-react";
+import { Bot, Eye, HardDrive, Trash2 } from "lucide-react";
 
 /**
  * Ce que deviennent les données d'un invité, dit exactement : stockage sur le Mac
- * de Bastien, synthèses envoyées à Claude via son compte personnel, engagement (et
- * non impossibilité) de ne pas consulter. Rien n'est affirmé sur l'entraînement des
+ * de Bastien, synthèses envoyées à Claude via son compte personnel, ouverture possible
+ * de l'espace par Bastien en lecture seule (« voir comme », accepté par les invités), notée et montrée. Rien n'est affirmé sur l'entraînement des
  * modèles tant que Bastien n'a pas confirmé avoir désactivé le réglage.
  */
-export function PrivacyNotice({ trainingOptOut }: { trainingOptOut: boolean }) {
+/** `viewLog` : ouvertures de l'espace par Bastien (« voir comme »), plus récentes d'abord ; montrées à l'invité. */
+export function PrivacyNotice({ trainingOptOut, viewLog }: { trainingOptOut: boolean; viewLog?: string[] }) {
   return (
     <section className="card welcome-card welcome-privacy">
       <h2 className="section-title">Tes données</h2>
@@ -21,7 +22,13 @@ export function PrivacyNotice({ trainingOptOut }: { trainingOptOut: boolean }) {
               : <>Leur usage par Anthropic suit les règles applicables aux comptes Claude personnels (<a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noreferrer">politique de confidentialité d&apos;Anthropic</a>).</>}
           </span>
         </li>
-        <li><EyeOff size={15} /> <span>L&apos;application ne montre à Bastien ni tes séances, ni tes échanges avec le coach : seulement ta consommation du coach et la liste de tes connexions. Les fichiers étant sur son ordinateur, il pourrait techniquement y accéder ; il s&apos;engage à ne pas le faire.</span></li>
+        <li>
+          <Eye size={15} />
+          <span>
+            Bastien peut ouvrir ton espace tel que tu le vois, en lecture seule, pour t&apos;aider ou vérifier un problème : il y voit alors tes séances, les analyses et tes échanges avec le coach. Il ne peut rien y modifier ni rien envoyer en ton nom, et chaque ouverture est notée ici.
+            {viewLog ? (viewLog.length ? <> Dernières ouvertures : {viewLog.slice(0, 5).map((iso) => new Date(iso).toLocaleString("fr-FR", { timeZone: "America/Toronto", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })).join(", ")} (heure de Toronto).</> : " Aucune ouverture pour l'instant.") : null}
+          </span>
+        </li>
         <li><Trash2 size={15} /> <span>Sur simple demande, Bastien supprime ton profil et toutes tes données.</span></li>
       </ul>
     </section>

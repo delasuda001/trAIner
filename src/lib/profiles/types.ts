@@ -12,6 +12,8 @@ export type Member = {
   id: string;
   name: string;
   role: MemberRole;
+  /** « Voir comme » : Bastien regarde l'espace de cet invité, en lecture seule. */
+  viewer?: { id: string; name: string };
 };
 
 export const MEMBER_ID_PATTERN = /^[a-z][a-z0-9]{1,23}$/;

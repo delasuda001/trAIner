@@ -1,6 +1,6 @@
 import { CalendarDays } from "lucide-react";
 import Link from "next/link";
-import { SUGGESTION_ZONE, ZONE_NAMES, zoneColor, type Zone } from "@/components/ui/session-type";
+import { KIND_ICON, KindIcon, SUGGESTION_ZONE, ZONE_NAMES, zoneColor, type Zone } from "@/components/ui/session-type";
 import { Say } from "@/components/ui/register";
 import type { CalendarDay, CalendarWeek, TrainingCalendar } from "@/lib/engine/calendar";
 import type { SuggestionType } from "@/lib/engine/suggestion";
@@ -42,6 +42,9 @@ export function SessionCalendar({ calendar, zonesNote, plain = false, declared =
         <span><span className="cal-swatch-other" />autre sport</span>
         <span><span className="cal-swatch-planned" />proposée</span>
         {declared.length ? <span><span className="cal-swatch-declared" />sans montre</span> : null}
+      </div>
+      <div className="legend cal-legend cal-kinds" aria-label="Pictogrammes des types de séance">
+        {(["recovery", "endurance", "long", "tempo", "threshold", "intervals_vo2", "intervals_short"] as const).map((kind) => <span key={kind}><KindIcon kind={kind} size={13} />{KIND_ICON[kind].label}</span>)}
       </div>
       {today ? <DeclareRun declared={declared} today={today} /> : null}
       {plain ? null : <p className="cal-zones"><Say tu={`Couleur = intensité : zone du travail pour un fractionné ou un tempo, zone dominante sinon. ${zonesNote}`} /></p>}
@@ -86,6 +89,7 @@ function DayCell({ day }: { day: CalendarDay }) {
   const label = [formatDate(day.date, "short"), ...day.activities.map((activity) => `${activity.title}${activity.distanceM ? ` ${formatNumber(activity.distanceM / 1000, 1)} km` : ""}`), day.planned && !main ? (day.planned.alternative ? "séance proposée (jour de repli)" : "séance proposée") : null].filter(Boolean).join(" · ");
   const content = (
     <>
+      {main && !main.declared ? <KindIcon kind={main.kind} /> : null}
       {runs.length > 1 ? <span className="cal-multi">{runs.length}</span> : null}
       {others.length && main ? <span className="cal-other-dot" /> : null}
     </>

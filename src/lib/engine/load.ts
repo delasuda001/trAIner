@@ -8,6 +8,8 @@ export type LoadActivity = {
   movingTimeS: number | null;
   trainingLoad: number | null;
   hrTimeInZonesS: number[] | null;
+  /** Zone du TYPE de séance (calendarZone : la zone du travail pour une qualité, la dominante sinon) ; courses seulement. */
+  sessionZone?: number | null;
 };
 
 /** Minutes par intensité : Z1–Z2 / Z3 / Z4–Z5 (toutes activités avec FC). */
@@ -17,6 +19,8 @@ export type WeekVolume = {
   kmByZone: [number, number, number, number, number, number];
   /** Minutes par zone FC, toutes activités (Z1 à Z5). */
   zoneMinutes: [number, number, number, number, number];
+  /** Minutes de course par zone du TYPE de séance (un fractionné compte entier dans sa zone de travail). */
+  sessionMinutes?: [number, number, number, number, number];
 };
 
 export type LoadSummary = {
@@ -28,6 +32,8 @@ export type LoadSummary = {
   ratio: number | null;
   /** Répartition du temps en zones FC sur 28 jours (toutes activités). */
   intensity28d: { low: number; moderate: number; high: number; totalMinutes: number } | null;
+  /** Même répartition, mais du temps de course selon le TYPE de séance (affichage ; le moteur garde la FC). */
+  sessionIntensity28d?: { low: number; moderate: number; high: number; totalMinutes: number } | null;
   weeks: WeekVolume[];
   runsPerWeek8w: number;
   runKmPerWeek8w: number;
@@ -68,14 +74,17 @@ export function summarizeLoad(activities: LoadActivity[], today: string, weeksCo
         const zones = [0, 0, 0, 0, 0];
         for (const activity of list) activity.hrTimeInZonesS?.forEach((seconds, zone) => (zones[zone] += seconds));
         const kmByZone: WeekVolume["kmByZone"] = [0, 0, 0, 0, 0, 0];
+        const sessionMinutes: WeekVolume["sessionMinutes"] = [0, 0, 0, 0, 0];
         for (const run of runs) {
           const shares = run.hrTimeInZonesS;
-          const best = shares && shares.some((value) => value > 0) ? shares.indexOf(Math.max(...shares)) : 5;
+          const best = run.sessionZone != null ? run.sessionZone - 1 : shares && shares.some((value) => value > 0) ? shares.indexOf(Math.max(...shares)) : 5;
           kmByZone[best] = round(kmByZone[best] + (run.distanceM ?? 0) / 1000, 1);
+          if (best < 5) sessionMinutes[best] += Math.round((run.movingTimeS ?? 0) / 60);
         }
         return {
           lowMin: Math.round((zones[0] + zones[1]) / 60), moderateMin: Math.round(zones[2] / 60), highMin: Math.round((zones[3] + zones[4]) / 60),
           kmByZone,
+          sessionMinutes,
           zoneMinutes: zones.map((seconds) => Math.round(seconds / 60)) as WeekVolume["zoneMinutes"],
         };
       })(),
@@ -90,6 +99,12 @@ export function summarizeLoad(activities: LoadActivity[], today: string, weeksCo
     intensity28d: totalZones > 0
       ? { low: round((zones[0] + zones[1]) / totalZones, 3), moderate: round(zones[2] / totalZones, 3), high: round((zones[3] + zones[4]) / totalZones, 3), totalMinutes: Math.round(totalZones / 60) }
       : null,
+    sessionIntensity28d: (() => {
+      const minutes = [0, 0, 0, 0, 0];
+      for (const run of within(28).filter((activity) => isRun(activity.sport) && activity.sessionZone != null)) minutes[(run.sessionZone as number) - 1] += (run.movingTimeS ?? 0) / 60;
+      const total = minutes.reduce((sum, value) => sum + value, 0);
+      return total > 0 ? { low: round((minutes[0] + minutes[1]) / total, 3), moderate: round(minutes[2] / total, 3), high: round((minutes[3] + minutes[4]) / total, 3), totalMinutes: Math.round(total) } : null;
+    })(),
     weeks,
     runsPerWeek8w: round(runs56.length / 8, 1),
     runKmPerWeek8w: round(runs56.reduce((sum, activity) => sum + (activity.distanceM ?? 0), 0) / 1000 / 8, 1),

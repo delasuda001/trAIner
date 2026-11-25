@@ -14,6 +14,7 @@ import { LogoutButton } from "@/components/profiles/logout-button";
 import { FeedbackButton } from "@/components/feedback/feedback-button";
 import { GaugeProvider } from "@/components/coach/coach-gauge";
 import { EnvBanner } from "@/components/env/env-banner";
+import { ViewAsBanner } from "@/components/profiles/view-as-banner";
 import { isTestEnv } from "@/lib/env/environment";
 import { coachGauge } from "@/lib/server/quota";
 import { refreshRateLimits } from "@/lib/server/usage";
@@ -60,7 +61,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // Bastien voit aussi la jauge (ses fenêtres 5 h / 7 j) près du chat, sans relevé supplémentaire ici.
   const gauge = member ? runAs(member, () => coachGauge()) : null;
   return (
-    <html lang="fr" data-env={isTestEnv() ? "test" : undefined} className={`${display.variable} ${text.variable}`} data-rendered-at={new Date().toISOString()} suppressHydrationWarning>
+    <html lang="fr" data-env={isTestEnv() ? "test" : undefined} data-view-as={member?.viewer ? "" : undefined} className={`${display.variable} ${text.variable}`} data-rendered-at={new Date().toISOString()} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
@@ -68,6 +69,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <RegisterProvider register={registerForRole(member?.role)}>
         <ConnectionProvider>
         <EnvBanner signedIn={member != null} />
+        {member?.viewer ? <ViewAsBanner name={member.name} /> : null}
         <header className="topbar">
           <div className="topbar-inner">
             <Link href="/" className="brand" aria-label={`${BRAND.name}, tableau de bord`}><LogoMark /><Wordmark />{celebrated(member?.id) ? <HeaderHearts /> : null}</Link>
@@ -75,7 +77,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <span className="topbar-spacer" />
             {member ? (
               <>
-                <SyncControl lastSuccessAt={sync?.lastSuccessAt ?? null} lastError={sync?.lastError ?? null} lastAttemptAt={sync?.lastAttemptAt ?? null} guest={member.role === "guest"} />
+                {member.viewer ? null : <SyncControl lastSuccessAt={sync?.lastSuccessAt ?? null} lastError={sync?.lastError ?? null} lastAttemptAt={sync?.lastAttemptAt ?? null} guest={member.role === "guest"} autoCoach={!isTestEnv()} />}
                 <Link href="/parametres" className="btn btn-ghost icon-btn" aria-label="Paramètres et consommation" title="Paramètres et consommation"><Settings size={16} /></Link>
               </>
             ) : null}
@@ -86,7 +88,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         {celebrated(member?.id) ? <ArrivalCelebration /> : null}
         <main className="shell"><OfflineBanner /><GaugeProvider gauge={gauge}>{children}</GaugeProvider></main>
         {member ? <FeedbackButton /> : null}
-        {member ? <WelcomeTour firstName={displayFirstName(member.name)} guest={member.role === "guest"} autoOpen={tourPending(member.id)} /> : null}
+        {member ? <WelcomeTour firstName={displayFirstName(member.name)} guest={member.role === "guest"} autoOpen={tourPending(member.id) && !member.viewer} /> : null}
         </ConnectionProvider>
         </RegisterProvider>
       </body>

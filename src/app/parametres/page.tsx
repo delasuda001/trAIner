@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { asMember, guestsSuspended } from "@/lib/profiles/request";
+import { z } from "zod";
+import { asMember, guestsSuspended, VIEW_AS_LOG_KEY } from "@/lib/profiles/request";
 import type { Member } from "@/lib/profiles/types";
 import { AccessPanel } from "@/components/settings/access-panel";
 import { LogoutButton } from "@/components/profiles/logout-button";
@@ -195,7 +196,7 @@ function renderGuest(member: Member) {
           </section>
         </SettingsGroup>
         <SettingsGroup id="donnees" title="Confidentialité" note="où sont gardées tes données et ce que voit Bastien" icon={Lock} accent="green">
-          <PrivacyNotice trainingOptOut={trainingOptOut()} />
+          <PrivacyNotice trainingOptOut={trainingOptOut()} viewLog={registry.getSetting(VIEW_AS_LOG_KEY(member.id), z.array(z.string())) ?? []} />
         </SettingsGroup>
       </div>
     </>

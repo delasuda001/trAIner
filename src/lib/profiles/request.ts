@@ -16,11 +16,31 @@ export function guestsSuspended(): boolean {
   return getRegistry().getSetting(GUESTS_SUSPENDED_KEY, z.boolean()) === true;
 }
 
+/** « Voir comme » : cookie de l'administrateur qui désigne l'invité regardé (lecture seule). */
+export const VIEW_AS_COOKIE = isTestEnv() ? "sillage_test_view_as" : "sillage_view_as";
+export const VIEW_AS_LOG_KEY = (id: string) => `view_as_log_${id}`;
+
+/** Profil de l'administrateur lui-même, même en « voir comme » (routes de bascule, Paramètres). */
+export async function requestAccount(): Promise<Member | null> {
+  const member = await requestMember();
+  return member?.viewer ? { id: member.viewer.id, name: member.viewer.name, role: "admin" } : member;
+}
+
 /** Profil de la requête courante (session d'appareil valide, profil actif, accès invité ouvert), ou null. */
 export async function requestMember(): Promise<Member | null> {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  const jar = await cookies();
+  const own = await sessionMember(jar.get(SESSION_COOKIE)?.value);
+  if (own?.role !== "admin") return own;
+  const viewed = jar.get(VIEW_AS_COOKIE)?.value;
+  if (!viewed || viewed === own.id) return own;
+  const record = getRegistry().find(viewed);
+  if (!record || record.role !== "guest" || record.disabledAt) return own;
+  return { ...toMember(record), viewer: { id: own.id, name: own.name } };
+}
+
+async function sessionMember(token: string | undefined): Promise<Member | null> {
   if (!looksLikeToken(token)) return null;
-  const record = getRegistry().resolveSession(token);
+  const record = getRegistry().resolveSession(token as string);
   if (!record) return null;
   if (record.role === "guest" && guestsSuspended()) return null;
   // Environnement de test : Bastien seul (les données des invités n'y sont que des copies, vues par « voir comme »).
@@ -63,5 +83,9 @@ export async function apiAsMember(handler: (member: Member) => Response | Promis
 
 /** Routes réservées à Bastien (banc, bilan Opus, choix du modèle, profils, retours de tous). */
 export async function apiAsAdmin(handler: (member: Member) => Response | Promise<Response>): Promise<Response> {
-  return apiAsMember((member) => (member.role === "admin" ? handler(member) : NextResponse.json({ error: "Réservé à l'administrateur." }, { status: 403 })));
+  // Toujours sous le compte de Bastien, même pendant un « voir comme ».
+  const member = await requestAccount();
+  if (!member) return NextResponse.json({ error: "Session expirée : reconnecte-toi." }, { status: 401 });
+  if (member.role !== "admin") return NextResponse.json({ error: "Réservé à l'administrateur." }, { status: 403 });
+  return runAs(member, () => handler(member));
 }

@@ -46,7 +46,7 @@ export type Suggestion = {
   /** Proposée quand les signaux de récupération sont dégradés. */
   alternative: (SuggestedSession & { reason: string }) | null;
   /** La séance d'après, si la prochaine est faite comme prévu. */
-  then: { title: string; durationMin: number; type: SuggestionType; when: { date: string; label: string } } | null;
+  then: { title: string; durationMin: number; type: SuggestionType; when: { date: string; label: string }; /** Détail pour la fenêtre « Ensuite » (déroulé, cible, pourquoi). */ structure?: string; target?: SessionTarget | null; reason?: string } | null;
   facts: {
     daysSinceLastRun: number | null;
     lastRunKind: string | null;
@@ -565,7 +565,7 @@ export function suggestNextSession(input: SuggestionInput): Suggestion {
     if (daysBetween(core.when, date) < spacing) date = snapToPreferredDay(addDays(core.when, spacing), input.goal?.preferredDays ?? []);
     if (date <= windowEnd) date = addDays(windowEnd, 1);
     if (input.goal?.eventDate && date > input.goal.eventDate) date = input.goal.eventDate;
-    then = { title: next.primary.title, durationMin: next.primary.durationMin, type: next.primary.type, when: { date, label: whenLabel(date, input.today) } };
+    then = { title: next.primary.title, durationMin: next.primary.durationMin, type: next.primary.type, when: { date, label: whenLabel(date, input.today) }, structure: next.primary.structure, target: next.primary.target, reason: next.reason };
   }
 
   return { primary, when: { date: core.when, label: windowLabel(core.dates, input.today), dates: core.dates }, reason: core.reason, ...(core.reasonDetail ? { reasonDetail: core.reasonDetail } : {}), alternative, then, facts: core.facts };

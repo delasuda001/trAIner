@@ -1,4 +1,4 @@
-import { Activity, Bike, Feather, Flag, Footprints, Gauge, Mountain, Route, Waves, Zap } from "lucide-react";
+import { Activity, Bike, Feather, Flag, Flame, Footprints, Gauge, Mountain, Route, Waves, Wind, Zap } from "lucide-react";
 import type { SessionFamily, SessionKind } from "@/lib/engine/activity-metrics";
 import type { SuggestionType } from "@/lib/engine/suggestion";
 
@@ -67,4 +67,24 @@ export function SessionGlyph({ family, zone, sport, size = "lg", icon }: { famil
 
 export function ZoneDot({ zone }: { zone: Zone | null }) {
   return <span className="zone-dot" style={{ ["--glyph" as string]: zoneColor(zone) }} aria-hidden />;
+}
+
+/** Pictogramme du type de séance (calendrier) : récupération, endurance, longue, tempo, seuil, VO2max, fractionné court. */
+export const KIND_ICON: Record<SessionKind, { Icon: typeof Activity; label: string }> = {
+  recovery: { Icon: Feather, label: "récupération" },
+  endurance: { Icon: Footprints, label: "endurance" },
+  long: { Icon: Route, label: "sortie longue" },
+  tempo: { Icon: Wind, label: "tempo" },
+  intervals_tempo: { Icon: Wind, label: "tempo" },
+  threshold: { Icon: Gauge, label: "seuil" },
+  intervals_threshold: { Icon: Gauge, label: "seuil" },
+  intervals_vo2: { Icon: Flame, label: "VO2max" },
+  intervals_short: { Icon: Zap, label: "fractionné court" },
+};
+
+export function KindIcon({ kind, size = 12 }: { kind: string | null | undefined; size?: number }) {
+  const entry = kind && kind in KIND_ICON ? KIND_ICON[kind as SessionKind] : null;
+  if (!entry) return null;
+  const { Icon } = entry;
+  return <Icon className="kind-icon" size={size} strokeWidth={2.4} aria-hidden />;
 }

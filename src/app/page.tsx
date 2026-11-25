@@ -18,6 +18,8 @@ import { tourPending } from "@/lib/server/tour";
 import { getRegistry } from "@/lib/profiles/context";
 import { z } from "zod";
 import { createAppStateRepository } from "@/lib/db/repositories/app-state-repository";
+import { kudosFor } from "@/lib/server/kudos";
+import { SessionKudos } from "@/components/fun/session-kudos";
 import { resolveViewMode, VIEW_MODE_KEY, viewModeSchema } from "@/lib/view-mode";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +44,7 @@ function renderHome(member: Member, query: string | null) {
     );
   }
   const outlook = readOutlookCoach(dashboard);
+  const kudos = member.viewer ? null : kudosFor(dashboard);
   const lastCoach = dashboard.lastRun ? readSessionCoach(dashboard.lastRun) : null;
   const weekday = formatDate(dashboard.today, "long");
   const register = registerForRole(member.role);
@@ -50,6 +53,8 @@ function renderHome(member: Member, query: string | null) {
   const zonesNote = voiceDeep(zonesSourceSentence(dashboard.profile.zones, dashboard.profile.zonesSource, dashboard.profile.easyZones), register);
   // Tête et cartes du haut identiques dans les deux vues : passer de l'une à l'autre ne fait rien bouger.
   const head = (
+    <>
+    {kudos ? <SessionKudos kudos={kudos} /> : null}
     <div className="page-head home-head">
       <div>
         <p className="eyebrow">{weekday}</p>
@@ -60,6 +65,7 @@ function renderHome(member: Member, query: string | null) {
         {outlook.status !== "ready" ? <CoachRequest endpoint="/api/coach/outlook" label="Demander l'avis du coach" queueLabel="Conseil du jour du coach" initialError={outlook.status === "error" ? outlook.message : null} gaugePopover /> : null}
       </div>
     </div>
+    </>
   );
   // Débutant, vue essentielle : régularité et palier suivant d'abord, sans zones ni allure à FC de référence
   // (la vue détaillée montre tout). Le conseil, lui, est le même.

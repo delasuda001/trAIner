@@ -15,7 +15,7 @@ export type CalendarInput = {
   weeks: number;
   /** Sorties par semaine visées (objectif ou semaine type), null si aucune. */
   target: number | null;
-  activities: Array<{ id: string; date: string; run: boolean; zone: number | null; family: string; title: string; distanceM: number | null; /** Déclarée sans montre : compte dans la semaine, sans données. */ declared?: boolean }>;
+  activities: Array<{ id: string; date: string; run: boolean; zone: number | null; family: string; /** Type de séance (pictogramme), courses analysées seulement. */ kind?: string | null; title: string; distanceM: number | null; /** Déclarée sans montre : compte dans la semaine, sans données. */ declared?: boolean }>;
   /** Jours où une séance est proposée (semaine en cours) ; `alternative` : jour de repli d'une fenêtre de 2 jours. */
   planned: Array<{ date: string; type: string; alternative: boolean }>;
 };

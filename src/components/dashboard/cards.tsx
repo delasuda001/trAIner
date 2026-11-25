@@ -8,7 +8,7 @@ import { IntensityChart, ProgressionChart, Sparkline, WeeklyVolumeChart } from "
 import { Badge } from "@/components/ui/badge";
 import { CoachStamp } from "@/components/ui/coach-stamp";
 import { Fact } from "@/components/ui/fact";
-import { dominantZone, familyOfKind, SessionGlyph, SUGGESTION_ZONE, ZONE_NAMES, ZoneDot, zoneColor, type Zone } from "@/components/ui/session-type";
+import { familyOfKind, SessionGlyph, SUGGESTION_ZONE, ZONE_NAMES, ZoneDot, zoneColor, type Zone } from "@/components/ui/session-type";
 import type { OutlookCoachOutput } from "@/lib/coach/outlook-coach";
 import type { SessionCoachOutput } from "@/lib/coach/session-coach";
 import { daysBetween } from "@/lib/dates";
@@ -23,6 +23,9 @@ import type { Progression } from "@/lib/engine/progression";
 import type { Dashboard } from "@/lib/server/analytics";
 import type { CoachResult } from "@/lib/server/coach-service";
 import type { Sport } from "@/lib/source/types";
+import { calendarZone } from "@/lib/engine/calendar";
+import { NextAfter } from "./next-after";
+import type { SessionKind } from "@/lib/engine/activity-metrics";
 
 const TONE_COLOR: Record<Tone, string> = { good: "var(--sl-ok)", warning: "var(--sl-warn)", critical: "var(--sl-alert)", neutral: "var(--sl-ink-muted)" };
 
@@ -91,13 +94,7 @@ export function SuggestionCard({ dashboard, coach, plain = false }: { dashboard:
         {coach.status === "ready" ? <div style={{ marginTop: 6 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Avis" /><RateCoach subjectKind="outlook" subjectId={coach.createdAt} label="Ce conseil t'est utile ?" /></div> : null}
         {suggestion.alternative ? <p className="alt"><strong>Plan B · {suggestion.alternative.title}</strong> ({formatDuration(suggestion.alternative.durationMin * 60)}). {suggestion.alternative.reason}</p> : null}
       </div>
-      {suggestion.then ? (
-        <div className="next-after">
-          <span className="pill" style={{ padding: "2px 10px" }}><ZoneDot zone={SUGGESTION_ZONE[suggestion.then.type]} />Ensuite</span>
-          <span style={{ flex: 1, minWidth: 0 }}><strong>{suggestion.then.title}</strong>{suggestion.then.durationMin ? ` · ${formatDuration(suggestion.then.durationMin * 60)}` : ""}</span>
-          <span className="muted small">{suggestion.then.when.label}</span>
-        </div>
-      ) : null}
+      {suggestion.then ? <NextAfter then={suggestion.then} /> : null}
       <div className="card-foot goal-strip card-more">
         <Target size={13} />
         {goal && (goal.title || goal.eventDate) ? (
@@ -234,7 +231,7 @@ export function LastSessionCard({ dashboard, coach }: { dashboard: Dashboard; co
   const stale = coach?.status === "missing" && shown != null;
   const ready = shown ? shown.output : null;
   const headline = ready ? ready.verdict : verdict.headline;
-  const zone = dominantZone(metrics.zoneShares);
+  const zone = calendarZone(metrics.kind, metrics.zoneShares) as Zone | null;
   const href = `/activities/${encodeURIComponent(activity.id)}`;
   return (
     <section className="card" style={{ ["--shadow-color" as string]: zoneColor(zone) }} aria-labelledby="last-title">
@@ -280,7 +277,7 @@ export function VolumeCard({ dashboard }: { dashboard: Dashboard }) {
     <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-blue)" }}>
       <div className="section-head">
         <h2 className="section-title" style={{ fontSize: 26 }}>Volume, 12 semaines</h2>
-        <span className="section-note num">{formatNumber(total / weeks.length, 1)} km/sem en moyenne · couleur = zone dominante</span>
+        <span className="section-note num">{formatNumber(total / weeks.length, 1)} km/sem en moyenne · couleur = type de séance</span>
       </div>
       <WeeklyVolumeChart weeks={weeks} />
       <ZoneLegend />
@@ -289,15 +286,17 @@ export function VolumeCard({ dashboard }: { dashboard: Dashboard }) {
 }
 
 export function IntensityCard({ dashboard }: { dashboard: Dashboard }) {
-  const intensity = dashboard.load.intensity28d;
+  // Par TYPE de séance (comme le calendrier) : un fractionné compte entier en intensité, même si la FC
+  // moyenne, tirée par l'échauffement et les récupérations, le ferait passer pour une endurance.
+  const intensity = dashboard.load.sessionIntensity28d ?? null;
   const weeks = dashboard.load.weeks.slice(-8);
-  const totals = weeks.reduce((sum, week) => sum.map((value, index) => value + week.zoneMinutes[index]), [0, 0, 0, 0, 0]);
+  const totals = weeks.reduce((sum, week) => sum.map((value, index) => value + (week.sessionMinutes?.[index] ?? 0)), [0, 0, 0, 0, 0]);
   const totalMinutes = totals.reduce((sum, value) => sum + value, 0);
   return (
     <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-pink)" }}>
       <div className="section-head">
         <h2 className="section-title" style={{ fontSize: 26 }}>Comment je répartis mon intensité ?</h2>
-        <span className="section-note">temps par zone FC, toutes activités</span>
+        <span className="section-note">temps de course par type de séance</span>
       </div>
       {intensity && totalMinutes > 0 ? (
         <>
@@ -305,12 +304,12 @@ export function IntensityCard({ dashboard }: { dashboard: Dashboard }) {
             {totals.map((minutes, index) => (minutes > 0 ? <span key={index} title={`${ZONE_NAMES[(index + 1) as Zone]} : ${minutes} min`} style={{ width: `${(minutes / totalMinutes) * 100}%`, background: zoneColor((index + 1) as Zone) }} /> : null))}
           </div>
           <p className="small" style={{ marginTop: 8 }}>
-            Sur 4 semaines : <strong className="num">{Math.round(intensity.low * 100)} %</strong> facile (Z1–Z2), <strong className="num">{Math.round(intensity.moderate * 100)} %</strong> modéré, <strong className="num">{Math.round(intensity.high * 100)} %</strong> intense. <span className="muted">Repère courant en endurance : environ 80 % facile.</span>
+            Sur 4 semaines : <strong className="num">{Math.round(intensity.low * 100)} %</strong> en séances faciles (endurance, récupération, sortie longue), <strong className="num">{Math.round(intensity.moderate * 100)} %</strong> en tempo, <strong className="num">{Math.round(intensity.high * 100)} %</strong> en seuil et fractionné. <span className="muted">Un fractionné compte entier dans sa zone de travail. Repère courant en endurance : environ 80 % facile.</span>
           </p>
-          <IntensityChart weeks={weeks.map((week) => ({ label: formatDate(week.weekStart, "short"), zones: week.zoneMinutes }))} />
+          <IntensityChart weeks={weeks.map((week) => ({ label: formatDate(week.weekStart, "short"), zones: week.sessionMinutes ?? [0, 0, 0, 0, 0] }))} />
           <ZoneLegend />
         </>
-      ) : <p className="muted">Pas de données de FC sur les dernières semaines.</p>}
+      ) : <p className="muted">Pas encore de séance classée sur les dernières semaines.</p>}
     </section>
   );
 }
@@ -320,12 +319,12 @@ export function RecentList({ dashboard }: { dashboard: Dashboard }) {
     <section className="card" style={{ ["--shadow-color" as string]: "var(--sl-blue)" }}>
       <div className="section-head">
         <h2 className="section-title" style={{ fontSize: 26 }}>Séances récentes</h2>
-        <span className="section-note">couleur = zone dominante</span>
+        <span className="section-note">couleur = type de séance</span>
       </div>
       <div className="list">
         {dashboard.recent.map((activity) => {
           const family = familyOfKind(activity.kind);
-          const zone = activity.kind ? dominantZone(activity.zoneShares) : null;
+          const zone = activity.kind ? (calendarZone(activity.kind as SessionKind, activity.zoneShares) as Zone | null) : null;
           return (
             <Link key={activity.id} href={`/activities/${encodeURIComponent(activity.id)}`} className="list-row">
               <span className="zone-bar" style={{ ["--glyph" as string]: zoneColor(zone) }} aria-hidden />

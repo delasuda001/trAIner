@@ -947,3 +947,47 @@ html[data-tour="/"] .nav a[href="/"], html[data-tour="/coach"] .nav a[href="/coa
 html[data-env="test"] .topbar { border-bottom: 4px solid transparent; border-image: repeating-linear-gradient(-45deg, var(--sl-yellow) 0 10px, var(--fixed-ink, #15151e) 10px 20px) 4; }
 @media (max-width: 700px) { .env-banner-detail { display: none; } .env-banner { font-size: 12px; padding: 5px 10px; } }
 .pill.pill-strong { background: var(--sl-ink); color: var(--sl-paper); border-color: var(--sl-ink); font-weight: 700; }
+/* Pictogramme du type de séance dans une case du calendrier. */
+.cal-day .kind-icon { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--fixed-ink, #15151e); opacity: 0.85; pointer-events: none; }
+.cal-kinds { margin-top: 4px; }
+.cal-kinds .kind-icon { margin-right: 3px; vertical-align: -2px; }
+/* Infobulle au doigt : au-dessus du graphique (le doigt et la courbe restent visibles). */
+.chart[data-touch], .spark[data-touch] { touch-action: pan-y; }
+.chart[data-touch] .recharts-tooltip-wrapper, .spark[data-touch] .recharts-tooltip-wrapper { z-index: 5; }
+.chart[data-touch] .chart-tooltip, .spark[data-touch] .chart-tooltip { transform: translateY(calc(-100% - 10px)); pointer-events: none; }
+/* « Ensuite » : bouton (clic / appui long) et fenêtre de détail sur fond flouté. */
+button.next-after { width: 100%; font: inherit; color: inherit; cursor: pointer; text-align: left; -webkit-touch-callout: none; user-select: none; transition: transform .15s ease; }
+button.next-after:hover { transform: translate(-1px, -1px); }
+button.next-after.pressing { transform: scale(0.98); }
+.sheet-backdrop { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 18px; background: color-mix(in srgb, var(--sl-paper) 35%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: sheet-fade .18s ease both; }
+.sheet { position: relative; width: min(520px, 100%); max-height: 85vh; overflow-y: auto; animation: sheet-rise .22s cubic-bezier(.2,.8,.2,1) both; }
+.sheet-close { position: absolute; top: 10px; right: 10px; }
+@keyframes sheet-fade { from { opacity: 0; } }
+@keyframes sheet-rise { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .sheet-backdrop, .sheet { animation: none; } }
+/* Félicitations après une séance difficile. */
+.kudos { position: fixed; left: 50%; top: 84px; z-index: 80; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; width: min(460px, calc(100vw - 28px)); cursor: pointer; animation: kudos-in .45s cubic-bezier(.2,.9,.25,1.2) both; }
+.kudos.leaving { animation: kudos-out .45s ease forwards; }
+.kudos-burst { position: relative; flex: none; width: 64px; height: 64px; display: grid; place-items: center; }
+.kudos-burst i { position: absolute; left: 50%; top: 50%; width: 3px; height: 12px; border-radius: 2px; background: var(--c); transform: rotate(var(--a)) translateY(-24px); opacity: 0; animation: kudos-ray .7s ease-out both; }
+.kudos-ring { position: absolute; inset: 0; width: 64px; height: 64px; transform: rotate(-90deg); }
+.kudos-ring circle { fill: var(--sl-yellow); stroke: var(--fixed-ink, #15151e); stroke-width: 3; stroke-dasharray: 164; stroke-dashoffset: 164; animation: kudos-draw .6s .1s ease-out forwards; }
+.kudos-check { position: relative; font-family: var(--font-display); font-weight: 800; font-size: 26px; color: var(--fixed-ink, #15151e); animation: pop .4s .55s cubic-bezier(.3,1.6,.5,1) both; }
+.kudos-card { flex: 1; min-width: 0; display: grid; gap: 3px; padding: 12px 16px; border-radius: 16px; background: var(--sl-surface); border: var(--sl-stroke) solid var(--sl-border); box-shadow: 5px 5px 0 var(--sl-pink); }
+.kudos-card strong { font-family: var(--font-display); font-weight: 800; font-size: 17px; letter-spacing: -0.01em; }
+.kudos-card span { font-size: 13px; color: var(--sl-ink-muted); }
+@keyframes kudos-in { from { opacity: 0; transform: translate(-50%, -18px) scale(.96); } }
+@keyframes kudos-out { to { opacity: 0; transform: translate(-50%, -12px) scale(.98); } }
+@keyframes kudos-draw { to { stroke-dashoffset: 0; } }
+@keyframes kudos-ray { 0% { opacity: 0; transform: rotate(var(--a)) translateY(-20px) scaleY(.4); } 35% { opacity: 1; } 100% { opacity: 0; transform: rotate(var(--a)) translateY(-40px) scaleY(1); } }
+@media (max-width: 700px) { .kudos { top: 70px; } }
+@media (prefers-reduced-motion: reduce) {
+  .kudos, .kudos.leaving, .kudos-check { animation: none; }
+  .kudos-burst i { display: none; }
+  .kudos-ring circle { animation: none; stroke-dashoffset: 0; }
+}
+/* « Voir comme » un invité : bandeau collé en haut, au-dessus de l'en-tête. */
+.view-as-banner { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 10px; padding: 7px 12px; font-size: 13px; background: var(--sl-blue); color: #FFFFFF; border-bottom: 2px solid var(--fixed-ink, #15151e); }
+.view-as-banner strong { font-family: var(--font-display); font-weight: 800; }
+.view-as-back { font-weight: 800; color: #FFFFFF; background: var(--fixed-ink, #15151e); padding: 3px 10px; border-radius: 999px; text-decoration: none; }
+html[data-view-as] .topbar { top: 37px; }

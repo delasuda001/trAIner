@@ -40,7 +40,8 @@ function explain(error: string, guest: boolean): { title: string; action: React.
 }
 
 /** Synchro incrémentale : au chargement (si la dernière date de plus de 15 min) et sur demande. */
-export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = false }: { lastSuccessAt: string | null; lastError: string | null; lastAttemptAt: string | null; guest?: boolean }) {
+/** `autoCoach` : analyse automatique de la nouvelle course après la synchro (coupée dans l'environnement de test, pour ne pas payer deux fois la même analyse). */
+export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = false, autoCoach = true }: { lastSuccessAt: string | null; lastError: string | null; lastAttemptAt: string | null; guest?: boolean; autoCoach?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -84,7 +85,7 @@ export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = f
       router.refresh();
       void warmPages(latestNewRunId != null);
       // Seule une nouvelle course déclenche Claude, et seulement pour la plus récente.
-      if (latestNewRunId) {
+      if (latestNewRunId && autoCoach) {
         setStatus("Le coach analyse ta dernière séance…");
         await Promise.allSettled([
           fetch(`/api/activities/${encodeURIComponent(latestNewRunId)}/coach`, { method: "POST" }),
@@ -99,7 +100,7 @@ export function SyncControl({ lastSuccessAt, lastError, lastAttemptAt, guest = f
     } finally {
       setBusy(false);
     }
-  }, [router, markOffline]);
+  }, [router, markOffline, autoCoach]);
 
   useEffect(() => {
     if (offline) return;

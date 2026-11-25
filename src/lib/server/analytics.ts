@@ -417,7 +417,9 @@ type Outlook = { load: LoadSummary; loadAlert: LoadAlert; recovery: RecoverySign
 /** Charge, récupération, progression et suggestion vues depuis `context.today` (les données doivent déjà s'arrêter là). */
 function computeOutlook(context: Context): Outlook {
   const { today, rows, runs, wellness, profile } = context;
-  const load = summarizeLoad(rows.map((row) => ({ localDate: row.localDate, sport: row.sport, distanceM: row.distanceM, movingTimeS: row.movingTimeS, trainingLoad: row.trainingLoad, hrTimeInZonesS: parseZones(row) })), today);
+  // Zone du type de séance (même règle que le calendrier) pour les graphiques de volume et d'intensité.
+  const runZone = new Map(runs.map((run) => [run.id, calendarZone(run.metrics.kind, run.metrics.zoneShares)]));
+  const load = summarizeLoad(rows.map((row) => ({ localDate: row.localDate, sport: row.sport, distanceM: row.distanceM, movingTimeS: row.movingTimeS, trainingLoad: row.trainingLoad, hrTimeInZonesS: parseZones(row), sessionZone: runZone.get(row.id) ?? null })), today);
   const recovery = assessRecovery(wellness, today);
   const lastRun = runs.at(-1);
   const lastFeeling = lastRun ? createFeelingRepository().get(lastRun.id) : null;
@@ -528,8 +530,8 @@ export function getDashboard(): Dashboard {
       target: weekPlanFor(goal, goalGapsFor(goal, runs, today, profile.lactateThresholdSpeedMps), runs, today)?.runsPerWeek ?? goal?.runsPerWeek ?? null,
       activities: rows.filter((row) => row.localDate >= addDays(startOfIsoWeek(today), -7 * (CALENDAR_WEEKS - 1))).map((row) => {
         const run = runById.get(row.id);
-        return { id: row.id, date: row.localDate, run: isRun(row.sport), zone: calendarZone(run?.metrics.kind ?? null, run?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null)), family: run?.metrics.family ?? "other", title: run ? sessionTitle(run.metrics) : row.name, distanceM: row.distanceM };
-      }).concat(declared.filter((run) => run.date >= calendarStart).map((run) => ({ id: `declaree-${run.id}`, date: run.date, run: true, zone: null, family: "declared", title: `Sortie sans montre (${run.durationMin} min)`, distanceM: null, declared: true }))),
+        return { id: row.id, date: row.localDate, run: isRun(row.sport), zone: calendarZone(run?.metrics.kind ?? null, run?.metrics.zoneShares ?? (isRun(row.sport) ? parseZones(row) : null)), family: run?.metrics.family ?? "other", kind: run?.metrics.kind ?? null, title: run ? sessionTitle(run.metrics) : row.name, distanceM: row.distanceM };
+      }).concat(declared.filter((run) => run.date >= calendarStart).map((run) => ({ id: `declaree-${run.id}`, date: run.date, run: true, zone: null, family: "declared", kind: null, title: `Sortie sans montre (${run.durationMin} min)`, distanceM: null, declared: true }))),
       planned: [
         ...suggestion.when.dates.map((date, index) => ({ date, type: suggestion.primary.type, alternative: index > 0 })),
         ...(suggestion.then ? [{ date: suggestion.then.when.date, type: suggestion.then.type, alternative: false }] : []),

@@ -13,7 +13,8 @@ import { Fact } from "@/components/ui/fact";
 import { SESSION_PROMPT_VERSION, type SessionCoachOutput } from "@/lib/coach/session-coach";
 import { INTERVAL_INTENSITY_LABELS, paceSeconds, sessionTitle } from "@/lib/engine/activity-metrics";
 import { readDynamics } from "@/lib/engine/dynamics-reading";
-import { dominantZone, familyOfKind, SessionGlyph } from "@/components/ui/session-type";
+import { familyOfKind, SessionGlyph, type Zone } from "@/components/ui/session-type";
+import { calendarZone } from "@/lib/engine/calendar";
 import { SPORT_LABELS, VERDICT_TONES } from "@/lib/engine/labels";
 import { VERDICT_LABELS } from "@/lib/engine/verdict";
 import { ZONE_LABELS, zoneRange } from "@/lib/engine/zones";
@@ -348,7 +349,7 @@ export function ActivityView({ view, coach }: { view: View; coach: CoachResult<S
     <>
       <div className="page-head rise" style={{ paddingTop: 12 }}>
         <div className="row">
-          <SessionGlyph family={family} zone={analysis ? dominantZone(analysis.metrics.zoneShares) : null} sport={activity.sport} />
+          <SessionGlyph family={family} zone={analysis ? (calendarZone(analysis.metrics.kind, analysis.metrics.zoneShares) as Zone | null) : null} sport={activity.sport} />
           <div>
             <p className="eyebrow">{formatDate(activity.localDate, "long")} · {time} · {sport}</p>
             <h1 className="page-title">{title}</h1>
