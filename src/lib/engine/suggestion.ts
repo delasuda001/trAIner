@@ -605,7 +605,7 @@ export function sessionOptions(primary: SuggestedSession, input: SuggestionInput
     const threshold = primary.target;
     return [
       { key: "fartlek_seuil", role: "intensity", benefit: 0.85, running: true, type: "threshold", title: "Seuil court : 6 × 4 min", durationMin: 55, target: threshold, structure: `15 min d'échauffement, 6 × 4 min au seuil avec 1 min 30 de trot, 10 min de retour au calme.${pacingCue(threshold, 4)}`, note: "Même allure, répétitions plus courtes : plus facile à tenir, un peu moins de temps au seuil d'affilée." },
-      { key: "tempo", role: "intensity", benefit: 0.8, running: true, type: "threshold", title: "Tempo continu : 25 min", durationMin: 50, target: tempo, structure: `15 min d'échauffement, 25 min d'un seul tenant à allure tempo, 10 min de retour au calme.${pacingCue(tempo, 25)}`, note: "Un peu sous le seuil, d'un seul tenant : moins intense, travaille la tenue." },
+      { key: "tempo", role: "intensity", benefit: 0.8, running: true, type: "threshold", title: "Tempo continu : 25 min", durationMin: 50, target: tempo, structure: `15 min d'échauffement, 25 min d'un seul tenant à allure tempo, 10 min de retour au calme.${pacingCue(tempo, 25)}`, note: "D'un seul tenant à ton allure de course : moins de temps au seuil, plus de tenue sans récupération." },
     ];
   }
   if (primary.type === "vo2max") {
