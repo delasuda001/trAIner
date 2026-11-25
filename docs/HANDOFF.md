@@ -1,7 +1,7 @@
 # Passation — Sillage (ex trAIner)
 
 Note tenue à jour à chaque étape commitée, pour qu'un nouveau fil reparte sans relire l'historique.
-Dernière mise à jour : 21 novembre 2026, 14 h 30 Toronto (ouverture à Benoît, effort de course et coureur multisport, EN LIGNE depuis `claude/project-thread-bl665v` ; avant, 10 h 30 : jauge de l'abonnement fiable par le relevé /usage sans token, schéma `docs/ARCHITECTURE.md` ; EN LIGNE depuis la branche `claude/project-thread-uaymy0` ; avant, 20 nov. 18 h 40 : récupération et volume des fractionnés, continus longs, allure du moment ; avant : zones génériques recalées, allure facile réelle, contrôle de cohérence et relecture IA ; EN LIGNE depuis la branche `claude/project-thread-p09am7` (= s7rvwt + page Paramètres en catégories repliables, 20 nov. 16 h 30 Toronto), sauvegardes `data/backups/*-2026-11-20-avant-correctifs.db`).
+Dernière mise à jour : 25 novembre 2026, soir Toronto (DEUX ENVIRONNEMENTS prod/test et lot de corrections, branche `claude/project-thread-2bx6ms`, EN TEST, promotion en prod à lancer par Bastien ; avant : 21 novembre 2026, 14 h 30 Toronto (ouverture à Benoît, effort de course et coureur multisport, EN LIGNE depuis `claude/project-thread-bl665v` ; avant, 10 h 30 : jauge de l'abonnement fiable par le relevé /usage sans token, schéma `docs/ARCHITECTURE.md` ; EN LIGNE depuis la branche `claude/project-thread-uaymy0` ; avant, 20 nov. 18 h 40 : récupération et volume des fractionnés, continus longs, allure du moment ; avant : zones génériques recalées, allure facile réelle, contrôle de cohérence et relecture IA ; EN LIGNE depuis la branche `claude/project-thread-p09am7` (= s7rvwt + page Paramètres en catégories repliables, 20 nov. 16 h 30 Toronto), sauvegardes `data/backups/*-2026-11-20-avant-correctifs.db`).
 
 ## En deux phrases
 
@@ -725,3 +725,53 @@ les seuils 4:01 / 4:02 et « l'allure du moment ». Règles générales, vérifi
   comme plus longue sortie. Désormais `isRaceLikeEffort` (prescription.ts, partagé avec la suggestion) écarte les
   courses de ce repère : 13 km (≈ 1 h 10). Photographie : Bastien, Marie, Charles identiques. Sauvegardes
   `data/backups/*-2026-11-22-avant-longue-course.db`.
+
+## Deux environnements et lot du 25 nov. (branche `claude/project-thread-2bx6ms`)
+
+- **Prod** = ce que voient les invités : port 3000, build `.next`, données `data/`, https://mac0172.tail204306.ts.net.
+  **Test** = Bastien seul : port 3100, build `.next-test`, COPIE des données dans `data/test/` (`admin.db`, `sillage.db`,
+  `profiles/`), `SILLAGE_ENV=test` au build et au lancement. Même code ; le test ne touche jamais les données de prod.
+- Tout passe par `scripts/sillage-env.sh` : `status`, `test` (build du code courant + redémarrage du test), `test-data`
+  (recopie prod → test, test arrêté pendant la copie, ancienne copie dans `data/backups/test-*`), `promote` (arbre propre
+  exigé, build dans `.next-staging`, sauvegarde des bases, bascule, retour arrière automatique si la prod ne répond pas),
+  `rollback`, `start-prod`, `start-test` (après un redémarrage du Mac). Versions dans `data/prod-release.json`,
+  `data/test/release.json`, copie dans `data/test/copied-at.json`. Seul le port visé est arrêté.
+- L'assistant n'a PAS le droit (refus du mode automatique) de lancer `promote` ni de toucher à Funnel : Bastien le fait.
+  Exposition du test : `tailscale funnel --bg --https=8443 3100` (Funnel accepte 443, 8443, 10000), à lancer par Bastien.
+- Cookies : `sillage_session` (prod), `sillage_test_session` (test) : même hôte, ports différents, les cookies ne sont pas
+  isolés par port. En test, seuls les administrateurs entrent (`requestMember`, connexion). Bascule : bouton dans
+  Paramètres (carte « Tu es en prod / dans l'environnement de test ») ou bandeau rayé du test → `GET /api/env/switch` :
+  prod → test avec un jeton HMAC de 60 s à usage unique (`SILLAGE_ENV_SECRET` dans `.env.local`, `lib/env/handoff.ts`),
+  test → prod simple retour. Adresse : locale sur le Mac (127.0.0.1:3000/3100), publique sinon (port 8443 pour le test).
+- Test : pas d'analyse automatique après une synchro (sinon double coût) ; le coach y appelle Claude sur le quota de Bastien.
+- Lot de corrections (tout vérifié en test, captures 390 × 844 et 1280) :
+  1. Quota : refus avec raison (`daily`, `weekly`, `guests`, `subscription`) et heure de retour (`freesAt`, fenêtre glissante
+     calculée par `rollingFreesAt`) ; la question refusée reste affichée « non envoyée » et revient dans le champ ; jauge
+     `QuotaMeter` toujours visible sous le chat (invité : jour et 7 jours en questions restantes ; Bastien : fenêtres 5 h / 7 j).
+  2. Jauges d'objectif : fréquence et volume sur les 8 semaines COMPLÈTES (`completeWeeksAverage`), semaine en cours exclue ;
+     plus longue sortie toujours glissante.
+  3. Chat : les styles `.bubble` de la visite guidée débordaient sur le vrai chat (largeur 78 %, ombre) : cantonnés à `.scene-coach`.
+  4. Coach `session-v16` : pistes « à travailler à côté » (`engine/side-work.ts` : foulée qui se dégrade → renforcement,
+     gammes et lignes droites, cadence ; fin plus lente ; volume si levier de l'objectif), dans la charge utile
+     (`pistes_a_cote`), champ `sideWork`, affichées sous les consignes (repli moteur sans analyse). Vérifié : 1 appel réel
+     (séance du 24 nov. de Bastien), réponse propre.
+  5. Courbes : `useTouchTip` (charts.tsx) : au doigt, infobulle seulement pendant l'appui, au-dessus du graphique.
+  6. Félicitations après une séance difficile (`engine/kudos.ts` : qualité, ≥ 90 min, effet aérobie ≥ 4 ou effort ≥ 8/10,
+     3 jours au plus), une fois par séance (`kudos_seen_activity` dans la base du profil), réduite si moins de mouvement.
+  7. Couleur par TYPE de séance partout (`calendarZone`) : séances récentes, dernière séance, volume (km par type), intensité
+     (`sessionMinutes`, `sessionIntensity28d` : affichage seulement, le moteur garde la FC) ; pictogrammes par type au
+     calendrier (`KindIcon`).
+  8. « Voir comme » (Bastien) : bouton sur la carte d'un invité → cookie `sillage_view_as` (session de navigateur),
+     `requestMember` rend l'invité avec `viewer` ; LECTURE SEULE (le proxy refuse toute écriture d'API sauf sortie),
+     bandeau bleu, pas de synchro, ni visite, ni félicitations. Chaque ouverture notée (`view_as_log_<id>`) et montrée à
+     l'invité dans Confidentialité (texte réécrit, honnête).
+  9. « Ensuite » : fenêtre détaillée (déroulé, allure, FC, pourquoi) au clic ou à l'appui long, fond flouté.
+  10. Coach outillé `chat-v4` : jauges de l'objectif seulement si la question en parle (`wantsDashboard`) ; contrainte de la
+      semaine (`planChange` → `week_constraint`, `WeekConstraint` dans la suggestion : plafond de sorties, jours exclus),
+      proposition recalculée sans appel de plus, rappelée et retirable sur la carte. Vérifié : 1 appel réel.
+  11. Fractionnés (cas de Marie, partie trop vite sur 5 × 3 min guidée à la FC) : l'allure guide (`pacingCue`), départ côté
+      lent, ajustement, FC repère seulement ; seuil indicatif sans montre (`shortRepThresholdEvidence` : répétitions de 3 à
+      6 min en Z4 ; `sustainedEffortEvidence` : meilleur continu soutenu ramené à l'heure par Riegel) : Marie 5:10/km,
+      Benoît 3:51/km. Seuil indicatif → `paceIndicative` : pas de « séance d'un autre type » sur cette base.
+      Photographie : Bastien et Charles identiques ; Marie (32 séances) et Benoît (36) gagnent des allures cibles.
+- Reste : promotion en prod (Bastien : `scripts/sillage-env.sh promote`) et Funnel 8443 ; plans B/C en test.
