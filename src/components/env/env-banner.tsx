@@ -14,7 +14,7 @@ export function EnvBanner({ signedIn }: { signedIn: boolean }) {
   return (
     <div className="env-banner" role="note">
       <FlaskConical size={14} aria-hidden />
-      <span><strong>Environnement de test</strong> · données copiées le {when(testDataCopiedAt())}{release ? ` · version ${release.commit.slice(0, 7)}` : ""}</span>
+      <span><strong>Environnement de test</strong><span className="env-banner-detail"> · données copiées le {when(testDataCopiedAt())}{release ? ` · version ${release.commit.slice(0, 7)}` : ""}</span></span>
       {/* Lien plein (pas de préchargement) : la bascule change d'adresse. */}
       {signedIn ? <a href="/api/env/switch" className="env-banner-link">Revenir à la prod</a> : null}
     </div>

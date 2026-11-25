@@ -64,6 +64,7 @@ export function SuggestionCard({ dashboard, coach, plain = false }: { dashboard:
   const target = primary.target;
   const ready = coach.status === "ready" ? coach.output : null;
   const paceCenter = target?.paceFastMps && target.paceSlowMps ? (target.paceFastMps + target.paceSlowMps) / 2 : null;
+  const intervals = primary.type === "threshold" || primary.type === "vo2max";
   return (
     <section className="card card-hero card-next card-collapsible" aria-labelledby="next-title">
       {(() => {
@@ -75,8 +76,10 @@ export function SuggestionCard({ dashboard, coach, plain = false }: { dashboard:
       <h2 id="next-title" className="card-title">{primary.title}</h2>
       <div className="target">
         {primary.durationMin ? <span className="pill">{formatDuration(primary.durationMin * 60)}</span> : null}
-        {target ? <span className="pill"><ZoneDot zone={zone} />{plain ? plainZone(target.zone) : target.zone} · {target.heartRateLow}–{target.heartRateHigh} bpm</span> : null}
-        {paceCenter ? <span className="pill" title={`${formatPace(target?.paceSlowMps)} à ${formatPace(target?.paceFastMps)}`}>≈ {formatPace(paceCenter)}</span> : null}
+        {/* Fractionné : l'allure guide, la FC n'est qu'un repère (elle monte en retard sur des répétitions courtes). */}
+        {intervals && target?.paceFastMps && target.paceSlowMps ? <span className="pill pill-strong">Allure {formatPace(target.paceSlowMps)}–{formatPace(target.paceFastMps)}</span> : null}
+        {target ? <span className="pill"><ZoneDot zone={zone} />{plain ? plainZone(target.zone) : target.zone} · {intervals ? "FC repère " : ""}{target.heartRateLow}–{target.heartRateHigh} bpm</span> : null}
+        {paceCenter && !intervals ? <span className="pill" title={`${formatPace(target?.paceSlowMps)} à ${formatPace(target?.paceFastMps)}`}>≈ {formatPace(paceCenter)}</span> : null}
       </div>
       {primary.type !== "endurance" && primary.type !== "long" ? <p className="structure">{primary.structure}</p> : null}
       <div className="coach-lines">

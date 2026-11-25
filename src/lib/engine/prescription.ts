@@ -152,6 +152,8 @@ export type PrescriptionInput = {
   /** Footings des 12 semaines précédentes (allure, FC) : bornent l'allure facile à ce qui a été couru (voir easy-pace.ts). */
   easySamples?: EasySample[];
   movingTimeS: number | null;
+  /** Seuil indicatif (voir threshold.ts) : les allures servent de cibles, mais un écart ne fait pas conclure à un autre type de séance. */
+  paceIndicative?: boolean;
   /** Effet aérobie de la montre (0–5) : à 4,5 et plus sur un continu plus long que son format, c'est un effort de course. */
   aerobicTrainingEffect?: number | null;
   /** Temps de course hebdomadaire moyen (min) des 4 semaines avant la séance : plafonne le volume de qualité proposé. */
@@ -440,7 +442,7 @@ function intervalPrescription(input: PrescriptionInput): Prescription {
   const fast = target.paceFastS ?? 0;
   const slow = target.paceSlowS ?? 0;
   const averageS = paceSeconds(work.averageSpeedMps);
-  if (hasPace && (averageS > slow + MISMATCH_LIMIT_S || averageS < fast - MISMATCH_LIMIT_S)) return { status: "none", reason: MISMATCH_REASON };
+  if (hasPace && !input.paceIndicative && (averageS > slow + MISMATCH_LIMIT_S || averageS < fast - MISMATCH_LIMIT_S)) return { status: "none", reason: MISMATCH_REASON };
 
   const reps = work.repsDetail.map((rep) => paceSeconds(rep.speedMps));
   const first = reps[0];
@@ -613,7 +615,7 @@ export function prescribe(input: PrescriptionInput): Prescription {
   }
 
   // Tempo / seuil continu.
-  if (hasPace && mainS != null && (mainS > (target.paceSlowS as number) + MISMATCH_LIMIT_S || mainS < (target.paceFastS as number) - MISMATCH_LIMIT_S)) return { status: "none", reason: MISMATCH_REASON };
+  if (hasPace && !input.paceIndicative && mainS != null && (mainS > (target.paceSlowS as number) + MISMATCH_LIMIT_S || mainS < (target.paceFastS as number) - MISMATCH_LIMIT_S)) return { status: "none", reason: MISMATCH_REASON };
   const referenceFade = input.reference?.halvesFadeSPerKm ?? null;
   const fadeDegraded = halves != null && halves.fadeSPerKm >= FADE_LIMIT_S && (referenceFade == null || halves.fadeSPerKm >= referenceFade + FADE_ABOVE_REFERENCE_S);
   const execution: string[] = [];

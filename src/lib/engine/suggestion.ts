@@ -1,6 +1,6 @@
 import { addDays, daysBetween } from "@/lib/dates";
 import { easyPaceRange, type EasySample } from "./easy-pace";
-import { formatDate, formatNumber } from "@/lib/formatters";
+import { formatDate, formatNumber, formatPace } from "@/lib/formatters";
 import type { HeartRateZones } from "@/lib/source/types";
 import type { SessionFamily, SessionKind } from "./activity-metrics";
 import { SESSION_KIND_LABELS } from "./activity-metrics";
@@ -216,23 +216,43 @@ function sharedTarget(input: SuggestionInput, kind: SessionKind, repDurationS: n
   return { zone, heartRateLow: target.heartRateLow, heartRateHigh: target.heartRateHigh, paceFastMps: target.paceFastS ? round(1000 / target.paceFastS, 3) : null, paceSlowMps: target.paceSlowS ? round(1000 / target.paceSlowS, 3) : null };
 }
 
+/**
+ * Consigne d'allure d'un fractionné. Sur des répétitions de moins de 8 min, la FC monte en retard : elle ne
+ * peut pas guider l'allure, seulement la confirmer en fin de répétition. La cible principale est donc
+ * l'allure (calculée sur les résultats du profil), avec une consigne de départ et d'ajustement.
+ */
+export function pacingCue(target: SessionTarget | null, repMinutes: number): string {
+  const short = repMinutes < 8;
+  if (target?.paceFastMps && target.paceSlowMps) {
+    const range = `${formatPace(target.paceSlowMps)} à ${formatPace(target.paceFastMps)}`;
+    return short
+      ? ` Repère : l'allure, ${range}. Pars la 1re répétition dans le haut de la fourchette (côté lent), puis ajuste à tes sensations : si tu sens que tu ne tiendras pas la dernière à cette allure, ralentis de 5 s/km. La FC (${target.heartRateLow}–${target.heartRateHigh} bpm) n'est qu'un repère en fin de répétition : elle monte en retard, ne cours pas après.`
+      : ` Repère : l'allure, ${range}, contrôlée par la FC (${target.heartRateLow}–${target.heartRateHigh} bpm) : si elle dépasse le haut de la fourchette avant la moitié, ralentis.`;
+  }
+  return short
+    ? " Sans allure de référence fiable : pars à une allure que tu pourrais tenir sur toute la série, la 1re répétition doit sembler contrôlée ; la dernière doit être la plus difficile, pas la seule faisable. La FC monte en retard sur des répétitions courtes : ne la suis pas pendant l'effort."
+    : "";
+}
+
 function thresholdSession(input: SuggestionInput): SuggestedSession {
+  const target = sharedTarget(input, "intervals_threshold", 600, "Z4");
   return {
     type: "threshold",
     title: "Seuil : 3 × 10 min",
     durationMin: 60,
-    structure: "15 min d'échauffement facile, 3 × 10 min au seuil avec 2 min de trot entre, 10 min de retour au calme.",
-    target: sharedTarget(input, "intervals_threshold", 600, "Z4"),
+    structure: `15 min d'échauffement facile, 3 × 10 min au seuil avec 2 min de trot entre, 10 min de retour au calme.${pacingCue(target, 10)}`,
+    target,
   };
 }
 
 function vo2Session(input: SuggestionInput): SuggestedSession {
+  const target = sharedTarget(input, "intervals_vo2", 180, "Z5");
   return {
     type: "vo2max",
     title: "VO2max : 5 × 3 min",
     durationMin: 50,
-    structure: "15 min d'échauffement avec 3 accélérations, 5 × 3 min avec 2 min de trot entre (la FC atteint la cible en fin de répétition), 10 min de retour au calme.",
-    target: sharedTarget(input, "intervals_vo2", 180, "Z5"),
+    structure: `15 min d'échauffement avec 3 accélérations, 5 × 3 min avec 2 min de trot entre, 10 min de retour au calme.${pacingCue(target, 3)}`,
+    target,
   };
 }
 

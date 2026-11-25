@@ -71,3 +71,32 @@ describe("seuil observé sans FC seuil de la montre (zones en % de FC max)", () 
     expect(estimateThreshold({ runs: [run("2026-11-13", { averageHeartRateBpm: 168 })], today, watchSpeedMps: null, thresholdHeartRateBpm: null }).source).toBe("none");
   });
 });
+
+describe("seuil indicatif sans montre", () => {
+  const floors = [123, 136, 150, 163, 179];
+
+  it("répétitions de 3 à 6 min courues en Z4 (FC un peu basse tolérée) : seuil indicatif pour donner des allures", () => {
+    const runs = [run("2026-11-04", { reps: 3, averageDurationS: 314, averageDistanceM: 1000, averageSpeedMps: 1000 / 313, averageHeartRateBpm: 165 }), run("2026-11-17", { reps: 3, averageDurationS: 309, averageDistanceM: 1010, averageSpeedMps: 1000 / 306, averageHeartRateBpm: 161 })];
+    const estimate = estimateThreshold({ runs, today: "2026-11-25", watchSpeedMps: null, thresholdHeartRateBpm: null, zoneFloors: floors });
+    expect(estimate.source).toBe("observed");
+    expect(Math.round(1000 / (estimate.speedMps as number))).toBe(310);
+  });
+
+  it("répétitions trop courtes (2 min) : pas de seuil tiré", () => {
+    const runs = [run("2026-11-17", { reps: 5, averageDurationS: 130, averageDistanceM: 480, averageSpeedMps: 1000 / 276, averageHeartRateBpm: 165 })];
+    expect(estimateThreshold({ runs, today: "2026-11-25", watchSpeedMps: null, thresholdHeartRateBpm: null, zoneFloors: floors }).source).toBe("none");
+  });
+
+  it("course récente (semi en 1:23:43) ramenée à l'allure tenable une heure", () => {
+    const semi = { localDate: "2026-11-15", movingTimeS: 5023, metrics: { ...run("2026-11-15", null).metrics, structure: "continuous" as const, kind: "threshold" as const, mainSpeedMps: 21_240 / 5023, mainHeartRateBpm: 140 } };
+    const estimate = estimateThreshold({ runs: [semi], today: "2026-11-25", watchSpeedMps: null, thresholdHeartRateBpm: 151, zoneFloors: [86, 103, 120, 137, 154] });
+    expect(estimate.source).toBe("observed");
+    expect(Math.round(1000 / (estimate.speedMps as number))).toBe(232);
+    expect(estimate.basis).toMatch(/allure tenable une heure/);
+  });
+
+  it("footing en Z2 : jamais pris pour un effort de seuil", () => {
+    const easy = { localDate: "2026-11-15", movingTimeS: 3600, metrics: { ...run("2026-11-15", null).metrics, structure: "continuous" as const, kind: "endurance" as const, mainSpeedMps: 1000 / 380, mainHeartRateBpm: 140 } };
+    expect(estimateThreshold({ runs: [easy], today: "2026-11-25", watchSpeedMps: null, thresholdHeartRateBpm: null, zoneFloors: floors }).source).toBe("none");
+  });
+});

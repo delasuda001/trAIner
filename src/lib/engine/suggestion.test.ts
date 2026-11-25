@@ -3,7 +3,7 @@ import { addDays } from "@/lib/dates";
 import type { HeartRateZones } from "@/lib/source/types";
 import type { LoadSummary } from "./load";
 import type { RecoverySignals } from "./recovery";
-import { suggestNextSession, type SuggestionInput, type SuggestionRun } from "./suggestion";
+import { pacingCue, suggestNextSession, type SuggestionInput, type SuggestionRun } from "./suggestion";
 
 const today = "2026-11-15";
 const zones: HeartRateZones = { floors: [110, 128, 149, 159, 167], maxHeartRateBpm: 189, lactateThresholdHeartRateBpm: 169, method: "LACTATE_THRESHOLD" };
@@ -252,5 +252,19 @@ describe("débutant : ni seuil ni VO2max", () => {
     expect(result.primary.type).toBe("endurance");
     expect(result.reason).toContain("Le seuil et la VO2max viendront plus tard");
     expect(result.then?.type).not.toMatch(/threshold|vo2max/);
+  });
+});
+
+describe("consigne d'allure des fractionnés", () => {
+  it("répétitions courtes : l'allure guide, départ côté lent, ajustement, FC seulement en repère", () => {
+    const cue = pacingCue({ zone: "Z5", heartRateLow: 179, heartRateHigh: 186, paceFastMps: 1000 / 289, paceSlowMps: 1000 / 295 }, 3);
+    expect(cue).toContain("l'allure, 4:55/km à 4:49/km");
+    expect(cue).toContain("1re répétition");
+    expect(cue).toContain("ralentis de 5 s/km");
+    expect(cue).toContain("monte en retard");
+  });
+
+  it("sans allure de référence : consigne de départ prudente, pas de FC à suivre", () => {
+    expect(pacingCue({ zone: "Z5", heartRateLow: 154, heartRateHigh: 164, paceFastMps: null, paceSlowMps: null }, 3)).toContain("Sans allure de référence fiable");
   });
 });

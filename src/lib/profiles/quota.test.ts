@@ -85,3 +85,23 @@ describe("jauge de l'abonnement", () => {
     expect(analysesLeft({ usedToday: 0, usedWeek: 0, remainingToday: null, remainingWeek: null })).toBeNull();
   });
 });
+
+describe("raison du refus et heure de retour", () => {
+  it("plafond du jour : raison « daily », retour à minuit", () => {
+    const denied = decideQuota(input({ own: [call(1, 35_000)] }));
+    expect(denied).toMatchObject({ allowed: false, reason: "daily", freesAt: "2026-11-17T05:00:00.000Z" });
+  });
+
+  it("plafond de 7 jours : retour quand assez d'anciens appels sortent de la fenêtre", () => {
+    const denied = decideQuota(input({ dailyCap: null, own: [call(150, 100_000), call(30, 45_000)] }));
+    expect(denied).toMatchObject({ allowed: false, reason: "weekly" });
+    // L'appel d'il y a 150 h sort de la fenêtre dans 18 h.
+    if (!denied.allowed) expect(denied.freesAt).toBe(new Date(now.getTime() + 18 * 3_600_000).toISOString());
+  });
+
+  it("plafond commun et abonnement : raisons distinctes", () => {
+    expect(decideQuota(input({ allGuests: [call(30, 245_000)] }))).toMatchObject({ reason: "guests" });
+    const resetsAt = new Date(now.getTime() + 3 * 3_600_000).toISOString();
+    expect(decideQuota(input({ windows: [{ window: "five_hour", utilization: 0.9, resetsAt, status: "allowed" }] }))).toMatchObject({ reason: "subscription", freesAt: resetsAt });
+  });
+});

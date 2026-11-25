@@ -292,6 +292,7 @@ export function analyzeSession(activityId: string, context: Context = loadContex
     zones: context.profile.zones,
     lactateThresholdSpeedMps: context.profile.lactateThresholdSpeedMps,
     thresholdLabel: thresholdLabel(context.profile),
+    paceIndicative: context.profile.threshold?.indicative === true,
     restingHeartRateBpm: context.profile.restingHeartRateBpm,
     recentSpeedPerBeat: perBeat.length ? median(perBeat) : null,
     easySamples: easySamplesBefore(history, current.localDate),

@@ -14,6 +14,7 @@ import { LogoutButton } from "@/components/profiles/logout-button";
 import { FeedbackButton } from "@/components/feedback/feedback-button";
 import { GaugeProvider } from "@/components/coach/coach-gauge";
 import { EnvBanner } from "@/components/env/env-banner";
+import { isTestEnv } from "@/lib/env/environment";
 import { coachGauge } from "@/lib/server/quota";
 import { refreshRateLimits } from "@/lib/server/usage";
 import { RegisterProvider } from "@/components/ui/register";
@@ -59,7 +60,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // Bastien voit aussi la jauge (ses fenêtres 5 h / 7 j) près du chat, sans relevé supplémentaire ici.
   const gauge = member ? runAs(member, () => coachGauge()) : null;
   return (
-    <html lang="fr" className={`${display.variable} ${text.variable}`} data-rendered-at={new Date().toISOString()} suppressHydrationWarning>
+    <html lang="fr" data-env={isTestEnv() ? "test" : undefined} className={`${display.variable} ${text.variable}`} data-rendered-at={new Date().toISOString()} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
