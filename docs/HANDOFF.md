@@ -774,4 +774,12 @@ les seuils 4:01 / 4:02 et « l'allure du moment ». Règles générales, vérifi
       6 min en Z4 ; `sustainedEffortEvidence` : meilleur continu soutenu ramené à l'heure par Riegel) : Marie 5:10/km,
       Benoît 3:51/km. Seuil indicatif → `paceIndicative` : pas de « séance d'un autre type » sur cette base.
       Photographie : Bastien et Charles identiques ; Marie (32 séances) et Benoît (36) gagnent des allures cibles.
-- Reste : promotion en prod (Bastien : `scripts/sillage-env.sh promote`) et Funnel 8443 ; plans B/C en test.
+- Plans B et C (EN ESSAI, test seulement : `featureEnabled("session_options")` = environnement de test, ou
+  `SILLAGE_FEATURE_SESSION_OPTIONS=1` pour l'ouvrir en prod) : `sessionOptions` (suggestion.ts) donne deux options de même
+  rôle (endurance : nature 90 %, vélo/elliptique 70 % ; longue : nature 90 %, en deux fois 75 % ; seuil : 6 × 4 min 85 %,
+  tempo 25 min 80 % ; VO2max : côtes 8 × 1 min 80 %, fartlek 10 × 1 min 75 %). Carrousel `dashboard/session-options.tsx`
+  (balayage aimanté, flèches, ← →, points). Choix → `session_choice` (base du profil, jusqu'à la date de la séance) →
+  `chosenOption` : la séance d'après est recalculée sur ce qui sera fait (le vélo ne compte pas comme sortie).
+- Reste : promotion en prod (Bastien : `scripts/sillage-env.sh promote`) et Funnel 8443 ; décision de Bastien sur les plans
+  B/C avant de les ouvrir en prod. Les commits après `HANDOFF … lot du 25 nov.` (plans B/C) sont sans effet en prod tant
+  que le drapeau n'est pas mis.
