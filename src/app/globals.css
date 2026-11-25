@@ -995,3 +995,21 @@ html[data-view-as] .topbar { top: 37px; }
 .plan-note { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; border: 1.5px solid var(--sl-border); background: var(--sl-yellow); color: var(--fixed-ink, #15151e); text-decoration: none; width: fit-content; }
 .week-constraint { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 12.5px; padding: 4px 4px 4px 10px; border-radius: 12px; border: 1.5px dashed var(--fixed-ink, #15151e); }
 .week-constraint span { flex: 1; }
+/* Plans B et C : carrousel de la prochaine séance (balayage aimanté, flèches, points). */
+.options { margin-top: 2px; }
+.options-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; outline: none; }
+.options-track::-webkit-scrollbar { display: none; }
+.options-slide { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; padding-right: 2px; }
+.option-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.option-badge { font-family: var(--font-display); font-weight: 800; font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--fixed-ink, #15151e); color: var(--sl-yellow); }
+.option-title { font-size: 30px; }
+.option.is-chosen .option-title { text-decoration: underline; text-decoration-color: var(--sl-pink); text-decoration-thickness: 3px; text-underline-offset: 4px; }
+.option-picked { display: flex; align-items: center; gap: 6px; font-weight: 700; margin: 10px 0 0; }
+.options-chosen-note { margin: 0 0 6px; font-size: 12.5px; }
+.link-button { background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: inherit; text-decoration: underline; cursor: pointer; }
+.options-nav { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.options-dots { display: flex; gap: 6px; }
+.options-dot { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 1.5px solid var(--fixed-ink, #15151e); background: transparent; cursor: pointer; transition: width .2s ease; }
+.options-dot.on { width: 22px; border-radius: 999px; background: var(--fixed-ink, #15151e); }
+.options-dot.chosen { background: var(--sl-pink); }
+.options-hint { flex: 1; }

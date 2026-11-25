@@ -34,3 +34,9 @@ export function otherEnvOrigin(host: string, target: SillageEnv): string {
   const port = ENV_PORTS[target].public;
   return `https://${hostname}${port === 443 ? "" : `:${port}`}`;
 }
+
+/** Fonctions en essai : visibles dans l'environnement de test seulement (ou forcées par variable, pour la prod). */
+export function featureEnabled(feature: "session_options"): boolean {
+  if (isTestEnv()) return true;
+  return feature === "session_options" && process.env.SILLAGE_FEATURE_SESSION_OPTIONS === "1";
+}

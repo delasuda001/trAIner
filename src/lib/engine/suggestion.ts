@@ -31,8 +31,27 @@ export type SuggestedSession = {
   target: SessionTarget | null;
 };
 
+/**
+ * Options équivalentes (plans B et C) : même fonction dans la semaine (aérobie facile ou intensité),
+ * bénéfice estimé face à la séance recommandée (repère d'entraîneur, pas une mesure).
+ */
+export type SessionOption = SuggestedSession & {
+  key: string;
+  role: "aerobic" | "intensity";
+  /** Part du bénéfice de la séance recommandée (0,7 = « ≈ 70 % du bénéfice »). */
+  benefit: number;
+  /** Ce qui change par rapport à la séance recommandée, en une phrase. */
+  note: string;
+  /** Course à pied ou non (vélo, elliptique) : une option sans course ne compte pas comme sortie. */
+  running: boolean;
+};
+
 export type Suggestion = {
   primary: SuggestedSession;
+  /** Deux options équivalentes au plus (vide pour repos, course, affûtage, séance spécifique). */
+  options: SessionOption[];
+  /** Option choisie par le coureur (clé), si elle vaut pour cette séance : la suite est recalée dessus. */
+  chosen: string | null;
   /**
    * Quand : `date` est le premier jour conseillé, `dates` la fenêtre (1 ou 2 jours
    * consécutifs, une seule séance à placer dedans), `label` la fenêtre en clair
@@ -129,6 +148,8 @@ export type SuggestionInput = {
    * pour la semaine `weekStart` (lundi). Plafonne les sorties de la semaine et écarte les jours indisponibles.
    */
   weekConstraint?: WeekConstraint | null;
+  /** Option choisie pour la prochaine séance (clé de `options`) : la séance d'après est recalée en conséquence. */
+  chosenOption?: string | null;
   /**
    * Coureur débutant (cf. engine/athlete-level) : ni seuil ni VO2max. Une sortie sur deux est ludique
    * (accélérations, fartlek, footing progressif), l'autre un peu plus longue, toujours facile.
@@ -560,9 +581,48 @@ function decide(input: SuggestionInput, labelToday: string): Core & { facts: Sug
   void labelToday;
 }
 
+/** Plans B et C de la séance recommandée : même rôle dans la semaine, bénéfice estimé. Pur. */
+export function sessionOptions(primary: SuggestedSession, input: SuggestionInput): SessionOption[] {
+  const minutes = primary.durationMin;
+  const easy = easyTarget(input);
+  const hrOnly = (target: SessionTarget | null): SessionTarget | null => (target ? { ...target, paceFastMps: null, paceSlowMps: null } : null);
+  if (primary.type === "endurance" || primary.type === "recovery_run") {
+    const bike = roundTo5(minutes * 1.4);
+    return [
+      { key: "nature", role: "aerobic", benefit: 0.9, running: true, type: primary.type, title: `Footing nature : ${minutes} min`, durationMin: minutes, target: hrOnly(easy), structure: "Même durée sur chemins ou en parc, à l'aise : la FC compte, pas l'allure (plus lente en côte).", note: "Même effet aérobie, terrain plus varié : un peu moins régulier." },
+      { key: "velo", role: "aerobic", benefit: 0.7, running: false, type: primary.type, title: `Vélo ou elliptique : ${bike} min`, durationMin: bike, target: hrOnly(easy), structure: `${bike} min en continu dans la même plage de FC, cadence souple.`, note: "Garde l'aérobie et ménage les jambes ; ne compte pas comme une sortie de course." },
+    ];
+  }
+  if (primary.type === "long") {
+    const half = roundTo5(minutes / 2);
+    return [
+      { key: "long_nature", role: "aerobic", benefit: 0.9, running: true, type: "long", title: `Sortie longue nature : ${minutes} min`, durationMin: minutes, target: hrOnly(easy), structure: "Même durée sur chemins, en Z2 ; marche dans les côtes raides si la FC dépasse la plage.", note: "Même endurance, plus de variété ; la distance sera plus courte, c'est la durée qui compte." },
+      { key: "long_split", role: "aerobic", benefit: 0.75, running: true, type: "long", title: `Longue en deux fois : 2 × ${half} min`, durationMin: half * 2, target: easy, structure: `${half} min le matin, ${half} min le soir, en Z2.`, note: "Même volume dans la journée, moins d'endurance sur la fin : utile quand le temps manque." },
+    ];
+  }
+  if (primary.type === "threshold") {
+    const tempo = sharedTarget(input, "intervals_tempo", 1500, "Z3–Z4");
+    const threshold = primary.target;
+    return [
+      { key: "fartlek_seuil", role: "intensity", benefit: 0.85, running: true, type: "threshold", title: "Seuil court : 6 × 4 min", durationMin: 55, target: threshold, structure: `15 min d'échauffement, 6 × 4 min au seuil avec 1 min 30 de trot, 10 min de retour au calme.${pacingCue(threshold, 4)}`, note: "Même allure, répétitions plus courtes : plus facile à tenir, un peu moins de temps au seuil d'affilée." },
+      { key: "tempo", role: "intensity", benefit: 0.8, running: true, type: "threshold", title: "Tempo continu : 25 min", durationMin: 50, target: tempo, structure: `15 min d'échauffement, 25 min d'un seul tenant à allure tempo, 10 min de retour au calme.${pacingCue(tempo, 25)}`, note: "Un peu sous le seuil, d'un seul tenant : moins intense, travaille la tenue." },
+    ];
+  }
+  if (primary.type === "vo2max") {
+    const short = sharedTarget(input, "intervals_vo2", 60, "Z5");
+    return [
+      { key: "cotes", role: "intensity", benefit: 0.8, running: true, type: "vo2max", title: "Côtes : 8 × 1 min", durationMin: 45, target: hrOnly(primary.target), structure: "15 min d'échauffement, 8 × 1 min en côte (pente de 4 à 6 %) à effort soutenu, retour en trottinant, 10 min de retour au calme. En côte, c'est l'effort qui compte : la dernière doit être aussi bonne que la première.", note: "Même travail cardio, plus de force, moins d'impact sur les jambes." },
+      { key: "fartlek_vo2", role: "intensity", benefit: 0.75, running: true, type: "vo2max", title: "Fartlek : 10 × 1 min / 1 min", durationMin: 45, target: short, structure: `15 min d'échauffement, 10 × 1 min vite et 1 min en trottinant, 10 min de retour au calme.${pacingCue(short, 1)}`, note: "Plus ludique et plus court par effort : un peu moins de temps près de la VO2max." },
+    ];
+  }
+  return [];
+}
+
 export function suggestNextSession(input: SuggestionInput): Suggestion {
   const core = decide(input, input.today);
   const { primary } = core;
+  const options = sessionOptions(primary, input);
+  const chosen = input.chosenOption && options.some((option) => option.key === input.chosenOption) ? input.chosenOption : null;
 
   let alternative: Suggestion["alternative"] = null;
   const recovery = input.recovery;
@@ -577,7 +637,9 @@ export function suggestNextSession(input: SuggestionInput): Suggestion {
   let then: Suggestion["then"] = null;
   if (primary.type !== "race") {
     const shape = kindOf(primary.type);
-    const simulatedRun: SuggestionRun = { localDate: core.when, kind: shape.kind, family: shape.family, movingTimeS: primary.durationMin * 60, aerobicTrainingEffect: shape.hard ? 4.2 : 2.8, distanceM: primary.type === "long" && input.weekPlan ? input.weekPlan.longRunKm * 1000 : null };
+    // Option choisie (plan B ou C) : la suite part de ce qui sera réellement fait. Sans course (vélo), rien n'est simulé.
+    const picked = chosen ? options.find((option) => option.key === chosen) ?? null : null;
+    const simulated: SuggestionRun[] = picked && !picked.running ? [] : [{ localDate: core.when, kind: picked?.key === "tempo" ? "tempo" : shape.kind, family: picked?.key === "tempo" ? "steady" : shape.family, movingTimeS: (picked?.durationMin ?? primary.durationMin) * 60, aerobicTrainingEffect: shape.hard ? 4.2 : 2.8, distanceM: primary.type === "long" && input.weekPlan && picked?.key !== "long_split" ? input.weekPlan.longRunKm * 1000 : null }];
     const neutralRecovery: RecoverySignals = { ...recovery, flags: [], state: "unknown" };
     // Rythme visé : pas plus de N séances par semaine. La séance d'après se décide au jour où elle peut avoir lieu
     // (au plus tôt après la fenêtre et l'écart du rythme), pas au jour de la prochaine : sinon une qualité due ce
@@ -586,7 +648,7 @@ export function suggestNextSession(input: SuggestionInput): Suggestion {
     const spacing = Math.max(1, Math.round(7 / planned) - 1);
     const windowEnd = core.dates.at(-1) ?? core.when;
     const decideOn = [addDays(windowEnd, 1), addDays(core.when, spacing)].sort().at(-1) as string;
-    const next = decide({ ...input, today: decideOn, runs: [...input.runs, simulatedRun], load: { ...input.load, ratio: null }, loadAlert: null, recovery: neutralRecovery }, input.today);
+    const next = decide({ ...input, today: decideOn, runs: [...input.runs, ...simulated], load: { ...input.load, ratio: null }, loadAlert: null, recovery: neutralRecovery }, input.today);
     let date = next.when > windowEnd ? next.when : addDays(windowEnd, 1);
     if (daysBetween(core.when, date) < spacing) date = snapToPreferredDay(addDays(core.when, spacing), input.goal?.preferredDays ?? []);
     if (date <= windowEnd) date = addDays(windowEnd, 1);
@@ -594,5 +656,5 @@ export function suggestNextSession(input: SuggestionInput): Suggestion {
     then = { title: next.primary.title, durationMin: next.primary.durationMin, type: next.primary.type, when: { date, label: whenLabel(date, input.today) }, structure: next.primary.structure, target: next.primary.target, reason: next.reason };
   }
 
-  return { primary, when: { date: core.when, label: windowLabel(core.dates, input.today), dates: core.dates }, reason: core.reason, ...(core.reasonDetail ? { reasonDetail: core.reasonDetail } : {}), alternative, then, facts: core.facts };
+  return { primary, options, chosen, when: { date: core.when, label: windowLabel(core.dates, input.today), dates: core.dates }, reason: core.reason, ...(core.reasonDetail ? { reasonDetail: core.reasonDetail } : {}), alternative, then, facts: core.facts };
 }

@@ -293,3 +293,23 @@ describe("contrainte de la semaine dite au coach", () => {
     expect(result.when.date).toBe(wednesday);
   });
 });
+
+describe("plans B et C", () => {
+  it("seuil : deux options d'intensité, bénéfice estimé, allures reprises ; repos ou course : aucune", () => {
+    const result = suggestNextSession(input([run(12, "intervals_vo2", "intervals"), run(4, "endurance", "easy")]));
+    expect(result.primary.type).toBe("threshold");
+    expect(result.options.map((option) => [option.key, option.role, option.benefit])).toEqual([["fartlek_seuil", "intensity", 0.85], ["tempo", "intensity", 0.8]]);
+    expect(result.chosen).toBeNull();
+  });
+
+  it("endurance : options aérobies ; le vélo ne compte pas comme sortie et la suite peut venir plus tôt", () => {
+    const runs = [run(9, "intervals_vo2", "intervals"), run(2, "intervals_threshold", "intervals")];
+    const base = suggestNextSession(input(runs));
+    expect(base.primary.type).toBe("endurance");
+    expect(base.options.map((option) => option.key)).toEqual(["nature", "velo"]);
+    const bike = suggestNextSession(input(runs, { chosenOption: "velo" }));
+    expect(bike.chosen).toBe("velo");
+    expect(bike.then).not.toBeNull();
+    expect(suggestNextSession(input(runs, { chosenOption: "inconnue" })).chosen).toBeNull();
+  });
+});

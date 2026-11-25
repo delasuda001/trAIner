@@ -25,6 +25,8 @@ import type { CoachResult } from "@/lib/server/coach-service";
 import type { Sport } from "@/lib/source/types";
 import { calendarZone } from "@/lib/engine/calendar";
 import { NextAfter } from "./next-after";
+import { SessionOptions } from "./session-options";
+import { featureEnabled } from "@/lib/env/environment";
 import { WeekConstraintNote } from "./week-constraint";
 import { constraintSentence } from "@/lib/engine/suggestion";
 import type { SessionKind } from "@/lib/engine/activity-metrics";
@@ -78,20 +80,30 @@ export function SuggestionCard({ dashboard, coach, plain = false }: { dashboard:
         return <span className={`sticker${sticker.length > 10 ? " sticker-long" : ""}`} aria-hidden>{sticker}</span>;
       })()}
       <div className="card-eyebrow">Prochaine séance · {suggestion.when.label}</div>
-      <h2 id="next-title" className="card-title">{primary.title}</h2>
-      <div className="target">
-        {primary.durationMin ? <span className="pill">{formatDuration(primary.durationMin * 60)}</span> : null}
-        {/* Fractionné : l'allure guide, la FC n'est qu'un repère (elle monte en retard sur des répétitions courtes). */}
-        {intervals && target?.paceFastMps && target.paceSlowMps ? <span className="pill pill-strong">Allure {formatPace(target.paceSlowMps).replace("/km", "")}–{formatPace(target.paceFastMps)}</span> : null}
-        {target ? <span className="pill"><ZoneDot zone={zone} />{plain ? plainZone(target.zone) : target.zone} · {intervals ? "FC repère " : ""}{target.heartRateLow}–{target.heartRateHigh} bpm</span> : null}
-        {paceCenter && !intervals ? <span className="pill" title={`${formatPace(target?.paceSlowMps)} à ${formatPace(target?.paceFastMps)}`}>≈ {formatPace(paceCenter)}</span> : null}
-      </div>
-      {dashboard.weekConstraint ? <WeekConstraintNote text={constraintSentence(dashboard.weekConstraint).replace(" La proposition en tient compte.", "")} /> : null}
-      {primary.type !== "endurance" && primary.type !== "long" ? <p className="structure">{primary.structure}</p> : null}
-      <div className="coach-lines">
-        <p className="coach-line"><span className="coach-tag">Pourquoi</span><span><CoachText text={ready ? ready.suggestionWhy : suggestion.reason} /></span></p>
-        <p className="coach-line card-more"><span className="coach-tag">Comment</span><span><CoachText text={ready ? ready.executionTip : primary.structure} /></span></p>
-      </div>
+      {(() => {
+        const recommended = (
+          <>
+            <h2 id="next-title" className="card-title">{primary.title}</h2>
+            <div className="target">
+              {primary.durationMin ? <span className="pill">{formatDuration(primary.durationMin * 60)}</span> : null}
+              {/* Fractionné : l'allure guide, la FC n'est qu'un repère (elle monte en retard sur des répétitions courtes). */}
+              {intervals && target?.paceFastMps && target.paceSlowMps ? <span className="pill pill-strong">Allure {formatPace(target.paceSlowMps).replace("/km", "")}–{formatPace(target.paceFastMps)}</span> : null}
+              {target ? <span className="pill"><ZoneDot zone={zone} />{plain ? plainZone(target.zone) : target.zone} · {intervals ? "FC repère " : ""}{target.heartRateLow}–{target.heartRateHigh} bpm</span> : null}
+              {paceCenter && !intervals ? <span className="pill" title={`${formatPace(target?.paceSlowMps)} à ${formatPace(target?.paceFastMps)}`}>≈ {formatPace(paceCenter)}</span> : null}
+            </div>
+            {dashboard.weekConstraint ? <WeekConstraintNote text={constraintSentence(dashboard.weekConstraint).replace(" La proposition en tient compte.", "")} /> : null}
+            {primary.type !== "endurance" && primary.type !== "long" ? <p className="structure">{primary.structure}</p> : null}
+            <div className="coach-lines">
+              <p className="coach-line"><span className="coach-tag">Pourquoi</span><span><CoachText text={ready ? ready.suggestionWhy : suggestion.reason} /></span></p>
+              <p className="coach-line card-more"><span className="coach-tag">Comment</span><span><CoachText text={ready ? ready.executionTip : primary.structure} /></span></p>
+            </div>
+          </>
+        );
+        // Plans B et C (en essai, environnement de test) : même rôle dans la semaine, bénéfice estimé.
+        return featureEnabled("session_options") && suggestion.options.length
+          ? <SessionOptions recommended={recommended} options={suggestion.options} chosen={suggestion.chosen} date={suggestion.when.date} />
+          : recommended;
+      })()}
       <div className="card-more">
         {suggestion.reasonDetail ? <p className="muted small" style={{ margin: "4px 0 0" }}><Say tu={suggestion.reasonDetail} /></p> : null}
         {coach.status === "ready" ? <div style={{ marginTop: 6 }}><CoachStamp model={coach.model} createdAt={coach.createdAt} prefix="Avis" /><RateCoach subjectKind="outlook" subjectId={coach.createdAt} label="Ce conseil t'est utile ?" /></div> : null}
