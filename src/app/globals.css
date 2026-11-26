@@ -1000,8 +1000,8 @@ html[data-view-as] .topbar { top: 37px; }
 .week-constraint span { flex: 1; }
 /* Plans B et C : pile de cartes (glisser au pouce, la carte part au fond, boucle). */
 .pile-wrap { margin-top: 2px; }
-.pile { display: grid; padding: 0 14px 14px 0; }
-.pile-card { grid-area: 1 / 1; min-width: 0; padding: 14px 16px; border-radius: 18px; background: var(--sl-yellow); color: var(--fixed-ink, #15151e); border: var(--sl-stroke) solid var(--fixed-ink, #15151e); transform: translate(calc(var(--depth) * 7px), calc(var(--depth) * 7px)) rotate(calc(var(--depth) * 1.2deg)); transition: transform .28s cubic-bezier(.2,.8,.3,1), opacity .28s ease; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.pile { display: grid; padding: 0 10px 12px 0; }
+.pile-card { grid-area: 1 / 1; min-width: 0; padding: 14px 16px; border-radius: 18px; background: var(--sl-yellow); color: var(--fixed-ink, #15151e); border: var(--sl-stroke) solid var(--fixed-ink, #15151e); transform: translate(calc(var(--depth) * 5px), calc(var(--depth) * 6px)) rotate(calc(var(--depth) * 1deg)); transition: transform .28s cubic-bezier(.2,.8,.3,1), opacity .28s ease; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .pile-card:not(.is-top) { pointer-events: none; filter: brightness(.94); }
 .pile-card.is-top { cursor: grab; box-shadow: 3px 3px 0 var(--fixed-ink, #15151e); }
 .pile-card.is-top:active { cursor: grabbing; }

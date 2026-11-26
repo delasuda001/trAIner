@@ -100,7 +100,7 @@ export function SessionOptions({ recommended, options, chosen, date }: { recomme
       if (Math.abs(dx) < 8) return;
       state.dragging = true;
       state.moved = true;
-      event.currentTarget.setPointerCapture(event.pointerId);
+      try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* pointeur déjà relâché */ }
     }
     setMotion({ kind: "drag", dx });
   }
