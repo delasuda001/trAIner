@@ -783,3 +783,15 @@ les seuils 4:01 / 4:02 et « l'allure du moment ». Règles générales, vérifi
 - Reste : promotion en prod (Bastien : `scripts/sillage-env.sh promote`) et Funnel 8443 ; décision de Bastien sur les plans
   B/C avant de les ouvrir en prod. Les commits après `HANDOFF … lot du 25 nov.` (plans B/C) sont sans effet en prod tant
   que le drapeau n'est pas mis.
+
+### Retours du 26 nov. (en test)
+- Pictogrammes du calendrier retirés (couleurs gardées). Calendrier sur 8 semaines terminées + la semaine en cours
+  (`CALENDAR_WEEKS` 9) : même fenêtre que les moyennes de l'objectif (avant : calendrier 13/7 = 1,9, jauge 13/8 = 1,6).
+  `completeWeeksAverage` divise par les semaines complètes réellement couvertes depuis la première sortie (profil récent).
+- « À travailler à côté » : chaque piste dans un paragraphe (le surlignage était un élément de grille pleine largeur).
+- « Ensuite » : la ligne grandit sur place (FLIP) jusqu'à la carte détaillée, contenu qui apparaît ensuite ; fermeture par
+  glisser vers le bas, toucher à côté, croix ou Échap, la carte reprend sa place.
+- Plans B/C : pile de cartes (`session-options.tsx`) qui tourne en boucle ; au doigt la carte suit le pouce, au-delà de 28 %
+  de la largeur (ou geste vif) elle part au fond, sinon revient ; flèches et ← → avec la même animation.
+  Endurance et récupération : une seule alternative, vélo ou elliptique (Bastien : pas de footing « ludique » ni de dessin GPS).
+- `promote` ignore aussi `tsconfig.json` (réécrit par chaque build, comme `next-env.d.ts`).
