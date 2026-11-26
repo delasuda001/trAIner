@@ -19,10 +19,10 @@ describe("moyennes sur semaines complètes", () => {
   it("la semaine en cours ne compte pas : un lundi sans sortie ne fait pas chuter la moyenne, une sortie de la semaine ne la gonfle pas", () => {
     const runs = weeks(2, 10);
     const monday = startOfIsoWeek(today);
-    expect(completeWeeksAverage(runs, monday)).toEqual({ runsPerWeek: 2, kmPerWeek: 20, weeks: 8 });
-    expect(completeWeeksAverage([...runs, { localDate: today, distanceM: 30_000 }], today)).toEqual({ runsPerWeek: 2, kmPerWeek: 20, weeks: 8 });
+    expect(completeWeeksAverage(runs, monday)).toEqual({ runsPerWeek: 2, kmPerWeek: 20, weeks: 7 });
+    expect(completeWeeksAverage([...runs, { localDate: today, distanceM: 30_000 }], today)).toEqual({ runsPerWeek: 2, kmPerWeek: 20, weeks: 7 });
     // Le lundi suivant, la semaine qui vient de finir entre dans la moyenne et la plus ancienne en sort.
-    expect(completeWeeksAverage([...runs, { localDate: today, distanceM: 30_000 }], addDays(monday, 7)).kmPerWeek).toBeCloseTo((20 * 7 + 30) / 8);
+    expect(completeWeeksAverage([...runs, { localDate: today, distanceM: 30_000 }], addDays(monday, 7)).kmPerWeek).toBeCloseTo((20 * 6 + 30) / 7);
   });
 
   it("historique de 3 semaines complètes : divisé par 3, pas par 8", () => {
@@ -62,7 +62,7 @@ describe("écart à l'objectif", () => {
     expect(gap.main).toBe("frequency");
     expect(gap.action).toBe("Passe à 3 sorties par semaine : ajoute un footing facile de 30 à 40 min en Z2 ; ensuite, allonge ta sortie longue de 2 km toutes les 2 semaines (11 → 18 km en 8 semaines).");
     expect(gap.levers.find((lever) => lever.key === "threshold")).toMatchObject({ current: "4:10/km", needed: "4:01/km", met: false });
-    expect(gap.summary).toMatch(/^Levier principal pour le semi : sorties par semaine \(1,5, repère 3 au moins\)\./);
+    expect(gap.summary).toMatch(/^Levier principal pour le semi : sorties par semaine \(1,6, repère 3 au moins\)\./);
   });
 
   it("fréquence et volume au niveau : la sortie longue passe en tête", () => {

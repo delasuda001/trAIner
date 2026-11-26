@@ -13,12 +13,14 @@ import { RACE_RATIO_FROM_THRESHOLD, type RaceTarget } from "./prescription";
  *   usuels pour le niveau visé ;
  * - seuil : allure au seuil qu'implique le temps visé (mêmes ratios que les
  *   estimations d'allure de course).
- * Fréquence et volume : moyennes des 8 dernières semaines COMPLÈTES (lundi–dimanche), la
+ * Fréquence et volume : moyennes des 7 dernières semaines COMPLÈTES (celles du calendrier) (lundi–dimanche), la
  * semaine en cours exclue (sinon un lundi ferait chuter la moyenne). La plus longue sortie se
  * lit sur les 8 semaines glissantes, semaine en cours comprise (un maximum ne se dilue pas).
  */
 
 export const GAP_WINDOW_WEEKS = 8;
+/** Moyennes de fréquence et de volume : 7 semaines complètes, celles que montre le calendrier. */
+export const AVERAGE_WINDOW_WEEKS = 7;
 /** Sortie longue : +2 km toutes les 2 semaines (progression prudente). */
 const LONG_STEP_KM = 2;
 const LONG_STEP_WEEKS = 2;
@@ -94,10 +96,10 @@ function pace(seconds: number): string {
 }
 
 /**
- * Sorties et km par semaine en moyenne sur les 8 semaines complètes avant la semaine en cours. Un historique
+ * Sorties et km par semaine en moyenne sur les 7 semaines complètes avant la semaine en cours. Un historique
  * plus court (profil récent) est divisé par les semaines complètes réellement couvertes depuis la première sortie.
  */
-export function completeWeeksAverage(runs: GapRun[], today: string, weeks = GAP_WINDOW_WEEKS): { runsPerWeek: number; kmPerWeek: number; weeks: number } {
+export function completeWeeksAverage(runs: GapRun[], today: string, weeks = AVERAGE_WINDOW_WEEKS): { runsPerWeek: number; kmPerWeek: number; weeks: number } {
   const end = startOfIsoWeek(today);
   const first = runs.reduce<string | null>((earliest, run) => (earliest == null || run.localDate < earliest ? run.localDate : earliest), null);
   const covered = first ? Math.round(daysBetween(startOfIsoWeek(first), end) / 7) : weeks;

@@ -24,7 +24,7 @@ import { goalMarker, isRaceLikeEffort, prescribe, type GoalMarker, type Prescrip
 import { suggestNextSession, type Suggestion, type WeekPlan } from "@/lib/engine/suggestion";
 import { estimateThreshold, type ThresholdEstimate } from "@/lib/engine/threshold";
 import type { EasySample } from "@/lib/engine/easy-pace";
-import { goalGap, longRunBenchmarkKm, nextLongRunKm, primaryGap, structuralLever, type GoalGap } from "@/lib/engine/goal-gap";
+import { AVERAGE_WINDOW_WEEKS, goalGap, longRunBenchmarkKm, nextLongRunKm, primaryGap, structuralLever, type GoalGap } from "@/lib/engine/goal-gap";
 import { classifyVerdict, type SessionVerdict } from "@/lib/engine/verdict";
 import { fallbackZones, recalibrateEasyZones, zonesFromHistory, type EasyZonesRecalibration, type ZonesSource } from "@/lib/engine/zones";
 import { activeMember } from "@/lib/profiles/context";
@@ -404,8 +404,8 @@ export type Dashboard = {
   declaredRuns: DeclaredRun[];
 };
 
-/** 8 semaines terminées + la semaine en cours : la même fenêtre que les moyennes de l'objectif (même 1,6 sortie/sem. partout). */
-const CALENDAR_WEEKS = 9;
+/** 7 semaines terminées + la semaine en cours : la même fenêtre que les moyennes de l'objectif (même chiffre partout). */
+const CALENDAR_WEEKS = AVERAGE_WINDOW_WEEKS + 1;
 
 /** Zone FC dominante (1 à 5) d'une répartition de temps par zone. */
 /** Types de séance réalisés qui correspondent à une suggestion (pour reprendre la consigne de la dernière fois). */

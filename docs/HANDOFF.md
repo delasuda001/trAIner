@@ -786,7 +786,7 @@ les seuils 4:01 / 4:02 et « l'allure du moment ». Règles générales, vérifi
 
 ### Retours du 26 nov. (en test)
 - Pictogrammes du calendrier retirés (couleurs gardées). Calendrier sur 8 semaines terminées + la semaine en cours
-  (`CALENDAR_WEEKS` 9) : même fenêtre que les moyennes de l'objectif (avant : calendrier 13/7 = 1,9, jauge 13/8 = 1,6).
+  puis (26 nov., Bastien : une ligne de moins) 7 semaines terminées + la semaine en cours, et les moyennes de l'objectif sur ces 7 semaines (`AVERAGE_WINDOW_WEEKS`) : même chiffre partout.
   `completeWeeksAverage` divise par les semaines complètes réellement couvertes depuis la première sortie (profil récent).
 - « À travailler à côté » : chaque piste dans un paragraphe (le surlignage était un élément de grille pleine largeur).
 - « Ensuite » : la ligne grandit sur place (FLIP) jusqu'à la carte détaillée, contenu qui apparaît ensuite ; fermeture par
