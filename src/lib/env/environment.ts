@@ -35,8 +35,12 @@ export function otherEnvOrigin(host: string, target: SillageEnv): string {
   return `https://${hostname}${port === 443 ? "" : `:${port}`}`;
 }
 
-/** Fonctions en essai : visibles dans l'environnement de test seulement (ou forcées par variable, pour la prod). */
+/**
+ * Fonctions en essai : visibles dans l'environnement de test seulement, sauf celles déjà ouvertes à tous.
+ * Plans B et C (`session_options`) : ouverts en prod le 26 nov. 2026 (décision de Bastien).
+ */
+const RELEASED = new Set<string>(["session_options"]);
+
 export function featureEnabled(feature: "session_options"): boolean {
-  if (isTestEnv()) return true;
-  return feature === "session_options" && process.env.SILLAGE_FEATURE_SESSION_OPTIONS === "1";
+  return isTestEnv() || RELEASED.has(feature);
 }

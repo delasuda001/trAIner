@@ -795,3 +795,5 @@ les seuils 4:01 / 4:02 et « l'allure du moment ». Règles générales, vérifi
   de la largeur (ou geste vif) elle part au fond, sinon revient ; flèches et ← → avec la même animation.
   Endurance et récupération : une seule alternative, vélo ou elliptique (Bastien : pas de footing « ludique » ni de dessin GPS).
 - `promote` ignore aussi `tsconfig.json` (réécrit par chaque build, comme `next-env.d.ts`).
+
+- (26 nov., 3 h 50 Toronto) Plans B/C OUVERTS EN PROD à la demande de Bastien (`RELEASED` dans `lib/env/environment.ts`).
