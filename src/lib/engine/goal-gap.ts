@@ -93,12 +93,18 @@ function pace(seconds: number): string {
   return formatPace(1000 / seconds);
 }
 
-/** Sorties et km par semaine en moyenne sur les 8 semaines complètes avant la semaine en cours. */
-export function completeWeeksAverage(runs: GapRun[], today: string, weeks = GAP_WINDOW_WEEKS): { runsPerWeek: number; kmPerWeek: number } {
+/**
+ * Sorties et km par semaine en moyenne sur les 8 semaines complètes avant la semaine en cours. Un historique
+ * plus court (profil récent) est divisé par les semaines complètes réellement couvertes depuis la première sortie.
+ */
+export function completeWeeksAverage(runs: GapRun[], today: string, weeks = GAP_WINDOW_WEEKS): { runsPerWeek: number; kmPerWeek: number; weeks: number } {
   const end = startOfIsoWeek(today);
-  const start = addDays(end, -7 * weeks);
+  const first = runs.reduce<string | null>((earliest, run) => (earliest == null || run.localDate < earliest ? run.localDate : earliest), null);
+  const covered = first ? Math.round(daysBetween(startOfIsoWeek(first), end) / 7) : weeks;
+  const counted = Math.max(1, Math.min(weeks, covered));
+  const start = addDays(end, -7 * counted);
   const inWindow = runs.filter((run) => run.localDate >= start && run.localDate < end);
-  return { runsPerWeek: inWindow.length / weeks, kmPerWeek: inWindow.reduce((sum, run) => sum + (run.distanceM ?? 0), 0) / 1000 / weeks };
+  return { runsPerWeek: inWindow.length / counted, kmPerWeek: inWindow.reduce((sum, run) => sum + (run.distanceM ?? 0), 0) / 1000 / counted, weeks: counted };
 }
 
 /**

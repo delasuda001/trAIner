@@ -404,7 +404,8 @@ export type Dashboard = {
   declaredRuns: DeclaredRun[];
 };
 
-const CALENDAR_WEEKS = 8;
+/** 8 semaines terminées + la semaine en cours : la même fenêtre que les moyennes de l'objectif (même 1,6 sortie/sem. partout). */
+const CALENDAR_WEEKS = 9;
 
 /** Zone FC dominante (1 à 5) d'une répartition de temps par zone. */
 /** Types de séance réalisés qui correspondent à une suggestion (pour reprendre la consigne de la dernière fois). */

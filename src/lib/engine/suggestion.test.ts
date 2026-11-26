@@ -306,7 +306,7 @@ describe("plans B et C", () => {
     const runs = [run(9, "intervals_vo2", "intervals"), run(2, "intervals_threshold", "intervals")];
     const base = suggestNextSession(input(runs));
     expect(base.primary.type).toBe("endurance");
-    expect(base.options.map((option) => option.key)).toEqual(["nature", "velo"]);
+    expect(base.options.map((option) => option.key)).toEqual(["velo"]);
     const bike = suggestNextSession(input(runs, { chosenOption: "velo" }));
     expect(bike.chosen).toBe("velo");
     expect(bike.then).not.toBeNull();

@@ -91,7 +91,7 @@ case "${1:-status}" in
     start_test
     ;;
   promote)
-    [ -z "$(git status --porcelain --untracked-files=no -- . ':!next-env.d.ts')" ] || { echo "Arbre de travail modifié : commite avant de passer en prod." >&2; exit 1; }
+    [ -z "$(git status --porcelain --untracked-files=no -- . ':!next-env.d.ts' ':!tsconfig.json')" ] || { echo "Arbre de travail modifié : commite avant de passer en prod." >&2; exit 1; }
     rm -rf .next-staging
     (unset SILLAGE_ENV DATABASE_URL SILLAGE_REGISTRY_PATH SILLAGE_PROFILES_DIR; NEXT_DIST_DIR=.next-staging "$NEXT" build > data/deploy-build.log 2>&1) || { echo "Build de prod en échec : data/deploy-build.log" >&2; exit 1; }
     stamp="$(date +%Y-%m-%d-%H%M)"

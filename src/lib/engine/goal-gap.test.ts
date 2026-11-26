@@ -19,10 +19,16 @@ describe("moyennes sur semaines complètes", () => {
   it("la semaine en cours ne compte pas : un lundi sans sortie ne fait pas chuter la moyenne, une sortie de la semaine ne la gonfle pas", () => {
     const runs = weeks(2, 10);
     const monday = startOfIsoWeek(today);
-    expect(completeWeeksAverage(runs, monday)).toEqual({ runsPerWeek: 2, kmPerWeek: 20 });
-    expect(completeWeeksAverage([...runs, { localDate: today, distanceM: 30_000 }], today)).toEqual({ runsPerWeek: 2, kmPerWeek: 20 });
+    expect(completeWeeksAverage(runs, monday)).toEqual({ runsPerWeek: 2, kmPerWeek: 20, weeks: 8 });
+    expect(completeWeeksAverage([...runs, { localDate: today, distanceM: 30_000 }], today)).toEqual({ runsPerWeek: 2, kmPerWeek: 20, weeks: 8 });
     // Le lundi suivant, la semaine qui vient de finir entre dans la moyenne et la plus ancienne en sort.
     expect(completeWeeksAverage([...runs, { localDate: today, distanceM: 30_000 }], addDays(monday, 7)).kmPerWeek).toBeCloseTo((20 * 7 + 30) / 8);
+  });
+
+  it("historique de 3 semaines complètes : divisé par 3, pas par 8", () => {
+    const monday = startOfIsoWeek(today);
+    const recent = [1, 3, 8, 10, 15, 17].map((days) => ({ localDate: addDays(monday, -days), distanceM: 8_000 }));
+    expect(completeWeeksAverage(recent, today)).toEqual({ runsPerWeek: 2, kmPerWeek: 16, weeks: 3 });
   });
 
   it("la plus longue sortie de la semaine en cours compte quand même (un maximum ne se dilue pas)", () => {

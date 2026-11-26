@@ -50,7 +50,7 @@ export function SessionPoints({ ready, prescription, fallbackKeep, metrics }: { 
     {side.length ? (
       <div className="point point-side">
         <div className="point-label"><Dumbbell size={12} /> À travailler à côté</div>
-        {side.map((text) => <CoachText key={text} text={text} />)}
+        {side.map((text) => <p key={text} className="point-side-text"><CoachText text={text} /></p>)}
       </div>
     ) : null}
     </>

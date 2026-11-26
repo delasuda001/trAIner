@@ -589,14 +589,12 @@ export function sessionOptions(primary: SuggestedSession, input: SuggestionInput
   if (primary.type === "endurance" || primary.type === "recovery_run") {
     const bike = roundTo5(minutes * 1.4);
     return [
-      { key: "nature", role: "aerobic", benefit: 0.9, running: true, type: primary.type, title: `Footing nature : ${minutes} min`, durationMin: minutes, target: hrOnly(easy), structure: "Même durée sur chemins ou en parc, à l'aise : la FC compte, pas l'allure (plus lente en côte).", note: "Même effet aérobie, terrain plus varié : un peu moins régulier." },
       { key: "velo", role: "aerobic", benefit: 0.7, running: false, type: primary.type, title: `Vélo ou elliptique : ${bike} min`, durationMin: bike, target: hrOnly(easy), structure: `${bike} min en continu dans la même plage de FC, cadence souple.`, note: "Garde l'aérobie et ménage les jambes ; ne compte pas comme une sortie de course." },
     ];
   }
   if (primary.type === "long") {
     const half = roundTo5(minutes / 2);
     return [
-      { key: "long_nature", role: "aerobic", benefit: 0.9, running: true, type: "long", title: `Sortie longue nature : ${minutes} min`, durationMin: minutes, target: hrOnly(easy), structure: "Même durée sur chemins, en Z2 ; marche dans les côtes raides si la FC dépasse la plage.", note: "Même endurance, plus de variété ; la distance sera plus courte, c'est la durée qui compte." },
       { key: "long_split", role: "aerobic", benefit: 0.75, running: true, type: "long", title: `Longue en deux fois : 2 × ${half} min`, durationMin: half * 2, target: easy, structure: `${half} min le matin, ${half} min le soir, en Z2.`, note: "Même volume dans la journée, moins d'endurance sur la fin : utile quand le temps manque." },
     ];
   }
