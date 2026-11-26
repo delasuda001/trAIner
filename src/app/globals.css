@@ -1022,3 +1022,7 @@ html[data-view-as] .topbar { top: 37px; }
 .options-dot.chosen { background: var(--sl-pink); }
 .options-hint { flex: 1; }
 .point-side-text { margin: 0; }
+/* Carte « Ensuite » agrandie : fond blanc fixe, donc encre fixe dans les deux thèmes. */
+.morph-card .pill { color: var(--fixed-ink, #15151e); border-color: var(--fixed-ink, #15151e); background: transparent; }
+.morph-card .pill.pill-strong { background: var(--fixed-ink, #15151e); color: #FFFFFF; }
+.morph-card .sheet-close, .morph-card .card-eyebrow, .morph-card .coach-tag { color: var(--fixed-ink, #15151e); }
